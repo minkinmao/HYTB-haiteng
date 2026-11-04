@@ -6,7 +6,7 @@
       <h2 style="font-size:18px;margin:0 0 6px">员工花名册 <span style="font-size:13px;font-weight:400;color:#9C9288">Employee Roster</span></h2>
       <div style="font-size:13px;color:#9C9288;max-width:760px;line-height:1.7">
         按<b style="color:#C86432">部门分组</b>展示（顺序与「组织架构」一致），<b style="color:#C86432">点击姓名</b>弹出该员工档案卡片；
-        本页为全员档案数据备份，<b style="color:#C86432">仅供查询，不做任何修改</b>；
+        具备人事管理权限的账号可<b style="color:#C86432">编辑</b>员工信息，具备删除权限（<code>hr.employee.delete</code>）的账号可<b style="color:#C86432">删除</b>员工；
         档案由「入职人员信息增加」流程确认后自动入册，人员异动 / 离职在「在职人员信息维护」办理。
       </div>
     </div>
@@ -45,8 +45,21 @@
           入职：{{ it.hire_date or '—' }}
         </div>
       </div>
-      <a href="{{ url_for('hr.employee_view', eid=it.id) }}"
-         style="font-size:12px;color:#E6823C;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">查看档案</a>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <a href="{{ url_for('hr.employee_view', eid=it.id) }}"
+           style="font-size:12px;color:#E6823C;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">查看档案</a>
+        {% if can_manage %}
+        <a href="{{ url_for('hr.employee_edit', eid=it.id) }}"
+           style="font-size:12px;color:#6B5D4F;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">编辑</a>
+        {% endif %}
+        {% if can_delete %}
+        <form action="{{ url_for('hr.employee_delete', eid=it.id) }}" method="post" style="display:inline"
+              onsubmit="return confirm('确定删除员工「{{ it.name }}」？\n删除后其薪资、合同、考勤、人事异动等关联记录会一并清除，且不可恢复。');">
+          <button type="submit"
+                  style="font-size:12px;color:#C0392B;background:#fff;border:1px solid #E6C2BC;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:inherit">删除</button>
+        </form>
+        {% endif %}
+      </div>
     </div>
     {% endfor %}
   </div>

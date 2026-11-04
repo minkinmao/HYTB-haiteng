@@ -1723,6 +1723,8 @@ def seed():
         p_approve = get_or_create(Permission, name='审批-通过/驳回', code='approval.approve')
         # 人事权限：员工管理（新增/修改员工档案）
         p_hr = get_or_create(Permission, name='人事-员工管理', code='hr.employee.manage')
+        # 人事权限：员工删除（2026-11-04 威哥要求，手工删除员工及其关联记录，敏感）
+        p_emp_del = get_or_create(Permission, name='人事-员工删除', code='hr.employee.delete')
         # 人事权限：工资管理（录入/修改工资清单，敏感，仅管理人员）
         p_salary = get_or_create(Permission, name='人事-工资管理', code='hr.salary.manage')
         # 人事权限：组织架构/部门设置（含人员部门归属）

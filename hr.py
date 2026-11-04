@@ -86,10 +86,13 @@ def employees():
     本页为全员档案数据备份，仅供查询、不做任何修改（档案由入职确认流程入册）。"""
     items, groups, emp_data = _roster_data()
     user = User.query.get(session.get('user_id'))
-    can_manage = bool(user and user.level and
-                      any(p.code == 'hr.employee.manage' for p in user.level.permissions))
+    # 2026-11-04：管理员(is_admin)默认具备；其余按职级权限流判定
+    can_manage = bool(user and (user.is_admin or (user.level and
+                      any(p.code == 'hr.employee.manage' for p in user.level.permissions))))
+    can_delete = bool(user and (user.is_admin or (user.level and
+                      any(p.code == 'hr.employee.delete' for p in user.level.permissions))))
     return render_template('hr/employee_list.html', items=items, groups=groups,
-                           emp_data=emp_data, can_manage=can_manage)
+                           emp_data=emp_data, can_manage=can_manage, can_delete=can_delete)
 
 
 @bp.route('/hr/employees/export', methods=['GET'])
@@ -247,6 +250,30 @@ def employee_update(eid):
         _delete_photo_file(_old_photo)   # 换/删后清掉旧文件，避免 static 目录堆积
     db.session.commit()
     flash('员工信息已更新')
+    return redirect(url_for('hr.employees'))
+
+
+@bp.route('/hr/employees/<int:eid>/delete', methods=['POST'])
+@login_required
+@permission_required('hr.employee.delete')
+def employee_delete(eid):
+    """手工删除员工（不可恢复）：先清理所有含 employee_id 的关联表，再删除员工本身。
+    2026-11-04 威哥要求：人事员工支持手工删除，权限码 hr.employee.delete（admin 默认具备）。"""
+    from sqlalchemy import text
+    emp = Employee.query.get_or_404(eid)
+    name, no = emp.name, emp.employee_no
+    # 所有含 employee_id 列的关联表（不清理会留下孤儿数据；SQLite 默认不强制外键）
+    rel_tables = ['commission', 'bonus_allocation', 'salary', 'contract',
+                  'attendance_record', 'employee_change', 'hr_education',
+                  'hr_family', 'hr_training', 'hr_tech_title',
+                  'hr_qualification', 'hr_reward', 'hr_punishment']
+    for t in rel_tables:
+        db.session.execute(text('DELETE FROM %s WHERE employee_id = :eid' % t), {'eid': eid})
+    db.session.delete(emp)
+    db.session.commit()
+    log_audit('删除员工', module='EHR', target_type='Employee', target_id=eid,
+              target_no=no or '', detail='手工删除员工：%s（%s）' % (name, no or ''))
+    flash('已删除员工「%s」及其关联记录（不可恢复）' % name)
     return redirect(url_for('hr.employees'))
 
 
