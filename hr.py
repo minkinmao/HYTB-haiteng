@@ -923,8 +923,13 @@ ONBOARD_STATUS_NAME = {
 @bp.route('/hr/onboards', methods=['GET'])
 @login_required
 def onboard_list():
-    """入职登记列表：全流程跟踪（建号 → 个人填报 → 主管确认 → 入册）"""
-    items = Onboarding.query.order_by(Onboarding.id.desc()).all()
+    """入职登记列表：全流程跟踪（建号 → 个人填报 → 主管确认 → 入册）
+
+    2026-11-04 威哥要求：已确认入册(confirmed)的员工自动归集到「在职人员信息维护」，
+    不再在本页下方显示，避免同一人两处出现、重复操作。
+    """
+    items = (Onboarding.query.filter(Onboarding.status != 'confirmed')
+             .order_by(Onboarding.id.desc()).all())
     orgs = Organization.query.order_by(Organization.id).all()
     levels = Level.query.order_by(Level.code).all()
     user = User.query.get(session.get('user_id'))
@@ -1455,10 +1460,14 @@ def employees_active():
     user = User.query.get(session.get('user_id'))
     can_manage = bool(user and user.level and
                       any(p.code == 'hr.employee.manage' for p in user.level.permissions))
+    # 手工删除员工：需 hr.employee.delete（2026-11-04 威哥要求在职人员也支持手工删除）
+    can_delete = bool(user and (user.is_admin or (
+        user.level and any(p.code == 'hr.employee.delete' for p in user.level.permissions))))
     # 已开通办公账号的工号集合（用于列表里隐藏"开通账号"按钮，避免重复开通）
     accounted_ids = {u.username for u in User.query.all()}
     return render_template('hr/employee_active.html', items=items, orgs=orgs, levels=levels,
-                           can_manage=can_manage, accounted_ids=accounted_ids)
+                           can_manage=can_manage, can_delete=can_delete,
+                           accounted_ids=accounted_ids)
 
 
 @bp.route('/hr/employees/off', methods=['GET'])

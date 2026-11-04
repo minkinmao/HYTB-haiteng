@@ -12,6 +12,24 @@
   .sblk .mini{background:#fff;border:1px solid #EAE2D6;border-radius:6px;padding:10px 12px;font-size:12.5px;color:#6B5D4F}
   .sblk .mini b{color:#2A2A2A}
   .sblk .mini .sum{color:#C86432;font-weight:600}
+  /* ===== 人力成本测算弹窗（2026-11-04 威哥要求：平时隐藏，点按钮才弹出，关闭即收起） ===== */
+  .sblk .cost-btn{font-size:12.5px;color:#C86432;background:#fff;border:1px solid #E2D8CA;
+    padding:6px 14px;border-radius:6px;cursor:pointer}
+  .sblk .cost-btn:hover{background:#FDF3E4}
+  .sblk .cost-mask{display:none;position:fixed;inset:0;background:rgba(42,42,42,.45);
+    z-index:9999;padding:24px;overflow:auto}
+  .sblk .cost-mask.on{display:flex;align-items:flex-start;justify-content:center}
+  .sblk .cost-card{background:#fff;border-radius:10px;width:100%;max-width:780px;margin:auto;
+    box-shadow:0 12px 40px rgba(0,0,0,.2)}
+  .sblk .cost-card .hd{display:flex;justify-content:space-between;align-items:center;
+    padding:14px 18px;border-bottom:1px solid #F3EDE3}
+  .sblk .cost-card .hd .t{font-size:15px;font-weight:600;color:#2A2A2A}
+  .sblk .cost-card .hd .x{border:none;background:transparent;font-size:20px;line-height:1;
+    color:#9C9288;cursor:pointer;padding:0 4px}
+  .sblk .cost-card .bd{padding:16px 18px}
+  .sblk .cost-card .ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;
+    border-top:1px solid #F3EDE3;background:#FCFAF7;border-radius:0 0 10px 10px;flex-wrap:wrap}
+  .sblk .cost-card .ft button{font-size:13px;padding:8px 18px;border-radius:6px;cursor:pointer}
 </style>
 
 <div class="sblk" style="grid-column:1/-1;background:#FCFAF7;border:1px dashed #E2D8CA;border-radius:8px;padding:14px">
@@ -86,30 +104,42 @@
              value="{{ sb.pct }}" class="in"></div>
   </div>
 
-  {# ---------- 人力成本测算（双向）---------- #}
-  <div style="margin-top:14px;border-top:1px dashed #EAE2D6;padding-top:12px">
-    <div style="font-size:13px;font-weight:600;color:#6B5D4F;margin-bottom:8px">
-      人力成本测算 <span style="font-weight:400;color:#9C9288;font-size:12px">（辅助工具，不影响上方录入）</span>
-    </div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-size:12.5px;color:#6B5D4F">
-      <label style="cursor:pointer"><input type="radio" name="calc_mode" value="bySalary" checked
-        onchange="runCalc()"> 按「总薪资」→ 算五险一金与总人力成本</label>
-      <label style="cursor:pointer"><input type="radio" name="calc_mode" value="byCost"
-        onchange="runCalc()"> 按「总人力成本」→ 反推总薪资与五险一金</label>
-    </div>
-    <div class="grid">
-      <div><div class="lbl" id="calc_lbl">总薪资（元）</div>
-        <input id="calc_input" type="number" step="0.01" min="0" class="in" oninput="runCalc()"
-               value="{{ sb.total_show }}"></div>
-      <div><div class="lbl">总人力成本（元·自动）</div>
-        <input id="calc_cost" readonly class="in"></div>
-      <div style="display:flex;align-items:flex-end">
-        <button type="button" onclick="applyCalc()"
-                style="font-size:12px;color:#fff;background:#E6823C;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">
-          把测算的总薪资填到基本薪资</button>
+  {# ---------- 人力成本测算（弹窗模式：平时收起，点按钮才弹出，关闭即隐藏）---------- #}
+  <div style="margin-top:12px;border-top:1px dashed #EAE2D6;padding-top:12px;
+              display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <button type="button" class="cost-btn" onclick="openCostModal()">人力成本测算</button>
+    <span style="font-size:12px;color:#9C9288">需要时点开测算（按总薪资正算 / 按总人力成本反推），关闭即收起，不影响上方录入</span>
+  </div>
+
+  <div id="costModal" class="cost-mask" onclick="if(event.target===this)closeCostModal()">
+    <div class="cost-card">
+      <div class="hd">
+        <div class="t">人力成本测算</div>
+        <button type="button" class="x" onclick="closeCostModal()" title="关闭">×</button>
+      </div>
+      <div class="bd">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;color:#6B5D4F">
+          <label style="cursor:pointer"><input type="radio" name="calc_mode" value="bySalary" checked
+            onchange="runCalc()"> 按「总薪资」→ 算五险一金与总人力成本</label>
+          <label style="cursor:pointer"><input type="radio" name="calc_mode" value="byCost"
+            onchange="runCalc()"> 按「总人力成本」→ 反推总薪资与五险一金</label>
+        </div>
+        <div class="grid">
+          <div><div class="lbl" id="calc_lbl">总薪资（元）</div>
+            <input id="calc_input" type="number" step="0.01" min="0" class="in" oninput="runCalc()"
+                   value="{{ sb.total_show }}"></div>
+          <div><div class="lbl">总人力成本（元·自动）</div>
+            <input id="calc_cost" readonly class="in"></div>
+        </div>
+        <div id="calc_out" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px"></div>
+      </div>
+      <div class="ft">
+        <button type="button" onclick="closeCostModal()"
+                style="color:#6B5D4F;background:#fff;border:1px solid #E2D8CA">关闭</button>
+        <button type="button" onclick="applyCalc();closeCostModal()"
+                style="color:#fff;background:#E6823C;border:none">把总薪资填到基本薪资</button>
       </div>
     </div>
-    <div id="calc_out" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px"></div>
   </div>
 </div>
 
@@ -158,6 +188,22 @@
     var b = document.getElementById('sb_allow_box');
     if (b) b.style.display = (b.style.display === 'block') ? 'none' : 'block';
   }
+  // 人力成本测算弹窗：点按钮打开（并即时算一次），点 ×／遮罩／关闭／ESC 收起
+  function openCostModal(){
+    var m = document.getElementById('costModal');
+    if (!m) return;
+    m.classList.add('on');
+    runCalc();
+    var inp = document.getElementById('calc_input');
+    if (inp) { setTimeout(function(){ inp.focus(); inp.select && inp.select(); }, 50); }
+  }
+  function closeCostModal(){
+    var m = document.getElementById('costModal');
+    if (m) m.classList.remove('on');
+  }
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' || e.keyCode === 27) closeCostModal();
+  });
   // 试用期联动：选「否」时试用薪资比例不可填（置灰 + 清空）
   function onProbChange(){
     var v = document.getElementById('probation').value;

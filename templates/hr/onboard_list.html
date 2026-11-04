@@ -5,7 +5,8 @@
   <div style="font-size:13px;color:#9C9288;margin-bottom:18px;line-height:1.8;overflow-wrap:anywhere">
     流程：操作员后台建号（系统自动生成<b>系统编码 RC****</b>；工号可自定义，留空则给候选值 HY***）→ 复制填报链接推送本人 →
     个人按人事卡片格式填写提交 → 人事主管确认（完善用工类型/职级/代理类型/职务）→ 自动入册员工花名册。<br>
-    说明：<b>系统编码是登记记录的稳定标识，不可修改</b>；工号是给人看的编号，有权限者可随时修改（方便把 001-010 等编号留给公司创始人）。
+    说明：<b>系统编码是登记记录的稳定标识，不可修改</b>；工号是给人看的编号，有权限者可随时修改（方便把 001-010 等编号留给公司创始人）。<br>
+    已确认入册的员工会<b>自动归集到「在职人员信息维护」</b>，本页只保留尚未入册的招募记录（待填报 / 待确认 / 已退回 / 已取消）。
   </div>
 
   {# 建号表单：仅拥有 hr.employee.manage 权限者可见 #}
@@ -110,21 +111,20 @@
             <a href="{{ url_for('hr.onboard_confirm', oid=o.id) }}"
                style="font-size:12px;color:#6B5D4F;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">查看</a>
           {% endif %}
-          {% if o.status != 'confirmed' %}
-          {% if o.status != 'cancelled' %}
           {# 取消：仅变更状态、可逆，用中性色；危险操作留给红色「删除」 #}
+          {% if o.status != 'cancelled' %}
           <form method="post" action="{{ url_for('hr.onboard_cancel', oid=o.id) }}"
                 onsubmit="return confirm('确认取消 {{ o.name }}（{{ o.employee_no }}）的入职登记？取消后仍可在本页删除。')">
             <button type="submit"
                     style="font-size:12px;color:#6B5D4F;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">取消</button>
           </form>
           {% endif %}
+          {# 删除：本页只显示未入册记录，每一位员工都可彻底删除；已入册的请到「在职人员信息维护」 #}
           <form method="post" action="{{ url_for('hr.onboard_delete', oid=o.id) }}"
                 onsubmit="return confirm('确认彻底删除 {{ o.name }}（{{ o.employee_no }}）的入职登记？删除后不可恢复，个人填报链接将同时失效。')">
             <button type="submit"
                     style="font-size:12px;color:#fff;background:#b91c1c;border:none;padding:5px 12px;border-radius:6px;cursor:pointer">删除</button>
           </form>
-          {% endif %}
         </div>
         {% endif %}
       </div>

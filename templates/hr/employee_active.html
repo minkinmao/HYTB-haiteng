@@ -49,6 +49,14 @@
             </form>
           </details>
           {% endif %}
+          {% if can_delete %}
+          {# 手工删除（不可恢复）：连同薪资/合同/考勤/异动等关联记录一并清理。正常离职请走「离职」 #}
+          <form method="post" action="{{ url_for('hr.employee_delete', eid=it.id) }}" style="display:inline">
+            <button type="submit"
+                    onclick="return confirm('确认彻底删除员工「{{ it.name }}（{{ it.employee_no }}）」？\n\n该操作不可恢复，会同时清除其薪资、合同、考勤、人事异动等全部关联记录。\n如果只是人员离开公司，请改用「离职」（保留档案、可复职）。')"
+                    style="font-size:12px;color:#fff;background:#b91c1c;border:none;padding:5px 12px;border-radius:6px;cursor:pointer">删除</button>
+          </form>
+          {% endif %}
         </div>
       </div>
     </div>
