@@ -163,23 +163,35 @@
 
     /* ===================== 内嵌窗口（iframe）：点模块不跳页 =====================
        需求（2026-11-04 威哥）：点击左侧任一模块，在当前页面内容区以内嵌窗口加载，
-       不再整页跳转。被嵌入的页面自动进入精简模式（隐藏侧栏/顶栏/返回条/AI机器人），
-       外层侧栏始终保留，随时切换别的模块。 */
+       不再整页跳转。外层侧栏始终保留，随时切换别的模块。
+       2016-11-04 补充（威哥）：内嵌时看不到返回入口 → 外层加「返回系统总览」工具条，
+       并恢复嵌入页自身的返回条（backbar），保证任何时候都有路可退。 */
     .embed-wrap{display:none;padding:0 26px 28px}
-    body.embed-open .embed-wrap{display:block}
+    body.embed-open .embed-wrap{display:flex;flex-direction:column;
+                                height:calc(100vh - 76px);box-sizing:border-box}
     body.embed-open .container{display:none}
-    .embed-wrap iframe{width:100%;height:calc(100vh - 96px);border:1px solid var(--line);
+    .embed-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+               padding:0 0 10px;flex:0 0 auto}
+    .embed-bar .eb-back{font-size:13px;color:#fff;background:var(--brand);border:none;
+                        padding:7px 16px;border-radius:8px;cursor:pointer;font-family:var(--sans)}
+    .embed-bar .eb-back:hover{background:var(--brand-deep)}
+    .embed-bar .eb-title{font-size:14px;font-weight:600;color:var(--ink)}
+    .embed-bar .eb-open{font-size:12.5px;color:var(--muted);text-decoration:none;
+                        border:1px solid var(--line);padding:5px 12px;border-radius:7px}
+    .embed-bar .eb-open:hover{color:var(--brand);border-color:var(--brand)}
+    .embed-wrap iframe{width:100%;flex:1 1 auto;min-height:0;border:1px solid var(--line);
                        border-radius:14px;background:var(--cream);display:block;
                        box-shadow:0 2px 10px rgba(42,42,42,.05)}
-    /* 被 iframe 嵌入时的精简模式：只留业务内容 */
+    /* 被 iframe 嵌入时的精简模式：只隐藏重复的侧栏/顶栏/AI机器人；
+       ⚠️ 返回条(backbar) 必须保留，否则嵌入页里没有路退回上级 */
     body.embed-mode .sidebar,
     body.embed-mode .topstrip,
-    body.embed-mode .backbar,
     body.embed-mode #aiLaunch,
     body.embed-mode #aiPanel{display:none !important}
     body.embed-mode .main{margin-left:0}
     body.embed-mode .container{max-width:none;width:100%;padding:16px 20px 34px}
     body.embed-mode .embed-wrap{display:none !important}
+    body.embed-mode .backbar{display:inline-flex !important;margin-bottom:12px}
 
     /* ===================== 窄屏回退（手机/小窗） ===================== */
     @media (max-width:900px){
@@ -279,8 +291,14 @@
       {% block content %}{% endblock %}
     </div>
 
-    <!-- 内嵌窗口：点击左侧模块时在此加载，避免整页跳转（2026-11-04） -->
+    <!-- 内嵌窗口：点击左侧模块时在此加载，避免整页跳转（2026-11-04）
+         顶部工具条：返回系统总览 / 当前模块名 / 新标签打开 —— 保证内嵌时也有路可退 -->
     <div class="embed-wrap" id="embedWrap">
+      <div class="embed-bar">
+        <button type="button" class="eb-back" id="embedBack">← 返回系统总览</button>
+        <span class="eb-title" id="embedTitle"></span>
+        <a class="eb-open" id="embedOpen" href="#" target="_blank" rel="noopener">在新标签打开 ↗</a>
+      </div>
       <iframe id="embedFrame" title="模块内容"></iframe>
     </div>
   </div>
@@ -364,13 +382,44 @@
     var ttl   = document.querySelector('.topstrip .ttl');
     if (!wrap || !frame) return;
 
+    var etitle = document.getElementById('embedTitle');
+    var eopen  = document.getElementById('embedOpen');
+    var eback  = document.getElementById('embedBack');
+
+    // 「← 返回系统总览」：关闭内嵌窗口回到主页面（不在首页时直接回首页）
+    if (eback) eback.addEventListener('click', function () {
+      var onHome = (location.pathname === '/' && !location.search);
+      if (!onHome) { location.href = '/'; return; }
+      body.classList.remove('embed-open');
+      try { frame.src = 'about:blank'; } catch (err) {}
+      if (etitle) etitle.textContent = '';
+      if (ttl) ttl.textContent = '系统总览';
+      document.querySelectorAll('.nav a.sub').forEach(function (x) { x.classList.remove('on'); });
+    });
+
+    // 内嵌页内自行跳转时，同步工具条上的模块名与「新标签打开」地址
+    frame.addEventListener('load', function () {
+      try {
+        var d = frame.contentDocument;
+        if (!d) return;
+        var t = (d.title || '').replace(/\s*·\s*海盈通保.*$/, '').trim();
+        if (t && etitle) etitle.textContent = t;
+        if (eopen && frame.contentWindow && d.location) {
+          eopen.href = d.location.pathname + d.location.search;
+        }
+      } catch (err) { /* 同源才可读，读不到就忽略 */ }
+    });
+
     document.querySelectorAll('.nav a.sub').forEach(function (a) {
       a.addEventListener('click', function (e) {
         if (e.ctrlKey || e.metaKey || e.shiftKey) return; // 保留「新标签打开」原生行为
         e.preventDefault();
-        frame.src = a.getAttribute('href');
+        var href = a.getAttribute('href');
+        frame.src = href;
         body.classList.add('embed-open');
         if (ttl) ttl.textContent = (a.textContent || '').trim();
+        if (etitle) etitle.textContent = (a.textContent || '').trim();
+        if (eopen) eopen.href = href;
         document.querySelectorAll('.nav a.sub').forEach(function (x) { x.classList.remove('on'); });
         a.classList.add('on');
       });
