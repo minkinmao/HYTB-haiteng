@@ -28,6 +28,27 @@ def admin_required(f):
     return wrapper
 
 
+# 权限分组（2026-11-04 威哥要求：按模块归类，避免一大片勾选项太乱）
+# 顺序即页面展示顺序；组内保持 Permission.id 升序。
+PERM_GROUPS = [
+    ('数据范围', ('data.',)),
+    ('OA办公 / 审批', ('oa.', 'approval.')),
+    ('人事管理', ('hr.',)),
+    ('财务管理', ('fin.', 'commission.')),
+    ('行政管理', ('adm.',)),
+    ('核心业务', ('crm.',)),
+    ('系统管理', ('it.',)),
+]
+
+
+def _perm_group_name(code):
+    """按权限 code 前缀归类；无法归类的落到「其他」。"""
+    for name, prefixes in PERM_GROUPS:
+        if any(code.startswith(p) for p in prefixes):
+            return name
+    return '其他'
+
+
 @bp.route('/admin/levels', methods=['GET'])
 @login_required
 @admin_required
@@ -35,7 +56,17 @@ def levels():
     """列出所有职级，及其当前拥有的权限（勾选即属于该职级权限流）"""
     levels = Level.query.order_by(Level.code).all()
     perms = Permission.query.order_by(Permission.id).all()
-    return render_template('admin/levels.html', levels=levels, perms=perms)
+    # 按模块分组，供模板分区渲染（组内按 id 升序）
+    grouped = {name: [] for name, _ in PERM_GROUPS}
+    grouped['其他'] = []
+    for p in perms:
+        grouped[_perm_group_name(p.code)].append(p)
+    perm_groups = [{'name': name, 'perms': grouped[name]}
+                   for name, _ in PERM_GROUPS if grouped[name]]
+    if grouped['其他']:
+        perm_groups.append({'name': '其他', 'perms': grouped['其他']})
+    return render_template('admin/levels.html', levels=levels, perms=perms,
+                           perm_groups=perm_groups)
 
 
 # ---------- 用户管理：绑定企业微信 userid（2026-09-28）----------
@@ -79,6 +110,10 @@ def set_level_permissions(code):
     # 按提交的 id 集合重建该职级的权限；为空则清空权限流
     lv.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
     db.session.commit()
+    # 2026-11-04：前端改为「弹窗确认 + AJAX 保存、不刷新页面」；AJAX 请求返回 JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.form.get('ajax') == '1':
+        return {'ok': True,
+                'msg': '已更新「%s」的权限流，共 %d 项' % (lv.name, len(lv.permissions))}
     flash(f'已更新「{lv.name}」的权限流')
     return redirect(url_for('admin.levels'))
 

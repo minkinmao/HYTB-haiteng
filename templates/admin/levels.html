@@ -2,34 +2,156 @@
 {% block title %}IT后台 · 职级权限流{% endblock %}
 {% block content %}
 
+<style>
+  .lv-form{border:1px solid #F1EAE0;border-radius:10px;padding:16px;margin-bottom:16px;background:#fff}
+  .lv-hd{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pgrid{display:flex;flex-direction:column;gap:12px}
+  .pgroup{border:1px solid #F3EDE3;border-radius:10px;overflow:hidden;background:#FDFBF8}
+  .pgroup-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
+             padding:9px 14px;background:#FAF7F2;border-bottom:1px solid #F3EDE3;
+             font-size:13px;font-weight:600;color:#5C554D}
+  .pgroup-hd .cnt{font-weight:400;color:#9C9288;font-size:12px}
+  .pgroup-bd{display:flex;flex-wrap:wrap;gap:8px 16px;padding:12px 14px}
+  .pgroup-bd label{font-size:13px;color:#5C554D;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .pgroup-bd label .code{color:#9C9288;font-size:11.5px}
+  .pgroup-hd button{background:#fff;border:1px solid #E2D8CA;border-radius:6px;padding:3px 10px;
+                    font-size:12px;color:#6B5D4F;cursor:pointer;font-family:inherit}
+  .pgroup-hd button:hover{border-color:#E6823C;color:#C86432}
+  .save-bar{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .save-msg{font-size:13px;color:#166534;display:none}
+  .save-msg.err{color:#C0392B}
+</style>
+
 <div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
   <h2 style="margin:0 0 6px;font-size:16px">职级权限流配置</h2>
   <p style="margin:0 0 16px;font-size:13px;color:#9C9288">
-    勾选即把权限加入该职级的"权限流"，保存后即时生效。仅 S 级可操作。
+    已按模块分组，可整组「全选 / 清空」；点「保存」会先弹窗确认，确认后仅更新该职级，
+    <b style="color:#C86432">页面不刷新</b>。仅 S 级可操作。
   </p>
 
   {% for lv in levels %}
-  <form method="post" action="{{ url_for('admin.set_level_permissions', code=lv.code) }}"
-        style="border:1px solid #F1EAE0;border-radius:8px;padding:14px;margin-bottom:14px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:10px">
+  <form class="lv-form" data-code="{{ lv.code }}" data-name="{{ lv.name }}"
+        action="{{ url_for('admin.set_level_permissions', code=lv.code) }}" method="post"
+        onsubmit="return false;">
+    <div class="lv-hd">
       {{ lv.code }} 级 · {{ lv.name }}
       <span style="font-weight:400;font-size:12px;color:#9C9288">（{{ lv.titles }}）</span>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
-      {% for p in perms %}
-      <label style="font-size:13px;color:#5C554D;cursor:pointer">
-        <input type="checkbox" name="perm_ids" value="{{ p.id }}"
-               {% if p in lv.permissions %}checked{% endif %}>
-        {{ p.name }} <span style="color:#9C9288">({{ p.code }})</span>
-      </label>
+
+    <div class="pgrid">
+      {% for grp in perm_groups %}
+      <div class="pgroup">
+        <div class="pgroup-hd">
+          <span>{{ grp.name }} <span class="cnt">· {{ grp.perms|length }} 项</span></span>
+          <button type="button" onclick="toggleGroup(this)">全选 / 清空</button>
+        </div>
+        <div class="pgroup-bd">
+          {% for p in grp.perms %}
+          <label>
+            <input type="checkbox" name="perm_ids" value="{{ p.id }}"
+                   {% if p in lv.permissions %}checked{% endif %}>
+            {{ p.name }} <span class="code">{{ p.code }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
       {% endfor %}
     </div>
-    <button type="submit"
-            style="margin-top:12px;background:#E6823C;color:#fff;border:none;padding:7px 18px;border-radius:6px;font-size:13px;cursor:pointer">
-      保存「{{ lv.code }}」权限流
-    </button>
+
+    <div class="save-bar">
+      <button type="button" onclick="askSave(this)"
+              style="background:#E6823C;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">
+        保存「{{ lv.code }}」权限流
+      </button>
+      <span class="save-msg"></span>
+    </div>
   </form>
   {% endfor %}
 </div>
+
+{# ===================== 保存确认弹窗 ===================== #}
+<div id="permConfirm" style="display:none;position:fixed;inset:0;background:rgba(42,42,42,.45);z-index:90;
+     align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:14px;max-width:440px;width:100%;box-shadow:0 12px 40px rgba(42,42,42,.28);overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid #F3EDE3;font-size:16px;font-weight:600">确认保存权限流</div>
+    <div id="permConfirmBody" style="padding:16px 20px;font-size:13.5px;color:#5C554D;line-height:1.8"></div>
+    <div style="padding:12px 20px;border-top:1px solid #F3EDE3;display:flex;justify-content:flex-end;gap:10px">
+      <button type="button" onclick="closeConfirm()"
+              style="background:#fff;border:1px solid #E2D8CA;color:#6B5D4F;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">取消</button>
+      <button type="button" onclick="confirmSave()"
+              style="background:#E6823C;border:none;color:#fff;padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">确认保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var pending = null;   // 待保存的表单
+  var modal = document.getElementById('permConfirm');
+  var body = document.getElementById('permConfirmBody');
+
+  // 整组全选 / 清空
+  window.toggleGroup = function (btn) {
+    var group = btn.closest('.pgroup');
+    var boxes = group.querySelectorAll('input[type=checkbox]');
+    var allChecked = Array.prototype.every.call(boxes, function (b) { return b.checked; });
+    Array.prototype.forEach.call(boxes, function (b) { b.checked = !allChecked; });
+  };
+
+  // 点保存 → 先弹窗确认
+  window.askSave = function (btn) {
+    var form = btn.closest('form');
+    pending = form;
+    var code = form.getAttribute('data-code');
+    var name = form.getAttribute('data-name');
+    var n = form.querySelectorAll('input[name=perm_ids]:checked').length;
+    var total = form.querySelectorAll('input[name=perm_ids]').length;
+    body.innerHTML = '即将保存 <b>' + code + ' 级 · ' + name + '</b> 的权限流。<br>'
+                   + '已勾选 <b style="color:#C86432">' + n + '</b> / ' + total + ' 项。<br>'
+                   + '<span style="color:#9C9288">保存后立即生效。</span>';
+    modal.style.display = 'flex';
+  };
+
+  window.closeConfirm = function () { modal.style.display = 'none'; pending = null; };
+
+  // 确认 → AJAX 保存（不刷新页面）
+  window.confirmSave = function () {
+    if (!pending) return;
+    var form = pending;
+    var msgEl = form.querySelector('.save-msg');
+    var btn = form.querySelector('.save-bar button');
+    var code = form.getAttribute('data-code');
+    var fd = new FormData(form);
+    fd.append('ajax', '1');
+    btn.disabled = true;
+    btn.textContent = '保存中…';
+    fetch(form.getAttribute('action'), {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      msgEl.style.display = 'inline';
+      if (res && res.ok) {
+        msgEl.className = 'save-msg';
+        msgEl.textContent = '✓ ' + (res.msg || '已保存');
+      } else {
+        msgEl.className = 'save-msg err';
+        msgEl.textContent = '✗ ' + ((res && res.msg) || '保存失败');
+      }
+    }).catch(function () {
+      msgEl.style.display = 'inline';
+      msgEl.className = 'save-msg err';
+      msgEl.textContent = '✗ 网络错误，保存失败';
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '保存「' + code + '」权限流';
+      closeConfirm();
+    });
+  };
+
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeConfirm(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeConfirm(); });
+})();
+</script>
 
 {% endblock %}
