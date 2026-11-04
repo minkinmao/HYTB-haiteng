@@ -85,6 +85,20 @@
     .nav .sys-bd .sub.on::before{background:var(--brand)}
     .nav .sys-bd .sub.empty{color:#6E665D;cursor:default;font-size:12px;padding-left:30px}
     .nav .sys-bd .sub.empty:hover{background:none;color:#6E665D}
+    /* —— 三级菜单（2026-11-04 威哥：页内重复的 tab 收进左侧做三级）——
+       分组标题可展开/收起，三级项比二级再缩进一档，点击同样打开独立页签 */
+    .nav .sys-bd .sub-grp{margin:1px 0}
+    .nav .sub-grp-hd{display:flex;align-items:center;gap:8px;padding:8px 12px 8px 30px;
+                     border-radius:8px;color:#9C9288;font-size:13px;cursor:pointer;user-select:none}
+    .nav .sub-grp-hd:hover{background:rgba(255,255,255,.06);color:#fff}
+    .nav .sub-grp-hd .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .nav .sub-grp-hd .ar{font-size:10px;color:#6E665D;transition:transform .2s}
+    .nav .sub-grp.open .sub-grp-hd .ar{transform:rotate(90deg);color:#9C9288}
+    .nav .sub-grp.open .sub-grp-hd{color:#E4DCD2}
+    .nav .sub-grp-bd{display:none;padding:1px 0 4px}
+    .nav .sub-grp.open .sub-grp-bd{display:block}
+    .nav .sys-bd .sub.lv3{padding-left:44px;font-size:12.5px}
+    .nav .sys-bd .sub.lv3::before{left:31px;width:4px;height:4px}
     /* 底部用户区 */
     .side-foot{border-top:1px solid rgba(255,255,255,.07);padding:13px 16px 15px;font-size:12px}
     .side-foot .row{display:flex;align-items:center;gap:9px}
@@ -261,7 +275,21 @@
         </div>
         <div class="sys-bd">
           {% for m in s.subs %}
+          {% if m.children %}
+          {# 三级分组：默认展开（少一次点击），标题可收起；子项各自是独立页面 #}
+          <div class="sub-grp open">
+            <div class="sub-grp-hd" onclick="this.parentNode.classList.toggle('open')">
+              <span class="nm">{{ m.name }}</span><span class="ar">▸</span>
+            </div>
+            <div class="sub-grp-bd">
+              {% for c in m.children %}
+              <a class="sub lv3 {{ 'on' if request.endpoint == c.url else '' }}" href="{{ url_for(c.url) }}">{{ c.name }}</a>
+              {% endfor %}
+            </div>
+          </div>
+          {% else %}
           <a class="sub {{ 'on' if request.endpoint == m.url else '' }}" href="{{ url_for(m.url) }}">{{ m.name }}</a>
+          {% endif %}
           {% else %}
           <div class="sub empty">（暂无可用模块）</div>
           {% endfor %}
@@ -380,9 +408,12 @@
         try { localStorage.setItem(KEY, b.classList.contains('nav-collapsed') ? '1' : '0'); } catch (e) {}
       });
     }
-    // 当前页高亮项自动展开其父级系统
+    // 当前页高亮项自动展开其父级系统 / 父级三级分组
     var cur = document.querySelector('.nav .sys-bd .sub.on');
-    if (cur) { var sys = cur.closest('.sys'); if (sys) sys.classList.add('open'); }
+    if (cur) {
+      var sys = cur.closest('.sys'); if (sys) sys.classList.add('open');
+      var grp = cur.closest('.sub-grp'); if (grp) grp.classList.add('open');
+    }
   })();
   </script>
   <!-- ===================== 内嵌窗口：点击模块不跳页（2026-11-04） =====================

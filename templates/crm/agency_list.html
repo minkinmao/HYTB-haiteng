@@ -19,13 +19,6 @@
   <b>全称全系统唯一</b>；<b>名下挂了人的不允许删除</b>（先把人挪走）。
 </div>
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
-  <a class="crm-tab on" href="{{ url_for('crm.agencies') }}">合作经代<span class="n">{{ kpi.total }}</span></a>
-  <a class="crm-tab" href="{{ url_for('crm.manpower') }}">人力数据清单</a>
-  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
-  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
-</div>
 
 <div class="crm-kpis">
   <div class="crm-kpi"><div class="k">经代主体总数</div><div class="v">{{ kpi.total }}</div></div>

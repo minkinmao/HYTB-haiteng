@@ -277,19 +277,34 @@ SYSTEMS = [
             #   保司档案 ← 保险公司档案 + 省分公司档案（后者改为页内「省分公司」页签）
             #   产品合约 ← 合约总览 + 总公司合约协议 + 分公司合约协议 + 继续率考核规则
             #              （四者保留独立 URL，改挂「产品合约」页内页签，另加「佣金查询」）
-            {'name': '保司档案', 'en': 'Insurer', 'url': 'crm.insurers', 'done': True},
-            {'name': '产品合约', 'en': 'ProdCtr', 'url': 'crm.contracts', 'done': True},
-            # 十九改（2026-10-02）：业务团队费用设置 = 先建架构、再录人、后配费用政策。
-            #   「人力架构」= 省公司→分支→分区→营业部→营业组（录人前必须先建）；
-            #   「人力数据清单」= 人员底表（谁属哪类团队、什么职级、推荐关系、银行卡）。
-            {'name': '人力架构', 'en': 'OrgStruct', 'url': 'crm.org_struct', 'done': True},
-            # 十九改++（2026-10-02）：合作经代公司基础信息（人力档案「所属经代公司」的维护端口）
-            {'name': '合作经代', 'en': 'Agency', 'url': 'crm.agencies', 'done': True},
-            {'name': '人力数据清单', 'en': 'Manpower', 'url': 'crm.manpower', 'done': True},
-            # 二十一改（2026-10-03）：团队系数设置 = 系数 × 基准费率（对齐小程序分配机制）
-            {'name': '团队系数设置', 'en': 'TeamCoef', 'url': 'crm.team_coefficient', 'done': True},
-            # 二十二改（2026-10-05）：销售费用清单 = 先扣公司税费 × 团队系数（按团队查询）
-            {'name': '销售费用清单', 'en': 'SalesFee', 'url': 'crm.sales_fee', 'done': True},
+            # 2026-11-04（威哥）：页内那排 tab 与左侧菜单重复 → 统一改成**三级菜单**。
+            # 规则：父项（无 url）= 左侧可展开的分组；children = 三级项，各自独立 URL / 独立页签。
+            # 授权粒度仍按"组"：组内任一项被授权，则整组可见（见 GROUP_MEMBERS），老授权不用迁移。
+            # —— 保司档案组 ——
+            {'name': '保司档案', 'en': 'Insurer', 'children': [
+                {'name': '保险公司总览', 'url': 'crm.insurers', 'done': True},
+                {'name': '省分公司', 'url': 'crm.branch_list', 'done': True},
+            ]},
+            # —— 产品合约组（合约总览 / 总分公司协议 / 继续率规则 / 唯一性规则 / 资料库 / 佣金查询）——
+            {'name': '产品合约', 'en': 'ProdCtr', 'children': [
+                {'name': '产品合约总览', 'url': 'crm.contracts', 'done': True},
+                {'name': '总公司合约协议', 'url': 'crm.hq_contracts', 'done': True},
+                {'name': '分公司合约协议', 'url': 'crm.branch_contracts', 'done': True},
+                {'name': '继续率考核规则', 'url': 'crm.rule_list', 'done': True},
+                {'name': '唯一性规则', 'url': 'crm.unique_rules', 'done': True},
+                {'name': '产品资料库', 'url': 'crm.docs', 'done': True},
+                {'name': '佣金查询', 'url': 'crm.commission_query', 'done': True},
+            ]},
+            # —— 人力与团队组（先建架构 → 录人 → 配费用政策）——
+            #   「人员信息录入」= 威哥 2026-11-04 要求补的独立端口，直接进新增人员表单。
+            {'name': '人力与团队', 'en': 'Manpower', 'children': [
+                {'name': '人力架构', 'url': 'crm.org_struct', 'done': True},
+                {'name': '合作经代', 'url': 'crm.agencies', 'done': True},
+                {'name': '人员信息录入', 'url': 'crm.manpower_new', 'done': True},
+                {'name': '人力数据清单', 'url': 'crm.manpower', 'done': True},
+                {'name': '团队系数设置', 'url': 'crm.team_coefficient', 'done': True},
+                {'name': '销售费用清单', 'url': 'crm.sales_fee', 'done': True},
+            ]},
             # 2026-11-02 新增：产品佣金系数（一键导入采购成本 → 设销售系数 → 自动生成基础/销售/经营费用）
             {'name': '产品佣金系数', 'en': 'CommCoef', 'url': 'crm.commission_coefficient', 'done': True},
             # 十八改（2026-10-02）：产品查询 与 产品资料库 合并，统一命名「产品资料库」
@@ -347,41 +362,86 @@ SYSTEM_MAP = {s['key']: s for s in SYSTEMS}
 # 与职级权限流(level_permission)是两条独立维度：职级决定功能操作权限，
 # 本处决定"用户能看见/进入哪些二级菜单"（左侧菜单过滤 + before_request 拦截）。
 def all_module_keys():
-    """所有可授权的二级菜单端点（done=True 且有 url 的模块/设置）"""
+    """所有可授权的菜单端点（二级模块 + 三级子项，done=True 且有 url）"""
     keys = []
     for s in SYSTEMS:
         for grp in ('modules', 'settings'):
             for m in s.get(grp, []):
                 if m.get('done') and m.get('url'):
                     keys.append(m['url'])
+                for c in m.get('children', []):          # 三级子项同样可授权
+                    if c.get('done') and c.get('url'):
+                        keys.append(c['url'])
     return keys
+
+
+def _group_members():
+    """端点 → 所属分组内的全部端点（含父项自身）。
+
+    用途：三级菜单按"组"授权 —— 组内任意一项被授权，整组都算有权限，
+    这样老用户的历史授权（如只有「人力数据清单」）不用迁移也能看到同组其他项。"""
+    g = {}
+    for s in SYSTEMS:
+        for grp in ('modules', 'settings'):
+            for m in s.get(grp, []):
+                kids = [c['url'] for c in m.get('children', []) if c.get('url')]
+                if not kids:
+                    continue
+                members = set(kids)
+                if m.get('url'):
+                    members.add(m['url'])
+                for k in members:
+                    g.setdefault(k, set()).update(members)
+    return g
+
+
+GROUP_MEMBERS = _group_members()
 
 
 MODULE_KEYS = all_module_keys()
 
 
 def user_module_keys(user):
-    """返回用户可访问的二级菜单端点集合；is_admin 返回全部"""
+    """返回用户可访问的菜单端点集合；is_admin 返回全部。
+
+    三级菜单的组内授权：命中组内任一端点 → 该组全部端点放行（免迁移）。"""
     if not user:
         return set()
     if getattr(user, 'is_admin', False):
         return set(MODULE_KEYS)
-    return {p.menu_key for p in user.module_perms}
+    keys = {p.menu_key for p in user.module_perms}
+    for k in list(keys):
+        keys |= GROUP_MEMBERS.get(k, set())
+    return keys
 
 
 def build_menu_tree(allowed):
-    """按一级系统组织二级菜单（allowed 为可访问端点集合）；admin 传入全集。
-    每项 subs 仅含该用户有权限的模块（纯中文 name，不带英文名）。"""
+    """按一级系统组织二级/三级菜单（allowed 为可访问端点集合）；admin 传入全集。
+
+    - 普通模块：subs 里一项 = 一个页面；
+    - 三级分组：children 非空 → 先按权限过滤子项，子项全部无权限则整组不显示。
+    """
     tree = []
     for s in SYSTEMS:
         subs = []
         seen = set()  # 2026-11-04：按 URL 去重，防止模块/设置登记同一页面（如 IT 的 admin.levels）重复出现
         for grp in ('modules', 'settings'):
             for m in s.get(grp, []):
+                kids_ok = []
+                for c in m.get('children', []):
+                    if c.get('url') and c['url'] in allowed and c['url'] not in seen:
+                        seen.add(c['url'])
+                        kids_ok.append({'name': c['name'], 'url': c['url'], 'en': c.get('en', '')})
+                if kids_ok:                      # 三级分组：本身不带 url，只做可展开标题
+                    subs.append({'name': m['name'], 'url': '', 'en': m.get('en', ''),
+                                 'children': kids_ok})
+                    continue
                 if m.get('url') and m['url'] in allowed and m['url'] not in seen:
                     seen.add(m['url'])
-                    subs.append({'name': m['name'], 'url': m['url'], 'en': m.get('en', '')})
-        tree.append({'name': s['name'], 'key': s['key'], 'subs': subs})
+                    subs.append({'name': m['name'], 'url': m['url'], 'en': m.get('en', ''),
+                                 'children': []})
+        n_leaf = sum(len(x['children']) if x['children'] else 1 for x in subs)
+        tree.append({'name': s['name'], 'key': s['key'], 'subs': subs, 'n': n_leaf})
     return tree
 
 

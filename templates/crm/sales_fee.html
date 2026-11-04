@@ -24,13 +24,6 @@
   选择<b>团队范围</b>即可查出该范围内各产品缴别的销售费用；一行 = 一个产品缴别。
 </div>
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
-  <a class="crm-tab" href="{{ url_for('crm.manpower') }}">人力数据清单</a>
-  <a class="crm-tab" href="{{ url_for('crm.agencies') }}">合作经代</a>
-  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
-  <a class="crm-tab on" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
-</div>
 
 <form class="crm-tool" method="get" action="{{ url_for('crm.sales_fee') }}">
   <label>团队类型</label>

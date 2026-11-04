@@ -21,13 +21,6 @@
   在职状态由<b>离职时间</b>自动判定（空 或 晚于今天 = 在职），不用手工维护。
 </div>
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
-  <a class="crm-tab" href="{{ url_for('crm.agencies') }}">合作经代</a>
-  <a class="crm-tab on" href="{{ url_for('crm.manpower') }}">人力数据清单<span class="n">{{ kpi.total }}</span></a>
-  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
-  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
-</div>
 
 <div class="crm-kpis">
   <div class="crm-kpi"><div class="k">总人数</div><div class="v">{{ kpi.total }}</div></div>

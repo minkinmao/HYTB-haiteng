@@ -41,17 +41,6 @@
 </div>
 {% endif %}
 
-<div class="crm-tabs">
-  <a class="crm-tab {{ 'on' if side == 'all' else '' }}" href="{{ url_for('crm.contracts') }}">产品合约</a>
-  <a class="crm-tab {{ 'on' if side == 'hq' else '' }}" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
-  <a class="crm-tab {{ 'on' if side == 'br' else '' }}" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
-  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
-  <a class="crm-tab" href="{{ url_for('crm.commission_query') }}">佣金查询</a>
-  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
-  <a class="crm-tab" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
-  {# 十六改：唯一性规则设置入口（同一保司+产品+缴别 只能录一次，开关在这里改） #}
-  <a class="crm-tab" href="{{ url_for('crm.unique_rules') }}">唯一性规则</a>
-</div>
 
 <div class="crm-kpis">
   <div class="crm-kpi"><div class="k">{% if side == 'all' %}合约总数{% else %}本口径合约{% endif %}</div><div class="v">{{ kpi.total }}</div></div>

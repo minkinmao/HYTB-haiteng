@@ -4,13 +4,6 @@
 {% block content %}
 {% include 'crm/_crm_css.html' %}
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.insurers') }}">保司档案</a>
-  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
-  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
-  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
-  <a class="crm-tab on" href="{{ url_for('crm.unique_rules') }}">唯一性规则</a>
-</div>
 
 <h2 style="font-size:18px;margin:0 0 6px">唯一性规则
   <small style="font-size:12px;color:#9C9288;font-weight:400">（不允许重复录入 · 后台开关）</small>

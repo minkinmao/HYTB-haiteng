@@ -13,13 +13,6 @@
   <br>十六改：保司列统一按<b>简称</b>展示；同一保司下的省分公司<b>全称 / 简称唯一</b>，重复会被拦下。
 </div>
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.insurers') }}">保险公司</a>
-  <a class="crm-tab on" href="{{ url_for('crm.branch_list') }}">省分公司</a>
-  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
-  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
-  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
-</div>
 
 <div class="crm-kpis">
   <div class="crm-kpi"><div class="k">分公司总数</div><div class="v">{{ kpi.total }}</div></div>

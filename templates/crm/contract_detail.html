@@ -29,13 +29,6 @@
   {% if out_cnt %}<span class="crm-tag t-warn" style="margin-left:8px">含 {{ out_cnt }} 项协议外政策</span>{% endif %}
 </div>
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
-  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
-  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
-  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
-  <a class="crm-tab" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
-</div>
 
 <div class="crm-tool">
   {% if can_manage %}

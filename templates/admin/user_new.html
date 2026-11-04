@@ -17,6 +17,10 @@
   .tree .subs{display:flex;flex-wrap:wrap;gap:6px 18px;padding-left:6px}
   .tree .sub{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
   .tree .sub input{width:auto;margin:0}
+  /* 三级分组：标题独占一行，子项再缩进一档（2026-11-04 三级菜单改造） */
+  .tree .grp{width:100%;font-size:12.5px;font-weight:600;color:var(--ink);margin:6px 0 -2px;padding-left:2px}
+  .tree .grp::before{content:"▾ ";color:var(--brand)}
+  .tree .sub.lv3{padding-left:16px;font-size:12.5px}
   .form-actions{margin-top:22px;display:flex;gap:12px;align-items:center}
   .lnk{color:var(--brand-deep);font-size:13px}
 </style>
@@ -68,14 +72,26 @@
   <div class="tree">
     {% for s in full_tree %}
     <div class="sys">
-      <div class="sys-hd">{{ s.name }}<span class="cnt">（{{ s.subs|length }} 个模块）</span></div>
+      <div class="sys-hd">{{ s.name }}<span class="cnt">（{{ s.n }} 个模块）</span></div>
       <div class="subs">
         {% for m in s.subs %}
+        {% if m.children %}
+        {# 三级分组（2026-11-04）：分组标题不可勾选，逐项勾选子页面 #}
+        <div class="grp">{{ m.name }}</div>
+        {% for c in m.children %}
+        <label class="sub lv3">
+          <input type="checkbox" name="keys" value="{{ c.url }}"
+                 {{ 'checked' if c.url in owned else '' }}>
+          {{ c.name }}
+        </label>
+        {% endfor %}
+        {% else %}
         <label class="sub">
           <input type="checkbox" name="keys" value="{{ m.url }}"
                  {{ 'checked' if m.url in owned else '' }}>
           {{ m.name }}
         </label>
+        {% endif %}
         {% else %}
         <span class="cnt">（暂无可用模块）</span>
         {% endfor %}

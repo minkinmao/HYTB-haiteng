@@ -43,13 +43,6 @@
     选保司 → 弹出产品 → 产品多选 → 选择要关联的规则 → 保存</div>
 </div>
 
-<div class="crm-tabs">
-  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
-  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
-  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
-  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
-  <a class="crm-tab on" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
-</div>
 
 <form class="crm-tool" method="get" action="{{ url_for('crm.rule_match') }}">
   <label>保险公司</label>
