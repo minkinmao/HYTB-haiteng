@@ -64,7 +64,7 @@
   <p class="hint" style="margin-top:6px">初始密码默认 123456（留空或保持默认即可）；密码为 123456 的账号首次登录会被强制修改。</p>
 
   <label>开通模块权限（二级菜单）</label>
-  <p class="hint">勾选即开通该账号访问对应模块；不勾则左侧菜单不显示、直链访问会被拦截。</p>
+  <p class="hint">选择职级后会自动勾选该职级的<b>默认模块</b>（初始化自动分配），可再手动增删；不勾则左侧菜单不显示、直链访问会被拦截。</p>
   <div class="tree">
     {% for s in full_tree %}
     <div class="sys">
@@ -89,4 +89,21 @@
     <a class="lnk" href="{{ url_for('admin.users') }}">返回列表</a>
   </div>
 </form>
+
+<script>
+(function () {
+  // 职级 id → 默认模块列表（后端注入）：选职级即自动勾选对应默认模块
+  var LEVEL_DEFAULTS = {{ level_defaults_by_id|tojson }};
+  var sel = document.querySelector('select[name=level_id]');
+  if (!sel) return;
+  sel.addEventListener('change', function () {
+    var keys = LEVEL_DEFAULTS[sel.value] || [];
+    var set = {};
+    keys.forEach(function (k) { set[k] = 1; });
+    document.querySelectorAll('input[name=keys]').forEach(function (cb) {
+      cb.checked = !!set[cb.value];
+    });
+  });
+})();
+</script>
 {% endblock %}

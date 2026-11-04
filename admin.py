@@ -10,6 +10,45 @@ from app import login_required, MODULE_KEYS, build_menu_tree, log_audit
 bp = Blueprint('admin', __name__)
 
 
+# ===================== 职级 → 默认模块（建号时自动分配初始权限） =====================
+# 2026-11-04 威哥定权限模型：
+#   ① 初始化：按员工职级自动分配初始的系统功能（二级菜单）权限；
+#   ② 管理员后台：可再按用户单独增减（user_perms 页）。
+# 角色口径：S/A/B 以审批为主；B/C 涉及二级审批；C 及以下以系统操作为主。
+def _uniq(seq):
+    """列表去重且保持顺序（多组拼接时用）。"""
+    seen, out = set(), []
+    for x in seq:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+
+_OA_APPROVE = ['oa.approvals', 'oa.todos', 'oa.apply_hub', 'oa.announcements']
+_OA_BASIC = ['oa.mails', 'oa.announcements', 'oa.apply_hub', 'oa.todos']
+_HR_OPS = ['hr.org_admin', 'hr.pay_admin', 'hr.att_admin']
+_ADM_OPS = ['adm.licenses', 'adm.contracts', 'adm.assets', 'adm.vehicles', 'adm.expenses', 'adm.services']
+_FIN_OPS = ['fin.acct_hub', 'fin.bank_hub', 'fin.report_hub', 'fin.invoices', 'fin.auto_book',
+            'fin.confirm_hub', 'fin.cash_orders', 'commission.commissions', 'commission.bonuses']
+_CRM_OPS = ['crm.insurers', 'crm.contracts', 'crm.org_struct', 'crm.agencies', 'crm.manpower',
+            'crm.team_coefficient', 'crm.sales_fee', 'crm.commission_coefficient', 'crm.docs',
+            'crm.policy_orders', 'crm.policy_query', 'crm.dashboard']
+_SALES_OPS = ['crm.proposals', 'crm.proposal_engine']
+_IT_OPS = ['admin.levels', 'admin.users']
+
+LEVEL_DEFAULT_MODULES = {
+    'S': _uniq(list(MODULE_KEYS)),                                                     # 最高负责人：全部
+    'A': _uniq(_OA_APPROVE + _HR_OPS + _ADM_OPS + _FIN_OPS + _CRM_OPS + _SALES_OPS),   # 部门负责人：审批 + 全业务
+    'B': _uniq(_OA_APPROVE + _HR_OPS + _CRM_OPS + _SALES_OPS),                         # 部门总经理：审批 + 业务
+    'C': _uniq(_OA_APPROVE + _HR_OPS + _ADM_OPS + _CRM_OPS + _SALES_OPS),              # 部门主管：二级审批 + 业务操作
+    'D': _uniq(_OA_BASIC + _CRM_OPS + _SALES_OPS),                                     # 部门员工：业务操作
+    'E': _uniq(_OA_BASIC),                                                             # 其他人员：OA 基础
+    'IT': _uniq(_IT_OPS),                                                              # IT 系统管理员：系统管理
+    'M2': _uniq(_OA_APPROVE + _IT_OPS),                                                # 二级系统管理员：审批 + 系统管理
+}
+
+
 def admin_required(f):
     """权限闸门（#40）：只有拥有 it.system.manage 权限才能进 IT 管理员后台。
 
@@ -126,6 +165,8 @@ def user_new():
     """新建用户：工号(登录账号) + 密码 + 职级 + 可访问的二级菜单模块权限"""
     levels = Level.query.order_by(Level.code).all()
     full_tree = build_menu_tree(set(MODULE_KEYS))  # 全量模块（按系统分组），供勾选
+    # 职级 id → 默认模块列表（前端「选职级自动勾选」用；后端也会兜底分配）
+    level_defaults_by_id = {str(lv.id): LEVEL_DEFAULT_MODULES.get(lv.code, []) for lv in levels}
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
         pinyin = (request.form.get('pinyin') or '').strip().lower()
@@ -137,20 +178,25 @@ def user_new():
             pwd2 = '123456'
         level_id = request.form.get('level_id')
         keys = request.form.getlist('keys')  # 勾选的模块端点
+        # ① 初始化自动分配：未手工勾选时，按职级默认模块开通（威哥定的权限模型）
+        if not keys and level_id:
+            _lv = Level.query.get(int(level_id))
+            if _lv:
+                keys = LEVEL_DEFAULT_MODULES.get(_lv.code, [])
         # 校验失败也回显已勾选的模块，避免用户重选
         owned_keys = set(keys)
         if not username:
             flash('登录账号（工号）不能为空')
-            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys)
+            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys, level_defaults_by_id=level_defaults_by_id)
         if len(pwd) < 6:
             flash('密码至少 6 位')
-            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys)
+            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys, level_defaults_by_id=level_defaults_by_id)
         if pwd != pwd2:
             flash('两次输入的密码不一致')
-            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys)
+            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys, level_defaults_by_id=level_defaults_by_id)
         if User.query.filter_by(username=username).first():
             flash('该工号账号已存在')
-            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys)
+            return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys, level_defaults_by_id=level_defaults_by_id)
         # 初始密码为 123456 的账号，首次登录强制改密（沿用既有机制）
         must_change = (pwd == '123456')
         u = User(username=username, password_hash=generate_password_hash(pwd),
@@ -166,7 +212,7 @@ def user_new():
         db.session.commit()
         flash('已创建用户「%s」并开通 %d 个模块权限' % (username, added))
         return redirect(url_for('admin.users'))
-    return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=set())
+    return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=set(), level_defaults_by_id=level_defaults_by_id)
 
 
 @bp.route('/admin/users/<int:uid>/perms', methods=['GET', 'POST'])
@@ -177,6 +223,8 @@ def user_perms(uid):
     u = User.query.get_or_404(uid)
     full_tree = build_menu_tree(set(MODULE_KEYS))  # 全量模块（按系统分组），供勾选
     owned = {p.menu_key for p in u.module_perms}
+    # 该用户职级的默认模块（供「按职级默认填充」按钮）
+    level_default_keys = LEVEL_DEFAULT_MODULES.get(u.level.code, []) if u.level else []
     if request.method == 'POST':
         keys = request.form.getlist('keys')
         # 重建权限：先删后建（空列表即清空该用户全部模块权限）
@@ -189,7 +237,8 @@ def user_perms(uid):
         db.session.commit()
         flash('已更新「%s」的模块权限（%d 个）' % (u.username, added))
         return redirect(url_for('admin.users'))
-    return render_template('admin/user_perms.html', u=u, full_tree=full_tree, owned=owned)
+    return render_template('admin/user_perms.html', u=u, full_tree=full_tree, owned=owned,
+                           level_default_keys=level_default_keys)
 
 
 @bp.route('/admin/users/<int:uid>/password', methods=['GET', 'POST'])

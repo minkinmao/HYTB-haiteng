@@ -61,7 +61,24 @@
 
   <div class="form-actions">
     <button class="btn" type="submit" {{ 'disabled' if u.is_admin else '' }}>保存权限</button>
+    <button type="button" class="lnk" onclick="fillLevelDefaults()"
+            style="background:#fff;border:1px solid var(--line);padding:8px 16px;border-radius:9px;cursor:pointer;color:var(--ink-2)"
+            {{ 'disabled' if u.is_admin else '' }}>按职级默认填充</button>
     <a class="lnk" href="{{ url_for('admin.users') }}">返回列表</a>
   </div>
 </form>
+
+<script>
+(function () {
+  // 该用户职级的默认模块：一键勾选（管理员可在此基础上再增减）
+  var DEF = {{ level_default_keys|tojson }};
+  window.fillLevelDefaults = function () {
+    var set = {};
+    DEF.forEach(function (k) { set[k] = 1; });
+    document.querySelectorAll('input[name=keys]').forEach(function (cb) {
+      if (!cb.disabled) cb.checked = !!set[cb.value];
+    });
+  };
+})();
+</script>
 {% endblock %}
