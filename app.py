@@ -708,6 +708,19 @@ def find_logo_mark():
     return find_static_img('logo-mark') or find_logo()
 
 
+def is_embedded_request():
+    """当前请求是否发生在主页面 iframe 里（用于隐藏 iframe 内重复的侧栏/顶栏）。
+
+    判定顺序（多保险，避免只靠前端 JS 时机）：
+      ① Sec-Fetch-Dest: iframe —— 现代浏览器对 iframe 导航自动带，最可靠；
+      ② URL 带 hy_embed=1 —— 打开页签时由前端显式追加，兼容不支持 Sec-Fetch 的浏览器。
+    注意：这里只影响页面外壳渲染，不影响权限。
+    """
+    if (request.headers.get('Sec-Fetch-Dest') or '').lower() == 'iframe':
+        return True
+    return request.args.get('hy_embed') in ('1', 'iframe')
+
+
 @app.context_processor
 def inject_layout():
     """向所有模板注入：nav_systems（左侧导航）、logo_mark_url（LOGO 图标）、page_title（页面标题）"""
@@ -743,6 +756,8 @@ def inject_layout():
         'page_title': title,
         # 统一返回条：由 BACK_MAP 算出当前页的上一级，base.html 负责渲染（顶层页为 None）
         'back': build_back_link(ep, request.view_args),
+        # 是否被主页面 iframe 嵌入 → base.html 给 body 加 embed-mode，隐藏重复的侧栏/顶栏
+        'is_embedded': is_embedded_request(),
     }
 
 

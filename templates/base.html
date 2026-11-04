@@ -223,7 +223,7 @@
     }
   </style>
 </head>
-<body>
+<body{% if is_embedded %} class="embed-mode"{% endif %}>
 <div class="layout">
 
   <!-- ===================== 左侧导航（原顶部板块统一移到此处） ===================== -->
@@ -392,7 +392,25 @@
   (function () {
     var body = document.body;
     // 被 iframe 嵌入时进入精简模式（隐藏重复的侧栏/顶栏/AI机器人；返回条保留）
-    if (window.self !== window.top) { body.classList.add('embed-mode'); }
+    // ⚠️ 主路径是服务端判定（见 app.py is_embedded_request → body 已带 embed-mode），
+    //    这里只是兜底；同时把 iframe 内部的站内跳转继续带上 hy_embed=1，避免跳一页外壳又冒出来。
+    if (window.self !== window.top) {
+      body.classList.add('embed-mode');
+      document.addEventListener('click', function (e) {
+        var a = (e.target && e.target.closest) ? e.target.closest('a[href]') : null;
+        if (!a || a.target === '_blank') return;
+        var h = a.getAttribute('href') || '';
+        if (!h || h.charAt(0) === '#' || h.indexOf('hy_embed=') >= 0) return;
+        if (/^(https?:)?\/\//i.test(h)) return;          // 外链不改
+        a.setAttribute('href', h + (h.indexOf('?') >= 0 ? '&' : '?') + 'hy_embed=1');
+      }, true);
+    }
+
+    // 给 iframe 地址追加嵌入标记（服务端据此直接输出精简外壳，不依赖 JS 执行时机）
+    function withEmbed(u) {
+      if (!u || u.indexOf('hy_embed=') >= 0) return u;
+      return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'hy_embed=1';
+    }
 
     var wrap   = document.getElementById('embedWrap');
     var tabsEl = document.getElementById('embedTabs');
@@ -411,10 +429,14 @@
     }
     function setOpenLink(href) { if (eopen) eopen.href = href || '#'; }
     function liveUrl(rec) {
-      // iframe 内部可能跳转过，优先取真实地址
+      // iframe 内部可能跳转过，优先取真实地址（去掉内部嵌入标记 hy_embed）
       try {
         var w = rec.frameEl.contentWindow;
-        if (w && w.location) return w.location.pathname + w.location.search;
+        if (w && w.location && w.location.pathname) {
+          var u = new URL(w.location.href);
+          u.searchParams.delete('hy_embed');
+          return u.pathname + (u.search || '');
+        }
       } catch (err) {}
       return rec.href;
     }
@@ -513,7 +535,7 @@
       });
       frsEl.appendChild(frameEl);
       rec.frameEl = frameEl;
-      frameEl.src = href;
+      frameEl.src = withEmbed(href);
 
       TABS.push(rec);
       body.classList.add('embed-open');
