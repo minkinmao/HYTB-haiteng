@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}EHR · 人事管理系统{% endblock %}
+{% block pagename %}EHR · 人事管理系统{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">EHR · 人事管理系统 <span style="font-size:13px;font-weight:400;color:#9C9288">Employee HR System</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">按 "HR-Admin 管理服务 / ESS 员工服务 / ATT 考勤服务" 三大类组织人事功能，已落地模块可点击进入，规划中模块显示占位。</div>
+
+  {% if profile_todo %}
+  <div style="background:#FDF3E4;border:1px solid #E6823C;border-radius:8px;padding:12px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div style="font-size:13.5px;color:#8A5A18">您有一项待办：<b>完善个人入职电子信息</b>（HR 已为您开通办公账号，请补全联系方式与工资卡等信息）</div>
+    <a href="{{ url_for('hr.my_profile') }}"
+       style="background:#C86432;color:#fff;text-decoration:none;padding:7px 18px;border-radius:6px;font-size:13px">立即完善 →</a>
+  </div>
+  {% endif %}
+
+  {% for group in groups %}
+  <div style="background:#fff;border-radius:8px;padding:16px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:2px">{{ group.en }} · {{ group.title }}</div>
+    <div style="font-size:12px;color:#9C9288;margin-bottom:14px">{{ group.desc }}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      {% for it in group['items'] %}
+        {% if it.url %}
+          <a href="{{ url_for(it.url) }}"
+             style="display:inline-block;padding:9px 16px;border:1px solid #E2D8CA;border-radius:8px;font-size:13px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+            <span style="color:#E6823C;font-weight:600">{{ it.en }}</span> · {{ it.name }}
+          </a>
+        {% else %}
+          <a href="{{ url_for('hr.hr_service_stub', key=it.key) }}"
+             style="display:inline-block;padding:9px 16px;border:1px dashed #CFC6B8;border-radius:8px;font-size:13px;color:#9C9288;text-decoration:none;background:#fff">
+            <span style="color:#CFC6B8;font-weight:600">{{ it.en }}</span> · {{ it.name }} <span style="font-size:11px;color:#CFC6B8">规划中</span>
+          </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% endblock %}

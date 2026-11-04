@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 唯一性规则设置{% endblock %}
+{% block pagename %}核心业务管理系统 · 唯一性规则设置{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.insurers') }}">保司档案</a>
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
+  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
+  <a class="crm-tab on" href="{{ url_for('crm.unique_rules') }}">唯一性规则</a>
+</div>
+
+<h2 style="font-size:18px;margin:0 0 6px">唯一性规则
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（不允许重复录入 · 后台开关）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  勾上＝<b style="color:#C86432">拦重复</b>（保存时直接拒绝并提示原因）；不勾＝放行。
+  比对时<b>忽略空格与大小写</b>、全角括号按半角处理，避免同一家保司被录成两条。
+  <br>⚠️ 口径：<b>总总 / 分分是两个独立口径</b>，同一产品两个口径各录一次属正常业务
+  （分分的产品和缴别就是从总总带出来的），所以默认<b>只在同口径内判重</b>。
+  想连跨口径一起拦，把最后那条「跨口径也唯一」打开。
+</div>
+
+<form method="post" action="{{ url_for('crm.unique_rules_save') }}">
+{% for gcode, gname in groups %}
+<div class="crm-card" style="margin-bottom:14px">
+  <div style="font-size:14px;color:#9C4E2C;font-weight:600;margin-bottom:10px">{{ gname }}</div>
+  <table class="crm-table">
+    <thead>
+      <tr>
+        <th style="width:56px;text-align:center">启用</th>
+        <th style="min-width:180px">规则名称</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows if r.group == gcode %}
+      <tr>
+        <td style="text-align:center">
+          <input type="checkbox" name="u_{{ r.code }}" value="1"
+                 {{ 'checked' if r.enabled == 'on' else '' }}
+                 {{ '' if can_manage else 'disabled' }}>
+        </td>
+        <td>
+          <div class="crm-nm">{{ r.name }}</div>
+          <div class="crm-sub">{{ r.code }}</div>
+        </td>
+        <td style="color:#6B5D4F;font-size:13px">{{ r.desc or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+
+{% if can_manage %}
+<div style="margin-top:6px">
+  <button type="submit" class="crm-btn primary">保存规则</button>
+</div>
+{% else %}
+<div style="font-size:13px;color:#9C9288">只读：你没有「产品合约管理」权限，不能修改规则。</div>
+{% endif %}
+</form>
+
+{# 现存重复体检：规则只拦以后，历史脏数据列出来让人清 #}
+<div class="crm-card" style="margin-top:16px">
+  <div style="font-size:14px;color:#9C4E2C;font-weight:600;margin-bottom:10px">
+    现存重复体检
+    <small style="font-size:12px;color:#9C9288;font-weight:400">
+      （规则只拦<b>以后</b>的录入；下面这些是库里<b>已经存在</b>的重复，需人工处理）
+    </small>
+  </div>
+  {% if issues %}
+  <ul style="margin:0;padding-left:20px;font-size:13px;color:#6B5D4F;line-height:2">
+    {% for x in issues %}
+    <li>{{ x.text }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div style="font-size:13px;color:#4F7A45">✅ 没有发现重复记录，数据干净。</div>
+  {% endif %}
+</div>
+{% endblock %}

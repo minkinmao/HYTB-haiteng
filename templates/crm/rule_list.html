@@ -1,0 +1,174 @@
+{# =====================================================================
+   继续率考核规则 · 列表（七改 2026-10-02 · 两步制）
+   第一步：本页「新建规则」建初始续期考核规则（保司 / 分公司 / 考核类型 / 奖励项目 / 档位 / 倒扣）
+   第二步：本页「产品匹配」→ 选保司 → 弹出产品 → 产品多选 → 关联规则
+   ===================================================================== #}
+{% extends 'base.html' %}
+{% block title %}CRM · 继续率考核规则{% endblock %}
+{% block pagename %}核心业务管理系统 · 继续率考核规则{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+<style>
+  /* 二十六改：继续率矩阵（缴别做行 × 区间做列），与合约表单填法一致 */
+  .pr-mx th.grp{text-align:center;color:#9C4E2C;border-left:2px solid #E5B58C;font-size:12px}
+  .pr-mx th{font-size:12px;white-space:nowrap}
+  .pr-mx th.sub{font-weight:400;color:#6B5D4F;text-align:right}
+  .pr-mx td.grp{border-left:2px solid #F0E0CE}
+  .pr-mx td.pc{font-weight:600;color:#5A4A3C;white-space:nowrap;background:#FCF7F0}
+  .pr-mx-t{font-size:12.5px;color:#8A4A21;font-weight:600;margin:12px 0 6px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">继续率考核规则
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（只读查询）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  <b>二十四改（2026-10-28）起：继续率奖金率跟着产品合约走</b> ——
+  不再在这里单独建规则，改为在<b>产品合约</b>的「<b>五、继续率奖金率</b>」里填。
+  本页只做<b>查询总览</b>（看看已经登记了哪些继续率政策），不能在此新增或修改。
+  <br><b>二十六改</b>：录入与展示统一为「<b>缴别（行）× 继续率区间（列）</b>」——
+  区间只定义一次、各缴别共用；<b>继续率奖金率</b>与<b>长期服务奖</b>分成两张表，不再混在同一组列里。
+  留空＝该缴别无此档政策；不涉及继续率的缴别在合约里取消勾选后不出现。
+  <br>本系统登记的是<b>保费继续率</b>；区间按「<b>值 符号 指标 符号 值</b>」阅读（如 80 ≤ 指标 &lt; 90）；
+  继续率精度系统统一为<b>四舍五入 1 位小数</b>。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab" href="{{ url_for('crm.commission_query') }}">佣金查询</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab on" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
+</div>
+
+<div class="crm-tool">
+  <span style="font-size:12.5px;color:#9C9288">共 {{ rows|length }} 条规则（全部由产品合约维护）</span>
+</div>
+
+{% if rows %}
+{% for r in rows %}
+{% set pros = scope.get(r.id, []) %}
+<div class="crm-card" style="margin-bottom:14px">
+  <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px">
+      <div class="crm-nm" style="font-size:14px">{{ r.name }}</div>
+      <div style="margin-top:5px">
+        {# 十六改：保司统一按**简称**展示（简称缺失回落全称） #}
+        <span class="crm-tag t-info">{{ ishort.get(r.insurer_id) or r.insurer_name or '未指定保司' }}</span>
+        {% if r.branch_name %}<span class="crm-tag t-gray">分公司：{{ r.branch_name }}</span>
+        {% else %}<span class="crm-tag t-gray">全部分公司通用</span>{% endif %}
+        {% set rcs = cycles.get(r.id, []) %}
+        {% if rcs %}{% for c in rcs %}<span class="crm-tag t-brand">{{ c }}</span>{% endfor %}
+        {% else %}<span class="crm-tag t-gray">未设考核标准</span>{% endif %}
+        {% for c in (r.award_items or '').split(',') %}{% if c %}
+          <span class="crm-tag t-ok">{{ dname.get(c, c) }}</span>{% endif %}{% endfor %}
+        {% if r.has_clawback %}<span class="crm-tag t-danger">有倒扣机制</span>{% endif %}
+        <span class="crm-tag {{ 't-ok' if (r.status or '') == 'on' else 't-gray' }}">{{ '启用' if (r.status or '') == 'on' else '停用' }}</span>
+      </div>
+      <div style="font-size:12.5px;color:#6B5D4F;margin-top:6px">
+        <b>适用产品（{{ pros|length }} 款）</b>：
+        {% if pros %}{{ pros|join('、') }}
+        {% else %}<span style="color:#B5532A">未关联（＝该保司全部产品都会命中）</span>{% endif %}
+      </div>
+      <div style="font-size:12.5px;color:#9C9288;margin-top:4px">
+        档位 {{ items.get(r.id, [])|length }} 个　｜
+        被合约显式引用 {{ used.get(r.id, 0) }} 个
+        {% if r.has_clawback %}
+        <br><span style="color:#B5532A">倒扣：起扣线 {{ '%.1f'|format(round_persist(r.clawback_line or 0)) }}%，
+          基数：{{ cbase_short.get(r.clawback_base or 'all', '全部推广费') }}</span>
+          {% if r.clawback_std %}　｜　{{ r.clawback_std }}{% endif %}
+        {% endif %}
+        {% if r.note %}<br>备注：{{ r.note }}{% endif %}
+      </div>
+    </div>
+    {% if r.contract_id %}
+    <div style="white-space:nowrap">
+      <a class="crm-btn sm dark" href="{{ url_for('crm.contract_detail', cid=r.contract_id) }}">查看所属合约</a>
+    </div>
+    {% endif %}
+  </div>
+
+  {# 二十六改：与合约表单一致的「缴别做行 × 区间做列」只读矩阵；
+     继续率奖金率与长期服务奖分成两张表（不再混在同一组列里） #}
+  {% set mx = matrix.get(r.id, []) %}
+  {% set ps = mperiods.get(r.id, []) %}
+  {% if mx and ps %}
+    {% set ns = namespace(hb=false, hl=false) %}
+    {% for row in mx %}
+      {% if row.b %}{% set ns.hb = true %}{% endif %}
+      {% if row.ls %}{% set ns.hl = true %}{% endif %}
+    {% endfor %}
+
+    {% if ns.hb %}
+    <div class="pr-mx-t">继续率奖金率（行＝缴别，列＝继续率区间）</div>
+    <div style="overflow-x:auto">
+      <table class="crm-table pr-mx" style="margin:0">
+        <thead>
+          <tr>
+            <th rowspan="2" style="min-width:92px">缴别</th>
+            {% for row in mx %}
+            <th colspan="{{ pcybs|length }}" class="grp">{{ row.text }}</th>
+            {% endfor %}
+          </tr>
+          <tr>
+            {% for row in mx %}
+              {% for cy, lb in pcybs %}<th class="sub">{{ lb }}（%）</th>{% endfor %}
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in ps %}
+          <tr>
+            <td class="pc">{{ p }}</td>
+            {% for row in mx %}
+              {% for cy, lb in pcybs %}
+                {% set v = (row.b.get(p) or {}).get(cy) %}
+                <td class="num{{ ' grp' if loop.first }}">{{ ('%.2f'|format(v)) if v else '—' }}</td>
+              {% endfor %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if ns.hl %}
+    <div class="pr-mx-t">长期服务奖（行＝缴别，列＝继续率区间）</div>
+    <div style="overflow-x:auto">
+      <table class="crm-table pr-mx" style="margin:0">
+        <thead>
+          <tr>
+            <th style="min-width:92px">缴别</th>
+            {% for row in mx %}<th class="grp">{{ row.text }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in ps %}
+          <tr>
+            <td class="pc">{{ p }}</td>
+            {% for row in mx %}
+              {% set lv = row.ls.get(p) %}
+              <td class="num{{ ' grp' if loop.first }}">{{ ('%.2f'|format(lv)) if lv else '—' }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  {% elif mx %}
+  <div style="margin-top:10px;font-size:12.5px;color:#9C9288">
+    已登记 {{ mx|length }} 个继续率区间，但档位未填缴别 / 奖金率（请在合约里补录）。
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="crm-card">
+  <div class="crm-empty">暂无继续率规则。<b>继续率奖金率统一在产品合约里录入</b> ——
+    打开「产品合约」→ 编辑某条合约 → 第「五、继续率奖金率」节按缴别填写即可。</div>
+</div>
+{% endif %}
+{% endblock %}

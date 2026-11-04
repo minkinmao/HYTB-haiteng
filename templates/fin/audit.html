@@ -1,0 +1,60 @@
+{# 财务操作日志审计页（#40）：列出关键写操作，可追溯、防越权 #}
+{% extends "base.html" %}
+{% block title %}操作日志审计 · FMS{% endblock %}
+{% block content %}
+<div class="fin-card">
+  <h2 style="margin:0 0 4px">操作日志审计</h2>
+  <div style="font-size:12px;color:#9C9288">记录所有财务关键操作（登录 / 凭证制单审核记账 / 结账 / 发票 / 自动记账 / 备份恢复等），可追溯、防越权。</div>
+
+  <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0">
+    <select name="action" style="padding:6px 8px;border:1px solid var(--line);border-radius:6px">
+      <option value="">全部动作</option>
+      {% for k, v in actions %}
+      <option value="{{ k }}" {% if action==k %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    <select name="module" style="padding:6px 8px;border:1px solid var(--line);border-radius:6px">
+      <option value="">全部模块</option>
+      {% for k, v in modules %}
+      <option value="{{ k }}" {% if module==k %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" style="padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer">筛选</button>
+    <a href="{{ url_for('fin.fin_audit') }}" style="font-size:12px;color:var(--brand-deep)">重置</a>
+  </form>
+
+  <div style="overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead>
+        <tr style="background:#FBEEE2;color:#8A4A18;text-align:left">
+          <th style="padding:8px 10px">时间</th>
+          <th style="padding:8px 10px">操作人</th>
+          <th style="padding:8px 10px">动作</th>
+          <th style="padding:8px 10px">模块</th>
+          <th style="padding:8px 10px">对象</th>
+          <th style="padding:8px 10px">单号</th>
+          <th style="padding:8px 10px">说明</th>
+          <th style="padding:8px 10px">IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in logs %}
+        <tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:7px 10px;white-space:nowrap">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}</td>
+          <td style="padding:7px 10px">{{ r.user_name or '—' }}</td>
+          <td style="padding:7px 10px">{{ r.action_cn }}</td>
+          <td style="padding:7px 10px">{{ r.module or '—' }}</td>
+          <td style="padding:7px 10px">{{ r.target_type or '—' }}</td>
+          <td style="padding:7px 10px">{{ r.target_no or '—' }}</td>
+          <td style="padding:7px 10px;color:#6B6258">{{ r.detail or '' }}</td>
+          <td style="padding:7px 10px;color:#9C9288">{{ r.ip or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="padding:20px;text-align:center;color:#9C9288">暂无操作日志</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div style="font-size:11px;color:#9C9288;margin-top:8px">最多显示最近 500 条；更久的历史请定期备份归档。</div>
+</div>
+{% endblock %}

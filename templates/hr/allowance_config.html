@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}岗位补贴项 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">岗位补贴项设置 <span style="font-size:13px;font-weight:400;color:#9C9288">Allowance Items</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px;line-height:1.8;overflow-wrap:anywhere">
+    这里配置「岗位补贴」由哪些字段组成（如 通讯费 / 交通费 / 餐补 / 高温补贴 …）。<br>
+    建号或修改入职登记时，系统会<b>按启用项逐条列出并自动合计</b>填入「岗位补贴」，也可按人逐项改金额；
+    <b>停用</b>的项不再出现在建号页，<b>删除</b>的项连历史选择也不再显示。
+  </div>
+
+  <style>
+    .aclbl{font-size:12px;color:#9C9288;margin-bottom:4px}
+    .acin{width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;box-sizing:border-box}
+    .arow{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:10px 0;border-bottom:1px dashed #F0E9DE}
+  </style>
+
+  <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05);max-width:760px">
+    <form method="post" action="{{ url_for('hr.allowance_config') }}" id="ac-form">
+      <div id="ac-rows">
+        {% for it in items %}
+        <div class="arow">
+          <input type="hidden" name="item_id" value="{{ it.id }}">
+          <input type="hidden" name="item_enabled" value="{{ '1' if it.enabled else '0' }}">
+          <div style="flex:1 1 200px;min-width:0">
+            <div class="aclbl">补贴项名称</div>
+            <input name="item_name" value="{{ it.name or '' }}" maxlength="32" class="acin" placeholder="如 通讯费">
+          </div>
+          <div style="flex:0 0 150px">
+            <div class="aclbl">默认月金额（元）</div>
+            <input name="item_amount" type="number" step="0.01" min="0" value="{{ it.default_amount or 0 }}" class="acin">
+          </div>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#6B5D4F;padding-bottom:9px;cursor:pointer;white-space:nowrap">
+            <input type="checkbox" {{ 'checked' if it.enabled }} onchange="syncEn(this)"> 启用
+          </label>
+          <button type="button" onclick="delRow(this)"
+                  style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:7px 14px;border-radius:6px;cursor:pointer;margin-bottom:1px">删除</button>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if not items %}
+      <div style="padding:14px 0;color:#9C9288;font-size:13px">尚未配置任何补贴项，点下方「+ 新增一项」添加。</div>
+      {% endif %}
+
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">
+        <button type="button" onclick="addRow()"
+                style="font-size:13px;color:#C86432;background:#fff;border:1px dashed #E2B58C;padding:8px 16px;border-radius:6px;cursor:pointer">+ 新增一项</button>
+        <button type="submit"
+                style="background:#E6823C;color:#fff;border:none;padding:9px 26px;border-radius:6px;font-size:14px;cursor:pointer">保存配置</button>
+      </div>
+    </form>
+  </div>
+
+  {# 新增行的模板（克隆用） #}
+  <template id="ac-tpl">
+    <div class="arow">
+      <input type="hidden" name="item_id" value="">
+      <input type="hidden" name="item_enabled" value="1">
+      <div style="flex:1 1 200px;min-width:0">
+        <div class="aclbl">补贴项名称</div>
+        <input name="item_name" value="" maxlength="32" class="acin" placeholder="如 通讯费">
+      </div>
+      <div style="flex:0 0 150px">
+        <div class="aclbl">默认月金额（元）</div>
+        <input name="item_amount" type="number" step="0.01" min="0" value="0" class="acin">
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#6B5D4F;padding-bottom:9px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" checked onchange="syncEn(this)"> 启用
+      </label>
+      <button type="button" onclick="delRow(this)"
+              style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:7px 14px;border-radius:6px;cursor:pointer;margin-bottom:1px">删除</button>
+    </div>
+  </template>
+
+  <script>
+    // 勾选/取消「启用」→ 同步到同行的隐藏字段（隐藏字段一定提交，保证各列长度对齐）
+    function syncEn(cb){
+      var row = cb.closest('.arow');
+      var hid = row.querySelector('input[name=item_enabled]');
+      if (hid) hid.value = cb.checked ? '1' : '0';
+    }
+    // 新增一行
+    function addRow(){
+      var tpl = document.getElementById('ac-tpl');
+      var node = tpl.content.cloneNode(true);
+      document.getElementById('ac-rows').appendChild(node);
+    }
+    // 删除一行（未保存前只是从表单移除；保存时后端会删掉数据库里多余的项）
+    function delRow(btn){
+      var row = btn.closest('.arow');
+      if (row) row.parentNode.removeChild(row);
+    }
+    // 提交前兜底：把勾选状态再同步一次（防止浏览器恢复表单时不同步）
+    document.getElementById('ac-form').addEventListener('submit', function(){
+      var cbs = this.querySelectorAll('.arow input[type=checkbox]');
+      for (var i = 0; i < cbs.length; i++) syncEn(cbs[i]);
+    });
+  </script>
+{% endblock %}

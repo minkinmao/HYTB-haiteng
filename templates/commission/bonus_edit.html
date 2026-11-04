@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}奖金池分配 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">
+    奖金分配：{{ b.name }}（{{ b.quarter }}）
+  </h2>
+
+  <div style="background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <form method="post" action="{{ url_for('commission.bonus_edit', bid=b.id) }}">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:16px">
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">名称</div>
+          <input name="name" value="{{ b.name }}" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">总额(元)</div>
+          <input name="total_amount" type="number" step="0.01" value="{{ b.total_amount or 0 }}" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:140px"></div>
+        <div style="flex:1"><div style="font-size:12px;color:#9C9288;margin-bottom:4px">说明</div>
+          <input name="note" value="{{ b.note or '' }}" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:100%"></div>
+      </div>
+
+      <div style="font-size:14px;font-weight:600;margin-bottom:10px">分配明细</div>
+      <div style="background:#FCFAF7;border:1px solid #DED6C9;border-radius:8px;padding:14px;margin-bottom:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="color:#9C9288;text-align:left">
+              <th style="padding:6px 8px">销售人员</th><th style="padding:6px 8px">代理类型</th><th style="padding:6px 8px">分配金额(元)</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for agent in agents %}
+            {% set existing = allocs | selectattr('employee_id', 'equalto', agent.id) | first %}
+            <tr style="border-top:1px solid #DED6C9">
+              <td style="padding:6px 8px">{{ agent.name }}（{{ agent.employee_no }}）</td>
+              <td style="padding:6px 8px;color:#9C9288">{{ agent.agent_type or '—' }}</td>
+              <td style="padding:6px 8px">
+                <input name="alloc_emp_{{ agent.id }}" type="number" step="0.01" value="{{ existing.amount if existing else 0 }}"
+                       style="padding:6px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;width:130px">
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3" style="padding:12px;text-align:center;color:#9C9288">暂无外勤人员</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 24px;border-radius:6px;font-size:14px;cursor:pointer">保存分配</button>
+    </form>
+  </div>
+{% endblock %}

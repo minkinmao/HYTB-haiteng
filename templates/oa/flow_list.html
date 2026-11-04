@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}审批流设置 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">审批流设置
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（行政管理员配置审批流程与审批人）</small>
+  </h2>
+  <div style="font-size:12px;color:#9C9288;margin-bottom:14px">行政管理员在此新建审批流、手工添加「有序审批人」。审批人按顺序（第 1 级 → 第 2 级 → …）逐级审批，供 OA 系统内的各类申请统一流转使用。</div>
+
+  {# 全部用户列表（供审批人下拉复用），转为 JSON 供前端动态增删审批人行 #}
+  <script>
+    var ALL_USERS = [
+      {% for u in users %}
+      {id: {{ u.id }}, name: "{{ u.username }}"}{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+  </script>
+
+  {# 新增审批流 #}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新建审批流</div>
+    <form method="post" action="{{ url_for('oa.flow_new') }}">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">审批流名称 *</div>
+          <input name="name" placeholder="如 请假审批流" required
+                 style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:200px"></div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">适用类型</div>
+          <select name="apply_type" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            <option value="">通用（默认流）</option>
+            <option value="请假">请假</option>
+            <option value="报销">报销</option>
+            <option value="出差">出差</option>
+            <option value="补卡">补卡</option>
+          </select></div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:8px">
+          <label style="font-size:13px;cursor:pointer">
+            <input type="checkbox" name="enabled" checked> 启用</label>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:#9C9288;margin-bottom:6px">有序审批人（自上而下 = 审批顺序，可增删多级）</div>
+      <div id="new-approvers">
+        <div class="approver-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+          <select name="approver_ids" style="padding:7px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;min-width:160px"></select>
+          <button type="button" class="row-del" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:5px 10px;border-radius:6px;cursor:pointer">删除</button>
+        </div>
+      </div>
+      <button type="button" id="new-add-row" style="font-size:12px;color:#E6823C;background:#fff;border:1px dashed #E6823C;padding:5px 14px;border-radius:6px;cursor:pointer;margin-bottom:12px">+ 添加审批人</button>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:4px">说明</div>
+        <input name="note" placeholder="可选" style="width:100%;max-width:420px;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+      </div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">创建审批流</button>
+    </form>
+  </div>
+
+  {# 审批流列表 #}
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for f in flows %}
+    <div style="padding:14px 0;border-bottom:1px solid #F3EDE3">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:15px;font-weight:600">{{ f.name }}
+            <span style="font-size:12px;color:#9C9288;font-weight:400;margin-left:6px">
+              {{ ('适用：' ~ f.apply_type) if f.apply_type else '通用默认流' }}</span>
+            {% if f.enabled %}
+              <span style="background:#dcfce7;color:#15803d;font-size:11px;padding:1px 8px;border-radius:10px;margin-left:8px">启用</span>
+            {% else %}
+              <span style="background:#EDEAE6;color:#9C9288;font-size:11px;padding:1px 8px;border-radius:10px;margin-left:8px">停用</span>
+            {% endif %}
+          </div>
+          <div style="font-size:12.5px;color:#6B5D4F;margin-top:6px;line-height:1.8">
+            审批顺序：
+            {% for s in f.steps %}
+              <span style="background:#F8E9DD;color:#C86432;padding:2px 9px;border-radius:10px;margin-right:4px;display:inline-block">
+                {{ loop.index }}级 · {{ s.approver.username if s.approver else '未知' }}</span>
+            {% endfor %}
+          </div>
+          {% if f.note %}<div style="font-size:12px;color:#9C9288;margin-top:4px">{{ f.note }}</div>{% endif %}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <form method="post" action="{{ url_for('oa.flow_edit', fid=f.id) }}" style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <input name="name" value="{{ f.name }}" style="width:130px;padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+              <select name="apply_type" style="padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+                <option value="" {{ 'selected' if not f.apply_type else '' }}>通用</option>
+                <option value="请假" {{ 'selected' if f.apply_type=='请假' else '' }}>请假</option>
+                <option value="报销" {{ 'selected' if f.apply_type=='报销' else '' }}>报销</option>
+                <option value="出差" {{ 'selected' if f.apply_type=='出差' else '' }}>出差</option>
+                <option value="补卡" {{ 'selected' if f.apply_type=='补卡' else '' }}>补卡</option>
+              </select>
+              <label style="font-size:12px"><input type="checkbox" name="enabled" {{ 'checked' if f.enabled else '' }}> 启用</label>
+            </div>
+            {# 编辑时的审批人（预填当前步骤，动态增删） #}
+            <div class="edit-approvers" data-flow="{{ f.id }}">
+              {% for s in f.steps %}
+              <div class="approver-row" style="display:flex;gap:8px;margin-bottom:4px;align-items:center">
+                <select name="approver_ids" style="padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;min-width:130px">
+                  {% for u in users %}
+                  <option value="{{ u.id }}" {{ 'selected' if u.id == s.user_id else '' }}>{{ u.username }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="row-del" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:3px 8px;border-radius:6px;cursor:pointer">删除</button>
+              </div>
+              {% endfor %}
+            </div>
+            <button type="button" class="edit-add-row" style="font-size:12px;color:#E6823C;background:#fff;border:1px dashed #E6823C;padding:3px 10px;border-radius:6px;cursor:pointer">+ 审批人</button>
+            <div style="display:flex;gap:6px">
+              <button type="submit" style="font-size:12px;color:#E6823C;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">保存</button>
+            </div>
+          </form>
+          <form method="post" action="{{ url_for('oa.flow_delete', fid=f.id) }}" onsubmit="return confirm('确认删除审批流「{{ f.name }}」？')">
+            <button type="submit" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:4px 10px;border-radius:6px;cursor:pointer">删除</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无审批流，可在上方新建（如 请假审批流 / 报销审批流）</div>
+    {% endfor %}
+  </div>
+
+  <script>
+  // 把用户列表填进某个下拉框
+  function fillSelect(sel) {
+    sel.innerHTML = '';
+    ALL_USERS.forEach(function (u) {
+      var o = document.createElement('option');
+      o.value = u.id;
+      o.textContent = u.name;
+      sel.appendChild(o);
+    });
+  }
+
+  // 新增审批人行的通用逻辑：给某容器加一行（含下拉 + 删除按钮）
+  function addRow(container) {
+    var row = document.createElement('div');
+    row.className = 'approver-row';
+    row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center';
+    var sel = document.createElement('select');
+    sel.name = 'approver_ids';
+    sel.style.cssText = 'padding:7px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;min-width:160px';
+    fillSelect(sel);
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'row-del';
+    del.textContent = '删除';
+    del.style.cssText = 'font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:5px 10px;border-radius:6px;cursor:pointer';
+    del.addEventListener('click', function () { row.remove(); });
+    row.appendChild(sel);
+    row.appendChild(del);
+    container.appendChild(row);
+  }
+
+  // 初始化：给新增表单的第一行审批人填入用户
+  document.querySelectorAll('#new-approvers .approver-row select').forEach(fillSelect);
+  document.getElementById('new-add-row').addEventListener('click', function () {
+    addRow(document.getElementById('new-approvers'));
+  });
+  // 新增表单里第一行的删除按钮（初始就有的那行）
+  document.querySelectorAll('#new-approvers .row-del').forEach(function (b) {
+    b.addEventListener('click', function () { b.parentElement.remove(); });
+  });
+
+  // 编辑区：每个审批流各自的「+ 审批人」按钮
+  document.querySelectorAll('.edit-add-row').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var box = btn.previousElementSibling; // .edit-approvers
+      var row = document.createElement('div');
+      row.className = 'approver-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:4px;align-items:center';
+      var sel = document.createElement('select');
+      sel.name = 'approver_ids';
+      sel.style.cssText = 'padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;min-width:130px';
+      fillSelect(sel);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '删除';
+      del.style.cssText = 'font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:3px 8px;border-radius:6px;cursor:pointer';
+      del.addEventListener('click', function () { row.remove(); });
+      row.appendChild(sel);
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  });
+  // 编辑区已有的删除按钮
+  document.querySelectorAll('.edit-approvers .row-del').forEach(function (b) {
+    b.addEventListener('click', function () { b.parentElement.remove(); });
+  });
+  </script>
+{% endblock %}

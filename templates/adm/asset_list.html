@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 固定资产{% endblock %}
+{% block pagename %}行政管理系统 · 固定资产台账{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">固定资产台账
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（电子设备 / 办公家具 / 车辆 / 其他）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记公司固定资产卡片，按<span style="color:#C86432">年限平均法</span>实时计算月折旧、累计折旧与净值。
+  财务记账（借 1601）在<span style="color:#C86432">财务管理系统</span>处理，本台账不生成凭证。
+</div>
+
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="资产名称 / 编号 / 使用人 / 型号">
+  <label>类别</label>
+  <select name="cat">
+    <option value="">全部</option>
+    {% for c in cats %}<option value="{{ c }}" {{ 'selected' if c == cat else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <label>使用状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    {% for v, lb in statuses %}<option value="{{ v }}" {{ 'selected' if v == st else '' }}>{{ lb }}</option>{% endfor %}
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.assets') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.asset_new') }}">＋ 登记资产</a>{% endif %}
+</form>
+
+<div class="adm-stat">
+  <span>资产卡片：<b>{{ items|length }}</b> 项</span>
+  <span>原值合计：<b>¥ {{ '{:,.2f}'.format(total) }}</b></span>
+  <span>净值合计：<b>¥ {{ '{:,.2f}'.format(net_total) }}</b></span>
+</div>
+
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>资产名称</th><th>类别</th><th>原值（元）</th><th>购置日期</th>
+        <th>折旧情况</th><th>净值（元）</th><th>使用人 / 部门</th><th>状态</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.r.code }}</td>
+        <td>
+          <div class="adm-nm">{{ it.r.name }}</div>
+          {% if it.r.spec %}<div class="adm-sub">{{ it.r.spec }}</div>{% endif %}
+        </td>
+        <td>{{ it.r.category or '—' }}</td>
+        <td class="num">{{ '{:,.2f}'.format(it.r.price or 0) }}</td>
+        <td class="mono">{{ it.r.buy_date or '—' }}</td>
+        <td class="mono">
+          月 {{ '{:,.2f}'.format(it.dep.monthly) }}
+          <div class="adm-sub">已提 {{ it.dep.months }} 个月 · 累计 {{ '{:,.2f}'.format(it.dep.acc) }}</div>
+        </td>
+        <td class="num" style="color:#C86432;font-weight:600">{{ '{:,.2f}'.format(it.dep.net) }}</td>
+        <td>
+          {{ it.r.keeper or '—' }}
+          {% if it.r.dept %}<div class="adm-sub">{{ it.r.dept }}</div>{% endif %}
+        </td>
+        <td>
+          {% set sm = {'in_use': ('t-ok', '在用'), 'idle': ('t-gray', '闲置'),
+                       'repair': ('t-warn', '维修中'), 'scrap': ('t-danger', '已报废')} %}
+          {% set s = sm.get(it.r.status, ('t-gray', it.r.status)) %}
+          <span class="adm-tag {{ s[0] }}">{{ s[1] }}</span>
+        </td>
+        <td>
+          {% if it.r.file_path %}
+            <a class="adm-a" href="{{ url_for('adm.asset_file', aid=it.r.id) }}">凭证</a>
+          {% endif %}
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.asset_edit', aid=it.r.id) }}"
+             style="margin-left:{{ '8px' if it.r.file_path else '0' }}">编辑</a>
+          <form method="post" action="{{ url_for('adm.asset_delete', aid=it.r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除资产「{{ it.r.name }}」？附件会一并删除。')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无固定资产。{% if can_edit %}点右上角「＋ 登记资产」开始建档。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}首页 · 海盈通保{% endblock %}
+{% block content %}
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:24px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
+  <h2 style="margin:0 0 16px;font-size:16px;color:#2A2A2A">当前登录信息</h2>
+  <div style="padding:10px 0;border-bottom:1px solid #F3EDE3;font-size:14px">
+    <span style="display:inline-block;width:120px;color:#9C9288">账号</span>{{ user.username }}</div>
+  <div style="padding:10px 0;border-bottom:1px solid #F3EDE3;font-size:14px">
+    <span style="display:inline-block;width:120px;color:#9C9288">职级</span>
+    {{ session.get('level_code') }} · {{ session.get('level_name') }}</div>
+  <div style="padding:10px 0;border-bottom:1px solid #F3EDE3;font-size:14px">
+    <span style="display:inline-block;width:120px;color:#9C9288">数据可见范围</span>
+    <span style="background:#FBEEE2;color:#E6823C;padding:2px 10px;border-radius:12px;font-size:12px">{{ scope }}</span></div>
+  <div style="padding:10px 0;font-size:14px">
+    <span style="display:inline-block;width:120px;color:#9C9288">说明</span>
+    后续各业务模块将按"数据可见范围"控制你能看到的记录。</div>
+</div>
+{% endblock %}

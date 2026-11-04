@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% block title %}{{ emp.name }} · 员工详情 · 海盈通保{% endblock %}
+{% block content %}
+  {# 员工头卡（只读档案：数据来自入职确认入册，花名册仅供查询） #}
+  <div class="card" style="padding:18px 20px;margin-bottom:18px;display:flex;align-items:center;gap:16px">
+    <div style="width:54px;height:54px;border-radius:50%;background:#FBEEE2;color:#C86432;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">{{ emp.name[:1] }}</div>
+    <div>
+      <div style="font-size:17px;font-weight:700">{{ emp.name }}
+        <span style="font-size:12px;color:#9C9288;font-weight:400">｜ 工号 {{ emp.employee_no or '待分配' }}</span>
+        {% if can_manage %}
+        <button type="button" onclick="toggleNo()"
+                style="font-size:11px;color:#4A6BB0;background:#fff;border:1px solid #E2D8CA;padding:2px 9px;border-radius:6px;cursor:pointer;vertical-align:middle">改工号</button>
+        {% endif %}
+        <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#FBEEE2' if emp.staff_type=='internal' else '#FDF3E4' }};color:{{ '#C86432' if emp.staff_type=='internal' else '#8A5A18' }}">{{ '内勤' if emp.staff_type=='internal' else '外勤' }}</span>
+        <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#dcfce7' if emp.status=='active' else '#FBE3DD' }};color:{{ '#166534' if emp.status=='active' else '#991b1b' }}">{{ '在职' if emp.status=='active' else '离职' }}</span>
+      </div>
+      <div style="font-size:12.5px;color:#9C9288;margin-top:4px">
+        {% if emp.staff_type == 'external' %}代理类型：{{ emp.agent_type or '未设' }}{% else %}职级：{{ emp.level.code if emp.level else '未设' }}（{{ emp.level.name if emp.level else '—' }}）{% endif %} ｜
+        部门：{{ emp.org.name if emp.org else '未设' }} ｜ 职务：{{ emp.title or '—' }}
+      </div>
+    </div>
+  </div>
+
+  {# 改工号（#145 补充）：内联展开。工号可由人事指定（001-010 留给创始人），系统编码不受影响 #}
+  {% if can_manage %}
+  <form id="noform" method="post" action="{{ url_for('hr.employee_set_no', eid=emp.id) }}"
+        style="display:none;margin:-8px 0 18px;padding:10px 14px;background:#fff;border:1px dashed #E2D8CA;border-radius:10px;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:12px;color:#9C9288">新工号：</span>
+    <input name="employee_no" value="{{ emp.employee_no or '' }}" maxlength="16"
+           style="width:150px;padding:5px 9px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+    <span style="font-size:12px;color:#9C9288;overflow-wrap:anywhere">改号会同步已开通账号的登录名与对应入职登记；员工改用新工号登录，密码不变</span>
+    <button type="submit"
+            style="font-size:12px;color:#fff;background:#E6823C;border:none;padding:5px 14px;border-radius:6px;cursor:pointer">保存</button>
+    <button type="button" onclick="toggleNo()"
+            style="font-size:12px;color:#6B5D4F;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">取消</button>
+  </form>
+  <script>
+    function toggleNo(){
+      var f = document.getElementById('noform');
+      if (!f) return;
+      f.style.display = (f.style.display === 'flex') ? 'none' : 'flex';
+    }
+  </script>
+  {% endif %}
+
+  {# 系统账号状态 + 开通入口（#145 第2项：开通后由系统向员工推送"完善个人信息"链接） #}
+  <div class="card" style="padding:14px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div style="font-size:13px">
+      <b style="font-size:14px">系统办公账号</b>
+      {% if has_account %}
+        <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#dcfce7;color:#166534;margin-left:8px">已开通（登录名：{{ emp.employee_no }}）</span>
+        {% if emp.need_profile %}
+          <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#FDF3E4;color:#8A5A18;margin-left:6px">待员工完善个人信息</span>
+        {% else %}
+          <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#E7EDFA;color:#4A6BB0;margin-left:6px">个人信息已完善</span>
+        {% endif %}
+      {% else %}
+        <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#FBE3DD;color:#991b1b;margin-left:8px">未开通</span>
+      {% endif %}
+    </div>
+    {% if can_manage and not has_account %}
+    <form method="post" action="{{ url_for('hr.employee_open_account', eid=emp.id) }}">
+      <button type="submit" onclick="return confirm('确认为 {{ emp.name }}（{{ emp.employee_no }}）开通办公账号？初始密码 123456')"
+              style="background:#C86432;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer">
+        开通办公账号
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+    <div style="flex:1;min-width:320px">
+      {# 联系信息 #}
+      <div class="card" style="padding:16px 18px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">联系信息</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:7px 8px;color:#9C9288;width:110px">个人手机</td><td style="padding:7px 8px">{{ emp.phone or '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">公司邮箱</td><td style="padding:7px 8px">{{ emp.email or '—' }}</td></tr>
+        </table>
+      </div>
+
+      {# 基本信息 #}
+      <div class="card" style="padding:16px 18px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">基本信息</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          {% for k, v in [('性别', emp.gender), ('出生日期', emp.birth_date), ('参加工作日期', emp.work_start_date),
+                          ('入职日期', emp.hire_date), ('婚姻状况', emp.marital), ('是否有子女', emp.children),
+                          ('籍贯', emp.hometown), ('兴趣爱好', emp.hobby), ('最后工作日', emp.last_job)] %}
+          <tr><td style="padding:7px 8px;color:#9C9288;width:110px">{{ k }}</td><td style="padding:7px 8px">{{ v or '—' }}</td></tr>
+          {% endfor %}
+          {% if emp.status == 'left' %}
+          <tr><td style="padding:7px 8px;color:#9C9288">离职日期</td><td style="padding:7px 8px">{{ emp.leave_date or '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">离职原因</td><td style="padding:7px 8px">{{ emp.leave_reason or '—' }}</td></tr>
+          {% endif %}
+        </table>
+      </div>
+
+      {# 异动记录（晋升/降职/调岗） #}
+      <div class="card" style="padding:16px 18px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">异动记录</div>
+        {% for c in changes %}
+        <div style="padding:10px 0;border-bottom:1px solid #F3EDE3;font-size:13px">
+          <div>
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;
+              background:{{ {'晋升':'#dcfce7','降职':'#FBE3DD','调岗':'#E7EDFA'}[c.change_type] }};
+              color:{{ {'晋升':'#166534','降职':'#991b1b','调岗':'#4A6BB0'}[c.change_type] }}">{{ c.change_type }}</span>
+            <b style="margin-left:6px">{{ c.from_title or '—' }}</b> → <b>{{ c.to_title or '—' }}</b>
+            <span style="font-size:11px;color:#9C9288;margin-left:6px">生效 {{ c.effective_date or '—' }}</span>
+          </div>
+          <div style="font-size:12px;color:#9C9288;margin-top:4px">
+            部门：{{ c.from_org.name if c.from_org else '—' }} → {{ c.to_org.name if c.to_org else '—' }}
+            {% if c.from_level or c.to_level %} ｜ 职级：{{ c.from_level.code if c.from_level else '—' }} → {{ c.to_level.code if c.to_level else '—' }}{% endif %}
+            {% if c.reason %} ｜ 事由：{{ c.reason }}{% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div style="font-size:12.5px;color:#9C9288;padding:6px 0">暂无异动记录</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:320px">
+      {# 任职信息 #}
+      <div class="card" style="padding:16px 18px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">任职信息</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:7px 8px;color:#9C9288;width:110px">用工类型</td><td style="padding:7px 8px">{{ '内勤（劳动合同）' if emp.staff_type=='internal' else '外勤（代理合同）' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">部门</td><td style="padding:7px 8px">{{ emp.org.name if emp.org else '未设' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">职务</td><td style="padding:7px 8px">{{ emp.title or '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">职级/代理</td>
+              <td style="padding:7px 8px">{% if emp.staff_type == 'external' %}{{ emp.agent_type or '未设' }}{% else %}{{ (emp.level.code + ' - ' + emp.level.name) if emp.level else '未设' }}{% endif %}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">状态</td><td style="padding:7px 8px">{{ '在职' if emp.status=='active' else '离职' }}</td></tr>
+        </table>
+      </div>
+
+      {# 合同档案（只读） #}
+      <div class="card" style="padding:16px 18px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">合同档案</div>
+        {% for c in contracts %}
+        <div style="padding:10px 0;border-bottom:1px solid #F3EDE3;font-size:13px">
+          <div><b>{{ '劳动合同' if c.contract_type=='labor' else '代理合同' }}</b>
+            <span style="font-size:12px;color:#9C9288;margin-left:6px">{{ c.contract_no or '—' }}</span>
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#dcfce7;color:#166534;margin-left:6px">{{ '生效中' if c.status=='active' else '已到期' }}</span>
+            {% if c.file_name %}<span style="font-size:11px;color:#E6823C;margin-left:6px">电子版已备份</span>{% endif %}
+          </div>
+          <div style="font-size:12px;color:#9C9288;margin-top:4px">{{ c.start_date or '—' }} ~ {{ c.end_date or '—' }}</div>
+        </div>
+        {% else %}
+        <div style="font-size:12.5px;color:#9C9288;padding:6px 0">暂无合同记录</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

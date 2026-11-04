@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}人事卡片 · {{ (emp.name if emp else '') or username }} · 海盈通保{% endblock %}
+{% block pagename %}人事卡片{% endblock %}
+{% block content %}
+
+{# ============ 人事卡片（正式版式，参照公司人事卡片表单） ============
+   入口：个人资料页左侧「人事卡片」。
+   九大板块：一 基本信息 + 二 工作经历（异动记录）+ 三~九 七大子集板块
+   （教育经历/家庭信息/培训经历/专业技术职务/职业资格/奖励/惩处，二期建表）。
+   HR 可在右上角「录入 / 编辑」补录七大子集数据。 #}
+{% set p = emp %}
+
+<style>
+  .hrc { width:100%; border-collapse:collapse; font-size:13px; background:#fff; }
+  .hrc th.sec { background:var(--brand-soft); color:var(--brand-deep); text-align:left;
+                padding:9px 12px; font-size:13.5px; letter-spacing:1px;
+                border:1px solid #EADCCB; font-weight:600; }
+  .hrc th.col { background:#F7F4EF; color:var(--ink-2); padding:7px 10px; font-weight:600;
+                border:1px solid #E7DED1; font-size:12.5px; text-align:left; }
+  .hrc td.lb { background:#FBFAF7; color:var(--muted); padding:8px 10px; width:92px;
+               border:1px solid #EAE2D6; white-space:nowrap; font-size:12.5px; }
+  .hrc td.vl { padding:8px 10px; border:1px solid #EAE2D6; overflow-wrap:anywhere; }
+  .hrc td.none { padding:9px 12px; border:1px solid #EAE2D6; color:var(--muted); font-size:12.5px; }
+  @media print {
+    .sidebar, .topstrip, .backbar, .hrc-notice { display:none !important; }
+    .main { margin-left:0 !important; }
+    .card { border:none !important; padding:0 !important; }
+  }
+</style>
+
+<!-- 卡片抬头 -->
+<div class="card" style="padding:18px 20px;margin-bottom:16px;display:flex;align-items:center;
+     justify-content:space-between;flex-wrap:wrap;gap:12px;border-top:3px solid var(--brand)">
+  <div>
+    <div style="font-family:var(--serif);font-size:20px;font-weight:600;letter-spacing:3px">人事卡片</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:5px">
+      {{ calc.company_name }}
+      {% if p %}｜{{ p.name }}｜员工编号 {{ p.employee_no or '—' }}{% endif %}
+      ｜制表日期 {{ calc.today }}
+    </div>
+  </div>
+  <div class="hrc-notice" style="display:flex;gap:10px;flex-wrap:wrap">
+    {% if emp and can_manage %}
+    <a href="{{ url_for('hr.card_edit', eid=emp.id) }}"
+       style="background:var(--brand);color:#fff;text-decoration:none;
+              padding:8px 18px;border-radius:6px;font-size:13px">录入 / 编辑</a>
+    {% endif %}
+    <button type="button" onclick="window.print()"
+            style="background:#fff;color:var(--brand-deep);border:1px solid #F3DCC6;
+                   padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer">打印 / 导出 PDF</button>
+  </div>
+</div>
+
+{% if not emp %}
+  <div class="card hrc-notice" style="padding:16px 18px;margin-bottom:16px;border-left:3px solid var(--brand)">
+    <div style="font-size:13.5px;color:#8A5A18">
+      当前登录账号「{{ username }}」未匹配到员工花名册档案，无法生成人事卡片。
+    </div>
+  </div>
+{% else %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="hrc">
+
+    <!-- ============ 一、基本信息 ============ -->
+    <tr><th class="sec" colspan="6">一、基本信息</th></tr>
+    <tr>
+      <td class="lb">单　位</td><td class="vl">{{ calc.company_name }}</td>
+      <td class="lb">部　门</td><td class="vl">{{ (p.org.name if p.org else '') or '—' }}</td>
+      <td class="lb">岗　位</td><td class="vl">{{ p.title or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="lb">姓　名</td><td class="vl">{{ p.name or '—' }}</td>
+      <td class="lb">性　别</td><td class="vl">{{ p.gender or '—' }}</td>
+      <td class="lb">年　龄</td><td class="vl">{{ calc.age if calc.age is not none else '—' }}</td>
+    </tr>
+    <tr>
+      <td class="lb">出生日期</td><td class="vl">{{ p.birth_date or '—' }}</td>
+      <td class="lb">婚姻状况</td><td class="vl">{{ p.marital or '—' }}</td>
+      <td class="lb">是否有子女</td><td class="vl">{{ p.children or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="lb">籍　贯</td><td class="vl">{{ p.hometown or '—' }}</td>
+      <td class="lb">民　族</td><td class="vl">—</td>
+      <td class="lb">政治面貌</td><td class="vl">—</td>
+    </tr>
+    <tr>
+      <td class="lb">参加工作<br>时　间</td><td class="vl">{{ p.work_start_date or '—' }}</td>
+      <td class="lb">工　龄</td><td class="vl">{{ calc.work_years if calc.work_years is not none else '—' }}</td>
+      <td class="lb">入司日期</td><td class="vl">{{ p.hire_date or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="lb">司　龄</td><td class="vl">{{ calc.company_years if calc.company_years is not none else '—' }}</td>
+      <td class="lb">用工类型</td><td class="vl">{{ '内勤（劳动合同）' if p.staff_type == 'internal' else '外勤（代理合同）' }}</td>
+      <td class="lb">职级/代理</td>
+      <td class="vl">{% if p.staff_type == 'external' %}{{ p.agent_type or '未设' }}{% else %}{{ (p.level.code + ' - ' + p.level.name) if p.level else '未设' }}{% endif %}</td>
+    </tr>
+    <tr>
+      <td class="lb">身份证<br>号　码</td><td class="vl">{{ p.idcard or '—' }}</td>
+      <td class="lb">手机号码</td><td class="vl">{{ p.phone or '—' }}</td>
+      <td class="lb">公司邮箱</td><td class="vl">{{ p.email or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="lb">现居住址</td><td class="vl" colspan="5">{{ p.address or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="lb">紧急联系人</td><td class="vl">{{ p.emergency_name or '—' }}</td>
+      <td class="lb">紧急联系电话</td><td class="vl">{{ p.emergency_phone or '—' }}</td>
+      <td class="lb">兴趣爱好</td><td class="vl">{{ p.hobby or '—' }}</td>
+    </tr>
+    {% if p.status == 'left' %}
+    <tr>
+      <td class="lb">离职日期</td><td class="vl">{{ p.leave_date or '—' }}</td>
+      <td class="lb">离职原因</td><td class="vl" colspan="3">{{ p.leave_reason or '—' }}</td>
+    </tr>
+    {% endif %}
+
+    <!-- ============ 二、工作经历 ============ -->
+    <tr><th class="sec" colspan="6">二、工作经历</th></tr>
+    <tr>
+      <th class="col">开始时间</th><th class="col">结束时间</th><th class="col">单位名称</th>
+      <th class="col">部门名称</th><th class="col">岗位名称</th><th class="col">变动类型 / 变动原因</th>
+    </tr>
+    {% for c in changes %}
+    <tr>
+      <td class="vl">{{ c.effective_date or '—' }}</td>
+      <td class="vl">至今</td>
+      <td class="vl">{{ calc.company_name }}</td>
+      <td class="vl">{{ (c.to_org.name if c.to_org else '') or '—' }}</td>
+      <td class="vl">{{ c.to_title or '—' }}</td>
+      <td class="vl">{{ c.change_type }}{% if c.reason %} / {{ c.reason }}{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td class="none" colspan="6">暂无记录（系统内异动记录为空；外部工作经历待「工作经历」板块建成后录入）</td></tr>
+    {% endfor %}
+
+    <!-- ============ 三 ~ 九：七大子集板块（二期，遍历 CARD_SECTIONS 渲染） ============ -->
+    {% set CN_NUM = ['三', '四', '五', '六', '七', '八', '九'] %}
+    {% for key, name, model, fields in sections %}
+    <tr><th class="sec" colspan="6">{{ CN_NUM[loop.index0] }}、{{ name }}</th></tr>
+    <tr>
+      {% for fname, label in fields %}<th class="col">{{ label }}</th>{% endfor %}
+    </tr>
+    {% for it in items[key] %}
+    <tr>
+      {% for fname, label in fields %}<td class="vl">{{ it[fname] or '—' }}</td>{% endfor %}
+    </tr>
+    {% else %}
+    <tr><td class="none" colspan="6">暂无记录（可由人事在「录入 / 编辑」中补充）</td></tr>
+    {% endfor %}
+    {% endfor %}
+
+  </table>
+</div>
+{% endif %}
+{% endblock %}

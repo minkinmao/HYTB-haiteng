@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}ADM · {{ '编辑用章' if row else '登记用章' }}{% endblock %}
+{% block pagename %}行政事务 · {{ '编辑用章登记' if row else '登记用章' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑用章登记' if row else '登记用章' }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（编号 {{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记编号由系统自动生成（YZ-年月-序号）。印章名称可直接输入，也可从候选里挑（候选在「行政分类设置」维护）。
+</div>
+
+<form class="adm-form" method="post"
+      action="{{ url_for('adm.seal_edit', vid=row.id) if row else url_for('adm.seal_new') }}">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>印章名称 <b>*</b></label>
+      <input type="text" name="seal_name" list="sealList" required
+             value="{{ (row.seal_name or '') if row else '' }}" placeholder="如：公司公章">
+      <datalist id="sealList">
+        {% for s in seal_names %}<option value="{{ s }}"></option>{% endfor %}
+      </datalist>
+    </div>
+    <div class="adm-fld">
+      <label>用章日期</label>
+      <input type="date" name="use_date" value="{{ row.use_date if row else today }}">
+    </div>
+    <div class="adm-fld">
+      <label>申请人 / 用章人</label>
+      <input type="text" name="applicant" value="{{ (row.applicant or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>申请部门</label>
+      <input type="text" name="dept" value="{{ (row.dept or '') if row else '' }}" placeholder="如：营销部">
+    </div>
+    <div class="adm-fld">
+      <label>用章方式</label>
+      <select name="use_type">
+        {% for k, lb in use_types %}
+        <option value="{{ k }}" {{ 'selected' if row and row.use_type == k else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>用章份数</label>
+      <input type="number" min="1" name="copies" value="{{ row.copies if row else 1 }}">
+    </div>
+    <div class="adm-fld">
+      <label>印章保管人 / 监印人</label>
+      <input type="text" name="keeper" value="{{ (row.keeper or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>状态</label>
+      <select name="status">
+        {% for k, lb in status_list %}
+        <option value="{{ k }}" {{ 'selected' if (row and row.status == k) or (not row and k == 'done') else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>关联 OA 审批单号</label>
+      <input type="text" name="approval_code" value="{{ (row.approval_code or '') if row else '' }}"
+             placeholder="如：SP-202610-001，可空">
+      <span class="hint">用章如需审批，请在 OA 申请中心发起后回填单号</span>
+    </div>
+    <div class="adm-fld full">
+      <label>用章事由</label>
+      <input type="text" name="purpose" value="{{ (row.purpose or '') if row else '' }}"
+             placeholder="如：签订保险代理合作协议">
+    </div>
+    <div class="adm-fld full">
+      <label>用章文件名称</label>
+      <input type="text" name="doc_name" value="{{ (row.doc_name or '') if row else '' }}"
+             placeholder="如：《XX 保险代理合作协议》一式两份">
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if row else '提交登记' }}</button>
+    <a class="adm-btn" href="{{ url_for('adm.seals') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

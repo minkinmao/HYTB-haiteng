@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}AI 助手 · 模型配置{% endblock %}
+{% block pagename %}AI 悬浮机器人 · 模型配置{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .ai-cfg-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
+  @media (max-width:1100px){.ai-cfg-grid{grid-template-columns:1fr}}
+  .ai-card{border:1px solid #EAE2D6;border-radius:10px;background:#fff;padding:16px 18px}
+  .ai-card.ok{border-color:#BFD9C0;background:#F7FBF6}
+  .ai-card h4{margin:0 0 4px;font-size:15px;color:#2A2A2A;display:flex;align-items:center;gap:8px}
+  .ai-card .sub{font-size:12.5px;color:#9C9288;margin-bottom:14px;line-height:1.7}
+  .ai-card .fl{display:flex;align-items:center;gap:10px;margin:11px 0;font-size:13.5px}
+  .ai-card .fl>label{width:118px;flex:0 0 118px;color:#5C554D}
+  .ai-card .fl input[type=text],.ai-card .fl input[type=password],
+  .ai-card .fl input[type=number],.ai-card .fl select{flex:1;min-width:0}
+  .ai-note{font-size:12.5px;color:#6B5D4F;line-height:1.9;background:#FBF7F1;
+    border-left:3px solid #E8B489;padding:11px 13px;border-radius:0 6px 6px 0;margin-top:14px}
+  .ai-note b{color:#B5532A}
+  .gl{list-style:none;margin:6px 0 0;padding:0;font-size:13px;line-height:1.95}
+  .gl li:before{content:'·';color:#E6823C;font-weight:700;margin-right:6px}
+  .st{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 9px;border-radius:10px}
+  .st.on{background:#E7F5EC;color:#1E7A4E;border:1px solid #C4E3D0}
+  .st.off{background:#FBEAE6;color:#A63A22;border:1px solid #F0CFC7}
+  .code{font-family:Consolas,Monaco,monospace;font-size:12px;background:#F4EFE7;
+    padding:1px 6px;border-radius:4px;color:#8A5A2E}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">AI 悬浮机器人 · 模型配置
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（四十四改：右下角机器人的「大脑」）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  机器人本身不认字，读协议要靠外部大模型。这里填一家即可，填完右下角的球就能用了。
+  当前状态：
+  {% if ready[0] %}<span class="st on">● 已就绪</span>
+  {% else %}<span class="st off">● {{ ready[1] }}</span>{% endif %}
+</div>
+
+<form method="post">
+<div class="ai-cfg-grid">
+
+  <!-- ① 接入配置 -->
+  <div class="ai-card {% if ready[0] %}ok{% endif %}">
+    <h4>① 大模型接入</h4>
+    <div class="sub">
+      推荐 <b>智谱 GLM-4-Flash</b>：每天 100 万 token 免费、128K 长上下文，一份几十页的协议一次读完，
+      一分钱不花。想换 DeepSeek / 通义 / Kimi 也行，改下面的地址和模型名即可（接口都兼容 OpenAI 规范）。
+    </div>
+
+    <div class="fl">
+      <label>服务商</label>
+      <select name="provider">
+        {% for v, n in [('zhipu','智谱 BigModel（推荐·免费档）'), ('deepseek','DeepSeek'),
+                        ('aliyun','阿里云百炼 / 通义'), ('moonshot','月之暗面 Kimi'),
+                        ('other','其他（自定义地址）')] %}
+        <option value="{{ v }}" {% if cfg.provider == v %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fl">
+      <label>接口地址</label>
+      <input type="text" name="base_url" value="{{ cfg.base_url or '' }}"
+             placeholder="https://open.bigmodel.cn/api/paas/v4">
+    </div>
+    <div class="fl">
+      <label>模型名</label>
+      <input type="text" name="model" value="{{ cfg.model or '' }}" placeholder="glm-4-flash">
+    </div>
+    <div class="fl">
+      <label>API Key</label>
+      <input type="password" name="api_key" autocomplete="new-password"
+             value="" placeholder="{% if cfg.api_key %}已配置（留空＝不修改，如要换请直接粘贴新的）{% else %}粘贴 sk- 开头的 Key{% endif %}">
+    </div>
+    <div class="fl" style="margin-top:-2px">
+      <label></label>
+      <label style="width:auto;font-size:12.5px;color:#9C9288;display:flex;align-items:center;gap:6px">
+        <input type="checkbox" name="clear_key" style="width:auto;flex:0 0 auto"> 清空已保存的 Key
+      </label>
+    </div>
+    <div class="fl">
+      <label>启用</label>
+      <label style="display:flex;align-items:center;gap:6px;color:#5C554D">
+        <input type="checkbox" name="enabled" style="width:auto;flex:0 0 auto"
+               {% if (cfg.enabled or 'on') == 'on' %}checked{% endif %}> 允许所有有合约权限的同事使用
+      </label>
+    </div>
+    <div class="fl">
+      <label>单次最大输出</label>
+      <input type="number" name="max_tokens" value="{{ cfg.max_tokens or 4096 }}" min="512" max="32768" step="512">
+      <span style="font-size:12px;color:#9C9288">token</span>
+    </div>
+    <div class="fl">
+      <label>温度</label>
+      <input type="number" name="temperature" value="{{ cfg.temperature if cfg.temperature is not none else 0.2 }}"
+             min="0" max="1" step="0.1">
+      <span style="font-size:12px;color:#9C9288">抽数据要低温，0.1~0.3</span>
+    </div>
+    <div class="fl">
+      <label>请求超时</label>
+      <input type="number" name="timeout_sec" value="{{ cfg.timeout_sec or 180 }}" min="30" max="600" step="30">
+      <span style="font-size:12px;color:#9C9288">秒（长协议建议 ≥180）</span>
+    </div>
+    <div class="fl">
+      <label>备注</label>
+      <input type="text" name="note" value="{{ cfg.note or '' }}" placeholder="选填">
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="crm-btn pri" type="submit" name="act" value="save">保存配置</button>
+      <button class="crm-btn" type="submit" name="act" value="save_back"
+              title="保存后回到来时的页面">保存并返回</button>
+      <button class="crm-btn" type="button" onclick="aiTest()">测试连接</button>
+      <span id="aiTestMsg" style="font-size:12.5px;color:#8A7F72"></span>
+    </div>
+    <div style="font-size:12px;color:#9C9288;margin-top:9px;line-height:1.7">
+      填完 Key 先点「测试连接」看通不通；通了再点「保存并返回」回原页面，右下角的球就能用了。
+      （左上角也有返回，随时可以走。）
+    </div>
+    {% if cfg.updated_at %}
+    <div style="font-size:12px;color:#9C9288;margin-top:10px">上次保存：{{ cfg.updated_at }}</div>
+    {% endif %}
+  </div>
+
+  <!-- ② 怎么用 -->
+  <div class="ai-card">
+    <h4>② 怎么拿到免费的 Key</h4>
+    <div class="sub">三分钟搞定，不用付费。</div>
+    <ul class="gl">
+      <li>打开 <b>bigmodel.cn</b>（智谱开放平台），手机号注册 + 实名认证</li>
+      <li>进「控制台 → API Keys → 创建新的 Key」，复制保存（只显示一次）</li>
+      <li>回来粘贴到左侧「API Key」，点保存 → 点测试连接</li>
+      <li>接口地址填 <span class="code">https://open.bigmodel.cn/api/paas/v4</span>，模型名 <span class="code">glm-4-flash</span></li>
+    </ul>
+
+    <div class="ai-note" style="margin-top:16px">
+      <b>为什么不用免费的网页版抓取？</b><br>
+      协议是 PDF / Word 的复杂表格，只有大模型能读懂「哪个数字是 FYC、哪个是第 3 年 RYC」。
+      规则抓取会把表格读串，填错数据比不填更麻烦。
+    </div>
+
+    <div class="ai-note">
+      <b>数据安全</b><br>
+      协议正文会发到所选服务商的接口做识别（智谱在国内，数据不出境）。
+      如果你不希望某份协议外发，就别用机器人识别，手工录入即可 —— 系统不做任何强制上传。
+    </div>
+
+    <div class="ai-note">
+      <b>机器人的边界（重要）</b><br>
+      AI 只生成「<b>待审草稿</b>」，草稿不会出现在合约列表里的正常数据中；
+      你必须在打开的编辑页逐项核对、点保存，它才转为正式合约。
+      抽错、抽漏都非常正常 —— 协议表格错位是常态，人工那一眼不能省。
+    </div>
+  </div>
+
+</div>
+</form>
+
+<script>
+// 测试连接：把**表单里当前填的**地址/模型/Key 一起发过去，不用先保存也能测。
+// （之前只读数据库，刚粘完 Key 直接点测试永远提示“还没配置”，已修）
+function aiTest() {
+  var box = document.getElementById('aiTestMsg');
+  box.style.color = '#8A7F72';
+  box.textContent = '正在测试…';
+  var f = document.querySelector('form');
+  var payload = {
+    base_url: (f.elements['base_url'].value || '').trim(),
+    model: (f.elements['model'].value || '').trim(),
+    api_key: (f.elements['api_key'].value || '').trim()
+  };
+  fetch('/ai/ping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d.ok) {
+      box.style.color = '#1E7A4E';
+      box.textContent = '✅ 通了：' + d.reply + '（' + d.ms + ' ms · ' + d.model + '）'
+        + (d.saved ? '' : ' —— 记得点「保存配置」才会生效');
+    } else {
+      box.style.color = '#A63A22';
+      box.textContent = '❌ ' + (d.error || '失败') + (d.hint ? '｜' + d.hint : '');
+    }
+  }).catch(function (e) {
+    box.style.color = '#A63A22';
+    box.textContent = '❌ 请求失败：' + e;
+  });
+}
+</script>
+{% endblock %}

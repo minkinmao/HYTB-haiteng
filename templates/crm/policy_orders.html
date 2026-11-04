@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 投保订单录入{% endblock %}
+{% block pagename %}核心业务管理系统 · 投保订单录入{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .po-tool{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .po-tool .qbox{flex:1;min-width:160px}
+  .po-acts{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .po-btn{padding:9px 18px;border-radius:10px;border:1px solid #EAE2D6;background:#fff;
+          color:#9C4E2C;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+  .po-btn.primary{background:#C86432;color:#fff;border-color:#C86432}
+  .po-btn:hover{opacity:.92}
+  .imp-card{background:#FAF7F2;border:1px dashed #E0D2C0;border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .imp-card h3{margin:0 0 8px;font-size:14px;color:#9C4E2C}
+  .imp-card .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  table.po{width:100%;border-collapse:collapse;background:#fff;border:1px solid #EAE2D6;border-radius:10px;overflow:hidden;font-size:13px}
+  table.po th,table.po td{border-bottom:1px solid #F0E9DD;padding:7px 9px;text-align:left;white-space:nowrap}
+  table.po th{background:#F6E5DC;color:#7A4326;font-weight:600;position:sticky;top:0}
+  table.po td .sub{color:#9C9288;font-size:11px}
+  .tag{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px;background:#F0E9DD;color:#7A4326}
+  .tag.self{background:#FBE3D0;color:#B5531E}
+  .tag.mutual{background:#FBD9D2;color:#B5301E}
+  .tag.long{background:#E7EFF6;color:#2C6CA8}
+  .tag.short{background:#EAF4EA;color:#3C8C3C}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">投保订单录入
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（新单录入 + Excel 导入 两端口汇总）</small>
+</h2>
+
+<div class="po-acts">
+  <a class="po-btn primary" href="{{ url_for('crm.policy_order_new') }}">＋ 新单录入</a>
+  <a class="po-btn" href="{{ url_for('crm.policy_order_template') }}">下载 Excel 导入模板</a>
+</div>
+
+<div class="imp-card">
+  <h3>Excel 批量导入（端口二）</h3>
+  <form class="row" method="post" action="{{ url_for('crm.policy_order_import') }}" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".xlsx,.xlsm" required>
+    <button class="po-btn primary" type="submit">导入 Excel</button>
+    <span class="hint">仅支持 .xlsx；按表头名匹配列，顺序可颠倒；工号在人力清单查不到的行自动跳过。</span>
+  </form>
+</div>
+
+<form class="po-tool" method="get" action="{{ url_for('crm.policy_orders') }}">
+  <div class="qbox"><label>关键字</label><input name="kw" value="{{ kw }}" placeholder="单号/姓名/产品/编码"></div>
+  <div class="qbox"><label>保险公司</label>
+    <select name="ins"><option value="">全部</option>
+      {% for i in insurers %}<option value="{{ i }}" {{ 'selected' if i==ins else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>代理人工号</label><input name="no" value="{{ no }}" placeholder="代理人工号"></div>
+  <div class="qbox"><label>自互保件</label>
+    <select name="sf"><option value="">全部</option>
+      {% for c,n in self_flags %}<option value="{{ c }}" {{ 'selected' if c==sf else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>长短险</label>
+    <select name="lf"><option value="">全部</option>
+      {% for c,n in ls_flags %}<option value="{{ c }}" {{ 'selected' if c==lf else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="po-btn" type="submit">查询</button>
+</form>
+
+<div style="overflow:auto">
+<table class="po">
+  <thead>
+    <tr>
+      <th>订单号</th><th>出单平台</th><th>代理人(工号)</th><th>投保单/保单号</th>
+      <th>投保人</th><th>被保人</th><th>保险公司</th><th>产品</th><th>险种</th>
+      <th>规模保费</th><th>佣金系数</th><th>代理人佣金</th><th>行业标保率</th><th>受理件数</th>
+      <th>长短险</th><th>自互保件</th><th>缴费年期</th><th>缴费方式</th><th>保单类型</th><th>双录</th><th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.code }}</td>
+      <td>{{ r.agency_platform or '-' }}</td>
+      <td>{{ r.agent_name or '-' }}<div class="sub">{{ r.agent_no or '' }}</div></td>
+      <td>{{ r.app_form_no or '-' }}<div class="sub">{{ r.policy_no or '' }}</div></td>
+      <td>{{ r.app_name or '-' }}<div class="sub">{{ r.app_code or '' }}</div></td>
+      <td>{{ r.ins_name or '-' }}<div class="sub">{{ r.ins_code or '' }}</div></td>
+      <td>{{ r.insurer_name or '-' }}</td>
+      <td>{{ r.product_name or '-' }}<div class="sub">{{ r.product_code or '' }}</div></td>
+      <td>{{ r.insurance_type or '-' }}</td>
+      <td class="num">{{ '%.2f' % r.scale_premium if r.scale_premium else '-' }}</td>
+      <td class="num">{{ '%.2f%%' % r.commission_rate if r.commission_rate else '-' }}</td>
+      <td class="num">{{ '%.2f' % r.commission if r.commission else '-' }}</td>
+      <td class="num">{{ '%.2f%%' % r.industry_std_rate if r.industry_std_rate else '-' }}</td>
+      <td>{{ r.accept_count }}</td>
+      <td>{% if r.ls_flag %}<span class="tag {{ r.ls_flag }}">{{ '长期险' if r.ls_flag=='long' else '短期险' }}</span>{% else %}-{% endif %}</td>
+      <td>{% if r.self_policy_flag %}<span class="tag {{ r.self_policy_flag }}">{{ '互保件' if r.self_policy_flag=='mutual' else '自保件' }}</span>{% else %}否{% endif %}</td>
+      <td>{{ r.pay_years or '-' }}</td>
+      <td>{{ nm_pay.get(r.pay_method, '') }}</td>
+      <td>{{ nm_kind.get(r.policy_kind, '') }}</td>
+      <td>{% if r.dual_record_flag=='yes' %}双录单{% else %}非双录单{% endif %}</td>
+      <td>
+        <a class="po-btn" href="{{ url_for('crm.policy_order_edit', oid=r.id) }}">编辑</a>
+        {% if can_manage %}
+        <form method="post" action="{{ url_for('crm.policy_order_delete', oid=r.id) }}" style="display:inline"
+              onsubmit="return confirm('确认删除该投保订单？')">
+          <button class="po-btn" type="submit" style="color:#B5301E;border-color:#E6C3BC">删除</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="20" style="text-align:center;color:#9C9288;padding:24px">暂无投保订单记录</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

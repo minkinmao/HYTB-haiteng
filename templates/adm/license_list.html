@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 证照资质{% endblock %}
+{% block pagename %}行政管理系统 · 证照资质台账{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">证照资质台账
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（营业执照 / 许可证 / 资质证书 / 印章 / 商标专利）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记公司全部证照与印章，系统按有效期自动提示到期：距到期 ≤30 天标黄，≤7 天或已过期标红。
+</div>
+
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="名称 / 号码 / 保管人 / 发证机关">
+  <label>类型</label>
+  <select name="cat">
+    <option value="">全部</option>
+    {% for c in cats %}<option value="{{ c }}" {{ 'selected' if c == cat else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <label>到期状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    <option value="expired" {{ 'selected' if st == 'expired' else '' }}>已过期</option>
+    <option value="danger" {{ 'selected' if st == 'danger' else '' }}>7 天内到期</option>
+    <option value="warn" {{ 'selected' if st == 'warn' else '' }}>30 天内到期</option>
+    <option value="ok" {{ 'selected' if st == 'ok' else '' }}>正常</option>
+    <option value="none" {{ 'selected' if st == 'none' else '' }}>长期有效</option>
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.licenses') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.license_new') }}">＋ 登记证照</a>{% endif %}
+</form>
+
+{% if alert_n %}
+<div style="background:#FDF3E4;border:1px solid #F0D9B8;color:#8A5A18;border-radius:10px;
+            padding:10px 16px;font-size:13px;margin-bottom:14px">
+  提示：当前列表有 <b>{{ alert_n }}</b> 项证照即将到期或已过期，请及时办理年检 / 换证。
+</div>
+{% endif %}
+
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>证照名称</th><th>类型</th><th>证照号码</th>
+        <th>发证机关</th><th>有效期至</th><th>到期状态</th><th>保管人</th><th>附件</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.r.code }}</td>
+        <td>
+          <div class="adm-nm">{{ it.r.name }}</div>
+          {% if it.r.place %}<div class="adm-sub">存放：{{ it.r.place }}</div>{% endif %}
+        </td>
+        <td>{{ it.r.category or '—' }}</td>
+        <td class="mono">{{ it.r.no or '—' }}</td>
+        <td>{{ it.r.issuer or '—' }}</td>
+        <td class="mono">{{ it.r.expire_date or '长期有效' }}</td>
+        <td>{% include 'adm/_expire_tag.html' %}</td>
+        <td>{{ it.r.keeper or '—' }}</td>
+        <td>
+          {% if it.r.file_path %}
+            <a class="adm-a" href="{{ url_for('adm.license_file', lid=it.r.id) }}">下载</a>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+        <td>
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.license_edit', lid=it.r.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('adm.license_delete', lid=it.r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除证照「{{ it.r.name }}」？附件会一并删除。')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无证照记录。{% if can_edit %}点右上角「＋ 登记证照」开始建档。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

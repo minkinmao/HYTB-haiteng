@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}日常考勤规则 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">日常考勤规则
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（上下班时间与打卡判定规则）</small>
+  </h2>
+  <div style="font-size:12px;color:#9C9288;margin-bottom:14px">人事管理员在此配置公司统一的上下班时间与打卡规则，用于考勤数据判定（迟到/早退/未打下班卡）。将来对接企微或电子考勤机后，同步的打卡时间将按此规则自动判定。</div>
+
+  <div style="background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(42,42,42,.05);max-width:720px">
+    <form method="post" action="{{ url_for('hr.attendance_rule_save') }}">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px">
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">上班时间 *</div>
+          <input type="time" name="work_start" value="{{ rule.work_start if rule else '09:00' }}"
+                 style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">下班时间 *</div>
+          <input type="time" name="work_end" value="{{ rule.work_end if rule else '18:00' }}"
+                 style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px">
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">迟到判定（晚于上班时间超过 N 分钟）</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" name="late_after" min="0" value="{{ rule.late_after if rule else 0 }}"
+                   style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:80px">
+            <span style="font-size:12px;color:#9C9288">分钟</span>
+          </div>
+        </div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">早退判定（早于下班时间超过 N 分钟）</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" name="early_before" min="0" value="{{ rule.early_before if rule else 0 }}"
+                   style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:80px">
+            <span style="font-size:12px;color:#9C9288">分钟</span>
+          </div>
+        </div>
+      </div>
+
+      {# 判定规则说明（动态展示当前生效的规则口径） #}
+      <div style="background:#FAF7F2;border:1px solid #F0E6D8;border-radius:6px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.9;color:#6B5D4F">
+        <div style="font-weight:600;color:#2A2A2A;margin-bottom:4px">判定规则说明</div>
+        <div>· 上班打卡时间 <b>晚于 {{ rule.work_start if rule else '09:00' }} 超过 {{ rule.late_after if rule else 0 }} 分钟</b> → 判定为「<span style="color:#8A5A18">迟到</span>」</div>
+        <div>· 下班打卡时间 <b>早于 {{ rule.work_end if rule else '18:00' }} 超过 {{ rule.early_before if rule else 0 }} 分钟</b> → 判定为「<span style="color:#8A5A18">早退</span>」</div>
+        <div>· 要求打下班卡但当天无下班打卡 → 判定为「<span style="color:#2F7A3F">未打下班卡</span>」</div>
+        <div>· 迟到与早退同时满足时，优先按「迟到」显示（先查迟到，再查早退）</div>
+        <div>· 上述判定仅针对状态为「出勤」的记录；已明确标记迟到/早退/旷工/请假的记录按原标记显示</div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:6px">打卡要求</div>
+        <label style="font-size:13px;margin-right:20px;cursor:pointer">
+          <input type="checkbox" name="need_check_in" {{ 'checked' if not rule or rule.need_check_in else '' }}> 要求打上班卡
+        </label>
+        <label style="font-size:13px;cursor:pointer">
+          <input type="checkbox" name="need_check_out" {{ 'checked' if not rule or rule.need_check_out else '' }}> 要求打下班卡（未打标记「未打下班卡」）
+        </label>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:6px">工作日（勾选为上班日）</div>
+        {% set wd = rule.workdays if rule else '1111100' %}
+        {% set wnames = ['周一','周二','周三','周四','周五','周六','周日'] %}
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          {% for i in range(7) %}
+          <label style="font-size:13px;cursor:pointer">
+            <input type="checkbox" name="wd_{{ i }}" {{ 'checked' if wd[i] == '1' else '' }}> {{ wnames[i] }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:4px">规则说明</div>
+        <input name="note" value="{{ rule.note if rule and rule.note else '' }}" placeholder="可选，如 午休 12:00-13:30 不计工时"
+               style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+      </div>
+
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:10px 26px;border-radius:6px;font-size:14px;cursor:pointer">保存规则</button>
+    </form>
+  </div>
+{% endblock %}

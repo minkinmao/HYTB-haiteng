@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ '编辑' if row else '新增' }}人力架构{% endblock %}
+{% block pagename %}核心业务管理系统 · 人力架构基础信息{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑' if row else '新增' }}人力架构
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（一条 = 一个营业组）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  层级：<b>省公司 → 分支 → 分区 → 营业部 → 营业组</b>。
+  编码由系统自动生成，<b>不用手填</b>：
+  分区 <b style="color:#C86432">FQ001</b>、营业部 <b style="color:#C86432">FQ001-B01</b>、
+  营业组 <b style="color:#C86432">FQ001-B01-G01</b>。
+  同一「省公司+分支+分区」自动复用同一分区编码；新增时只填名称即可。
+</div>
+
+<form class="crm-form" method="post">
+  <div class="crm-sec">一、归属层级 <span>五项均为必填</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>省公司 <b>*</b></label>
+      <input type="text" name="province" list="lstProv" required
+             value="{{ (row.province or '') if row else '' }}" placeholder="如 广东省">
+      <datalist id="lstProv">{% for p in provinces %}<option value="{{ p }}">{% endfor %}</datalist>
+    </div>
+    <div class="crm-fld">
+      <label>分支 <b>*</b></label>
+      <input type="text" name="branch" list="lstBr" required
+             value="{{ (row.branch or '') if row else '' }}" placeholder="如 广州本部">
+      <datalist id="lstBr">
+        {% for p, bs in branches.items() %}{% for b in bs %}<option value="{{ b }}">{% endfor %}{% endfor %}
+      </datalist>
+    </div>
+    <div class="crm-fld">
+      <label>分区 <b>*</b></label>
+      <input type="text" name="zone" value="{{ (row.zone or '') if row else '' }}" placeholder="短代号，如 一区">
+    </div>
+    <div class="crm-fld">
+      <label>分区名称 <b>*</b></label>
+      <input type="text" name="zone_name" value="{{ (row.zone_name or '') if row else '' }}"
+             placeholder="如 广州第一分区">
+      <span class="hint">分区与分区名称至少要填一个；两个都填时以「分区名称」展示</span>
+    </div>
+    <div class="crm-fld">
+      <label>营业部 <b>*</b></label>
+      <input type="text" name="dept" value="{{ (row.dept or '') if row else '' }}" placeholder="如 天河营业部">
+    </div>
+    <div class="crm-fld">
+      <label>营业组 <b>*</b></label>
+      <input type="text" name="group_name" value="{{ (row.group_name or '') if row else '' }}"
+             placeholder="如 广州一区">
+      <span class="hint">同一营业部下营业组不允许重名</span>
+    </div>
+  </div>
+
+  {% if row %}
+  <div class="crm-sec">二、系统编码 <span>自动生成，改名称不影响</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld"><label>分区编码</label>
+      <input type="text" readonly value="{{ row.zone_code or '' }}"></div>
+    <div class="crm-fld"><label>营业部编码</label>
+      <input type="text" readonly value="{{ row.dept_code or '' }}"></div>
+    <div class="crm-fld"><label>营业组编码</label>
+      <input type="text" readonly value="{{ row.group_code or '' }}"></div>
+  </div>
+  {% endif %}
+
+  <div class="crm-sec">{{ '三' if row else '二' }}、备注</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="选填">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.org_struct') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

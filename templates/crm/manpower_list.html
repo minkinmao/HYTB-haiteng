@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 人力数据清单{% endblock %}
+{% block pagename %}核心业务管理系统 · 人力数据清单{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  /* 列多且都要看清楚：每个单元格都不许折行（汉字被压成竖排很难认），
+     装不下就让外层 .crm-card 横向滚动 */
+  .mp-card td, .mp-card th{white-space:nowrap}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">人力数据清单
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（业务团队系数设置的取数底表 · 先有人、再有政策）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  团队类型分<b>两大类</b>：<b style="color:#9C4E2C">基本法团队</b>统一套一套<b>标准化</b>费用政策（不分层，全员同一口径）；
+  <b style="color:#9C4E2C">渠道团队</b>可按<b>层级</b>（渠道总 → 团队长 → 营销员）分别下发费用政策。
+  <b>系统工号</b>（SA-001）由系统自动生成、唯一；<b>代理人工号</b>（海腾上号）选填。
+  人员必须挂到已建的<b>人力架构</b>营业组上（先在「人力架构」页建好架构）；
+  在职状态由<b>离职时间</b>自动判定（空 或 晚于今天 = 在职），不用手工维护。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
+  <a class="crm-tab" href="{{ url_for('crm.agencies') }}">合作经代</a>
+  <a class="crm-tab on" href="{{ url_for('crm.manpower') }}">人力数据清单<span class="n">{{ kpi.total }}</span></a>
+  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
+  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">总人数</div><div class="v">{{ kpi.total }}</div></div>
+  <div class="crm-kpi"><div class="k">在职</div><div class="v">{{ kpi.active }}</div></div>
+  <div class="crm-kpi"><div class="k">已离职</div><div class="v">{{ kpi.left }}</div></div>
+  <div class="crm-kpi"><div class="k">基本法团队</div><div class="v">{{ kpi.basic }}</div></div>
+  <div class="crm-kpi"><div class="k">渠道团队</div><div class="v">{{ kpi.channel }}</div></div>
+  <div class="crm-kpi"><div class="k">已签渠道协议</div><div class="v">{{ kpi.signed }}</div></div>
+</div>
+
+<form class="crm-tool" method="get" action="{{ url_for('crm.manpower') }}">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="姓名 / 工号 / 经代公司 / 团队">
+  <label>团队类型</label>
+  <select name="tt">
+    <option value="">— 全部 —</option>
+    {% for c, n in team_types %}
+    <option value="{{ c }}" {{ 'selected' if tt == c else '' }}>{{ n }}</option>
+    {% endfor %}
+  </select>
+  <label>职级</label>
+  <select name="rk">
+    <option value="">— 全部 —</option>
+    {% for c, n in ranks %}
+    <option value="{{ c }}" {{ 'selected' if rk == c else '' }}>{{ n }}</option>
+    {% endfor %}
+  </select>
+  <label>在职状态</label>
+  <select name="st">
+    <option value="all" {{ 'selected' if st == 'all' else '' }}>— 全部 —</option>
+    <option value="active" {{ 'selected' if st == 'active' else '' }}>在职</option>
+    <option value="left" {{ 'selected' if st == 'left' else '' }}>已离职</option>
+  </select>
+  <label>经代公司</label>
+  <select name="ag">
+    <option value="">— 全部 —</option>
+    {% for a in agencies %}<option value="{{ a }}" {{ 'selected' if ag == a else '' }}>{{ a }}</option>{% endfor %}
+  </select>
+  <label>渠道协议</label>
+  <select name="sg">
+    <option value="">— 全部 —</option>
+    {% for c, n in yesno %}<option value="{{ c }}" {{ 'selected' if sg == c else '' }}>{{ n }}</option>{% endfor %}
+  </select>
+  <label>销售资质</label>
+  <select name="lv">
+    <option value="">— 全部 —</option>
+    {% for x in levels %}<option value="{{ x }}" {{ 'selected' if lv == x else '' }}>{{ x }}</option>{% endfor %}
+  </select>
+  <button class="crm-btn pri" type="submit">筛选</button>
+  <a class="crm-btn" href="{{ url_for('crm.manpower') }}">重置</a>
+  <div class="crm-spacer"></div>
+  <a class="crm-btn" href="{{ url_for('crm.manpower_export') }}">导出 Excel</a>
+  <a class="crm-btn" href="{{ url_for('crm.manpower_template') }}">下载导入模板</a>
+  {% if can_manage %}
+  <a class="crm-btn pri" href="{{ url_for('crm.manpower_new') }}">＋ 新增人员</a>
+  {% endif %}
+</form>
+
+{% if can_manage %}
+<form class="crm-tool" method="post" enctype="multipart/form-data"
+      action="{{ url_for('crm.manpower_import') }}"
+      style="background:#FBF6F1;border-color:#E8DCCE">
+  <label style="font-weight:600;color:#9C4E2C">批量导入</label>
+  <input type="file" name="file" required style="min-width:0;max-width:280px;padding:6px 8px">
+  <span class="hint" style="font-size:11.5px;color:#9C9288">
+    仅 .xlsx；按<b>表头名</b>匹配列（顺序颠倒也能认）；<b>代理人工号重复的会跳过</b>不覆盖
+  </span>
+  <button class="crm-btn pri" type="submit">导入</button>
+</form>
+{% endif %}
+
+<div class="crm-card mp-card" style="overflow-x:auto">
+  <table class="crm-table" style="min-width:1380px">
+    <thead>
+      <tr>
+        <th style="white-space:nowrap">系统工号</th>
+        <th style="white-space:nowrap">代理人工号</th>
+        <th style="white-space:nowrap">姓名</th>
+        <th style="white-space:nowrap">团队类型</th>
+        <th style="white-space:nowrap">职级</th>
+        <th style="white-space:nowrap">销售资质等级</th>
+        <th style="white-space:nowrap">省公司</th>
+        <th style="white-space:nowrap">分支</th>
+        <th style="white-space:nowrap">所属经代公司</th>
+        <th style="white-space:nowrap">所属架构（营业组）</th>
+        <th style="white-space:nowrap">入司时间</th>
+        <th style="white-space:nowrap">离职时间</th>
+        <th style="white-space:nowrap">推荐人</th>
+        <th style="white-space:nowrap">渠道协议</th>
+        <th style="white-space:nowrap">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in rows %}
+      <tr>
+        <td class="mono"><span class="crm-nm">{{ m.sys_no or '-' }}</span></td>
+        <td class="mono">{{ m.agent_no or '-' }}</td>
+        <td><span class="crm-nm">{{ m.name or '-' }}</span>
+          {% if not active_of(m) %}<span class="crm-tag t-gray" style="margin-left:6px">离职</span>{% endif %}</td>
+        <td>
+          {% if m.team_type == 'basic' %}<span class="crm-tag t-info">基本法团队</span>
+          {% else %}<span class="crm-tag t-brand">渠道团队</span>{% endif %}
+        </td>
+        <td>
+          {% set rn = rank_names.get(m.rank, '') %}
+          {% if rn in ('渠道总', '部经理') %}<span class="crm-tag t-warn">{{ rn }}</span>
+          {% elif rn in ('团队长', '主管') %}<span class="crm-tag t-ok">{{ rn }}</span>
+          {% else %}<span class="crm-tag t-gray">{{ rn or '营销员' }}</span>{% endif %}
+        </td>
+        <td>
+          {% if m.sale_level %}
+          <span class="crm-tag {{ 't-warn' if m.sale_level == '一级' else ('t-ok' if m.sale_level == '二级' else 't-gray') }}"
+                title="{{ grade_scope.get(m.sale_level, '') }}">{{ m.sale_level }}</span>
+          {% else %}-{% endif %}
+        </td>
+        <td>{{ m.province or '-' }}</td>
+        <td>{{ m.branch or '-' }}</td>
+        <td>{{ m.agency or '-' }}</td>
+        <td>{% if m.org_path %}<span title="{{ m.org_path }}">
+            {{ m.org_path.split(' / ')[-2:] | join(' / ') }}</span>
+          {% else %}{{ m.team_name or '-' }}{% endif %}</td>
+        <td class="mono">{{ m.hire_date or '-' }}</td>
+        <td class="mono">{{ m.leave_date or '-' }}</td>
+        <td>
+          {% if m.ref_name %}<span class="crm-nm">{{ m.ref_name }}</span>
+          <div class="crm-sub mono">{{ m.ref_no or '-' }}{% if m.ref_rank %} · {{ m.ref_rank }}{% endif %}</div>
+          {% else %}<span class="mono">{{ m.ref_no or '-' }}</span>
+          {% if m.ref_rank %}<div class="crm-sub">{{ m.ref_rank }}</div>{% endif %}{% endif %}
+        </td>
+        <td>
+          {% if m.signed == 'yes' %}<span class="crm-tag t-ok">已签</span>
+          {% if m.sign_date %}<div class="crm-sub">{{ m.sign_date }}</div>{% endif %}
+          {% if m.sign_file %}<div class="crm-sub">
+            <a class="crm-a" href="{{ url_for('crm.manpower_file', mid=m.id, kind='sign_file') }}">协议附件</a></div>
+          {% endif %}
+          {% else %}<span class="crm-tag t-gray">未签</span>{% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          {% if can_manage %}
+          <a class="crm-a" href="{{ url_for('crm.manpower_edit', mid=m.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.manpower_delete', mid=m.id) }}"
+                style="display:inline" onsubmit="return confirm('确认删除「{{ m.name or m.agent_no }}」的人力档案？')">
+            <button class="crm-del" type="submit">删除</button>
+          </form>
+          {% else %}<span style="color:#9C9288">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="15"><div class="crm-empty">暂无人力数据，点右上角「＋ 新增人员」或批量导入</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div style="font-size:12.5px;color:#9C9288;margin-top:10px">
+  共 {{ rows|length }} 人{% if kw or tt or rk or st != 'all' or ag or sg or lv %}（已筛选，总人数 {{ kpi.total }}）{% endif %}
+</div>
+{% endblock %}

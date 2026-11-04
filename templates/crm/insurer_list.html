@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 保司档案{% endblock %}
+{% block pagename %}核心业务管理系统 · 保司档案{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">保司档案
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（保险公司基础信息主数据）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记合作保险公司的工商与资质基础信息，供产品合约引用。新建时可从内置保司库一键填充，也可用 Excel 批量导入。
+  <br>十五改：原「分公司档案」已并入本菜单 —— 各省 / 直辖市分公司请看「<b>省分公司</b>」页签。
+  <br>十六改：保司全称 / 简称 / 统一社会信用代码<b>唯一</b>，重复会被拦下 —— 开关见
+  <a class="crm-a" href="{{ url_for('crm.unique_rules') }}">唯一性规则设置</a>。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab on" href="{{ url_for('crm.insurers') }}">保险公司</a>
+  <a class="crm-tab" href="{{ url_for('crm.branch_list') }}">省分公司</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">档案总数</div><div class="v">{{ kpi.total }}</div></div>
+  <div class="crm-kpi"><div class="k">合作中</div><div class="v">{{ kpi.coop }}</div></div>
+  <div class="crm-kpi"><div class="k">寿险公司</div><div class="v">{{ kpi.life }}</div></div>
+  <div class="crm-kpi"><div class="k">财险公司</div><div class="v">{{ kpi.property }}</div></div>
+</div>
+
+<form class="crm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="全称 / 简称 / 信用代码 / 法人">
+  <label>类型</label>
+  <select name="type">
+    <option value="">全部</option>
+    {% for c, n in types %}<option value="{{ c }}" {{ 'selected' if c == t else '' }}>{{ n }}</option>{% endfor %}
+  </select>
+  <label>合作状态</label>
+  <select name="status">
+    <option value="">全部</option>
+    {% for c, n in statuses %}<option value="{{ c }}" {{ 'selected' if c == st else '' }}>{{ n }}</option>{% endfor %}
+  </select>
+  <button class="crm-btn pri" type="submit">查询</button>
+  <a class="crm-btn" href="{{ url_for('crm.insurers') }}">重置</a>
+  <span class="crm-spacer"></span>
+  <a class="crm-btn" href="{{ url_for('crm.insurer_export') }}">导出 Excel</a>
+  {% if can_manage %}<a class="crm-btn dark" href="{{ url_for('crm.insurer_new') }}">＋ 新建保司</a>{% endif %}
+</form>
+
+{% if can_manage %}
+<form class="crm-tool" method="post" enctype="multipart/form-data"
+      action="{{ url_for('crm.insurer_import') }}">
+  <label>批量导入</label>
+  <input type="file" name="file" accept=".xlsx,.xlsm" required>
+  <button class="crm-btn" type="submit">导入 Excel</button>
+  <span style="font-size:12px;color:#9C9288">
+    按「保司全称」去重；表头顺序与导出文件一致，已存在的自动跳过。
+  </span>
+</form>
+
+{# 四十一改：一键抓取 —— 全称填好后其余自动补，不用一条条手填 #}
+<form class="crm-tool" method="post" action="{{ url_for('crm.insurer_fetch_all') }}"
+      onsubmit="return confirm('批量抓取所有「缺许可证号 / 缺成立日期 / 缺信用代码」的保司？\n\n默认只补空字段，已填好的不覆盖。抓取期间请勿关闭页面。')">
+  <label>一键抓取</label>
+  <label style="font-size:12.5px;color:#6B5D4F;white-space:nowrap">
+    <input type="checkbox" name="overwrite" value="1"> 覆盖已有值（谨慎）
+  </label>
+  <button class="crm-btn pri" type="submit">批量抓取缺项</button>
+  <a class="crm-btn" href="{{ url_for('crm.insurer_source') }}">数据源配置</a>
+  <span style="font-size:12px;color:#9C9288">
+    只补空字段；数据源＝金融监管总局许可证库（免费）＋天眼查 API（需 token）。每条间隔 3 秒，10 家约 30 秒。
+  </span>
+</form>
+{% endif %}
+
+<div class="crm-card">
+  {% if rows %}
+  <table class="crm-table">
+    <thead>
+      <tr>
+        <th>保司全称</th><th>简称</th><th>类型</th><th>统一社会信用代码</th>
+        <th>法定代表人</th><th>联系电话</th><th>合作状态</th><th>数据来源</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>
+          <div class="crm-nm"><a class="crm-a" href="{{ url_for('crm.insurer_detail', iid=r.id) }}">{{ r.name }}</a></div>
+          {% if r.address %}<div class="crm-sub">{{ r.address }}</div>{% endif %}
+        </td>
+        <td>{{ r.short_name or '—' }}</td>
+        <td>{{ dname.get(r.insurer_type, r.insurer_type or '—') }}</td>
+        <td class="mono">{{ r.credit_code or '—' }}</td>
+        <td>{{ r.legal_person or '—' }}</td>
+        <td class="mono">{{ r.phone or '—' }}</td>
+        <td>
+          {% set sc = {'coop': 't-ok', 'paused': 't-warn', 'none': 't-gray'} %}
+          <span class="crm-tag {{ sc.get(r.status, 't-gray') }}">{{ dname.get(r.status, r.status or '—') }}</span>
+        </td>
+        <td><span class="crm-tag t-gray">{{ dname.get(r.source, r.source or '—') }}</span></td>
+        <td>
+          <a class="crm-a" href="{{ url_for('crm.insurer_detail', iid=r.id) }}">详情</a>
+          {# 四十一改 C：抓不到的保司一键跳天眼查这家公司页，抄字段回来 #}
+          <a class="crm-a" style="margin-left:8px" target="_blank" rel="noopener"
+             href="{{ tyc_url(r.name) }}" title="去天眼查查这家公司的工商信息">天眼查</a>
+          {% if can_manage %}
+          <a class="crm-a" style="margin-left:8px" href="{{ url_for('crm.insurer_edit', iid=r.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.insurer_delete', iid=r.id) }}" style="display:inline"
+                onsubmit="return confirm('确定删除保司「{{ r.name }}」？')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无保司档案。{% if can_manage %}点右上角「＋ 新建保司」开始建档。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

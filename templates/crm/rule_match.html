@@ -1,0 +1,166 @@
+{# =====================================================================
+   继续率考核规则 · 产品匹配（七改 2026-10-02 · 两步制第二步）
+   流程：选保险公司 → 系统自动弹出该保司产品 → 产品多选 →
+        勾选要关联的规则 → 保存（可用「并入」或「覆盖」）
+   ⚠️ 只用产品建立关联，不选产品缴别
+   ===================================================================== #}
+{% extends 'base.html' %}
+{% block title %}CRM · 继续率规则 · 产品匹配{% endblock %}
+{% block pagename %}核心业务管理系统 · 继续率规则产品匹配{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .pp-wrap{display:flex;flex-wrap:wrap;gap:8px 10px;padding:8px 10px;border:1px solid #E2D8CA;
+    border-radius:9px;background:#fff;max-height:230px;overflow:auto}
+  .pp{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#2A2A2A;
+    background:#F8F3EC;border:1px solid #EADFCE;border-radius:14px;padding:4px 11px 4px 8px;
+    cursor:pointer;white-space:nowrap;user-select:none}
+  .pp input{margin:0;cursor:pointer}
+  .pp.on{background:#FBEEE0;border-color:#E5B58C;color:#9C4E2C;font-weight:600}
+  .step-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .step-bar .st{flex:1;min-width:240px;border:1px solid #EADFCE;border-radius:10px;
+    padding:9px 12px;font-size:12.5px;color:#6B5D4F;background:#FBF8F4}
+  .step-bar .st b{display:block;font-size:13px;color:#9C4E2C;margin-bottom:3px}
+  .step-bar .st.on{background:#FBEEE0;border-color:#E5B58C}
+  .step-bar .st.on b{color:#8A4A21}
+  .rrow{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border:1px solid #EEE6D9;
+    border-radius:9px;background:#fff;margin-bottom:8px}
+  .rrow .nm{font-size:13px;color:#2A2A2A;font-weight:600}
+  .rrow .sub{font-size:12px;color:#9C9288;margin-top:2px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">继续率规则 · 产品匹配</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:14px">
+  两步制第二步：<b>选保险公司 → 系统自动弹出产品 → 产品多选 → 与规则建立关联</b>。
+  这里<b>不选产品缴别</b>，只用产品做关联；关联后落在范围内的合约自动套用该规则。
+</div>
+
+<div class="step-bar">
+  <div class="st"><b>第一步 · 建续期考核规则</b>
+    到「继续率考核规则」列表点<b>新建规则</b>（保司 / 分公司 / 考核类型 / 奖励项目 / 档位 / 倒扣）</div>
+  <div class="st on"><b>第二步 · 产品匹配（本页）</b>
+    选保司 → 弹出产品 → 产品多选 → 选择要关联的规则 → 保存</div>
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab on" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
+</div>
+
+<form class="crm-tool" method="get" action="{{ url_for('crm.rule_match') }}">
+  <label>保险公司</label>
+  <select name="insurer_id" id="selIns" onchange="this.form.submit()">
+    <option value="">— 请选择保险公司 —</option>
+    {% for iv in insurers %}
+    <option value="{{ iv.id }}" {{ 'selected' if cur_ins == iv.id else '' }}>{{ iv.name }}</option>
+    {% endfor %}
+  </select>
+  <noscript><button class="crm-btn pri" type="submit">查询</button></noscript>
+  <span class="crm-spacer"></span>
+  <span style="font-size:12.5px;color:#9C9288">切换保司会自动刷新下方产品与规则</span>
+</form>
+
+{% if not cur_ins %}
+<div class="crm-card"><div class="crm-empty">请先在上方选择保险公司。</div></div>
+{% elif not rules %}
+<div class="crm-card">
+  <div class="crm-empty">
+    该保司还没有继续率考核规则 —— 请先到「继续率考核规则」列表
+    <a class="crm-a" href="{{ url_for('crm.rule_new') }}">新建规则</a>（第一步）。
+  </div>
+</div>
+{% else %}
+<form method="post" action="{{ url_for('crm.rule_match') }}">
+  <input type="hidden" name="insurer_id" value="{{ cur_ins }}">
+
+  <div class="crm-card" style="margin-bottom:16px">
+    <div class="crm-sec">一、选择产品名称 <span>选中保司后自动弹出该保司已录产品，可多选</span></div>
+    <div class="crm-grid">
+      <div class="crm-fld full">
+        <div class="pp-wrap" id="prodWrap">
+          {% for p in products %}
+          <label class="pp{% if (pre_products and p in pre_products) or (not pre_products) %} on{% endif %}">
+            <input type="checkbox" name="product_names" value="{{ p }}"
+                   {% if (pre_products and p in pre_products) or (not pre_products) %}checked{% endif %}>{{ p }}</label>
+          {% endfor %}
+        </div>
+        {% if products %}
+        <div class="hint">来源：该保司在<b>总公司合约协议 / 分公司合约协议</b>中已录的产品（去重）。
+          默认已全选，取消不需要的即可。</div>
+        <div style="margin-top:8px">
+          <button class="crm-btn sm" type="button" onclick="pickAll(true)">全选</button>
+          <button class="crm-btn sm" type="button" onclick="pickAll(false)">全不选</button>
+        </div>
+        {% else %}
+        <div class="hint" style="color:#B5532A">该保司暂无可选产品 ——
+          请先到「总公司合约协议」建档该保司的产品（保司基础信息 → 总总合约 → 再来匹配）。</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="crm-card" style="margin-bottom:16px">
+    <div class="crm-sec">二、关联到继续率考核规则 <span>可多选；一条规则可含多个考核标准</span></div>
+    {% for r in rules %}
+    <label class="rrow" style="cursor:pointer">
+      <input type="checkbox" name="rule_ids" value="{{ r.id }}"
+             {{ 'checked' if r.id in sel_rules else '' }} style="margin-top:3px">
+      <span style="flex:1">
+        <span class="nm">{{ r.name }}</span>
+        <span class="sub">
+          考核标准：{% set rcs = r_cycles.get(r.id, []) %}{% if rcs %}{{ rcs|join('、') }}{% else %}—{% endif %}
+          {% if r.branch_name %}｜分公司：{{ r.branch_name }}{% endif %}
+          ｜奖励项目：{% if r.award_items %}{% for c in r.award_items.split(',') %}{{ dname.get(c, c) }}{% if not loop.last %}、{% endif %}{% endfor %}{% else %}—{% endif %}
+          ｜档位 {{ r_items.get(r.id, 0) }} 个
+        </span>
+        <span class="sub" style="display:block">
+          当前已关联产品：{% set ps = r_products.get(r.id, []) %}
+          {% if ps %}{{ ps|join('、') }}{% else %}<span style="color:#B5532A">无（＝该保司全部产品都会命中）</span>{% endif %}
+        </span>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="crm-card" style="margin-bottom:16px">
+    <div class="crm-sec">三、匹配方式</div>
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>保存方式</label>
+        <select name="mode">
+          <option value="append">并入（追加到规则现有产品，去重）</option>
+          <option value="replace">覆盖（用本次所选产品替换规则的适用产品）</option>
+        </select>
+        <div class="hint">日常用「并入」；要重设某条规则的产品范围时用「覆盖」。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存匹配</button>
+    <a class="crm-btn" href="{{ url_for('crm.rule_list') }}">返回规则列表</a>
+  </div>
+</form>
+
+<script>
+  function pickAll(v) {
+    var box = document.getElementById('prodWrap');
+    if (!box) { return; }
+    [].slice.call(box.querySelectorAll('input[name="product_names"]')).forEach(function (cb) {
+      cb.checked = v;
+      if (cb.parentNode) { cb.parentNode.className = 'pp' + (v ? ' on' : ''); }
+    });
+  }
+  document.addEventListener('change', function (e) {
+    var cb = e.target;
+    if (cb && cb.name === 'product_names' && cb.parentNode) {
+      cb.parentNode.className = 'pp' + (cb.checked ? ' on' : '');
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

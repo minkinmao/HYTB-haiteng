@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}ADM · {{ '编辑合同' if row else '登记合同' }}{% endblock %}
+{% block pagename %}行政管理系统 · {{ '编辑合同' if row else '登记合同' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑商务合同' if row else '登记商务合同' }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（编号 {{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  合同编号由系统自动生成（SWHT-年月-序号）。到期日留空表示无固定期限（如长期服务协议）。
+</div>
+
+<form class="adm-form" method="post" enctype="multipart/form-data"
+      action="{{ url_for('adm.contract_edit', cid=row.id) if row else url_for('adm.contract_new') }}">
+  <div class="adm-grid">
+    <div class="adm-fld full">
+      <label>合同名称 <b>*</b></label>
+      <input type="text" name="name" required value="{{ (row.name or '') if row else '' }}"
+             placeholder="如：广州办公室房屋租赁合同（2026 年度）">
+    </div>
+    <div class="adm-fld">
+      <label>合同类型</label>
+      <select name="category">
+        <option value="">请选择</option>
+        {% for c in cats %}
+        <option value="{{ c }}" {{ 'selected' if row and row.category == c else '' }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>对方单位</label>
+      <input type="text" name="party" value="{{ (row.party or '') if row else '' }}" placeholder="出租方 / 供应商名称">
+    </div>
+    <div class="adm-fld">
+      <label>签订日期</label>
+      <input type="date" name="sign_date" value="{{ (row.sign_date or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>合同金额（元）</label>
+      <input type="number" step="0.01" name="amount" value="{{ (row.amount or '') if row else '' }}" placeholder="0.00">
+    </div>
+    <div class="adm-fld">
+      <label>合同起始日</label>
+      <input type="date" name="start_date" value="{{ (row.start_date or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>合同到期日</label>
+      <input type="date" name="end_date" value="{{ (row.end_date or '') if row else '' }}">
+      <span class="hint">留空 = 无固定期限</span>
+    </div>
+    <div class="adm-fld">
+      <label>付款方式</label>
+      <select name="pay_mode">
+        <option value="">请选择</option>
+        <option value="once" {{ 'selected' if row and row.pay_mode == 'once' else '' }}>一次性付清</option>
+        <option value="install" {{ 'selected' if row and row.pay_mode == 'install' else '' }}>分期付款</option>
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>经办人</label>
+      <input type="text" name="handler" value="{{ (row.handler or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>承办部门</label>
+      <input type="text" name="dept" value="{{ (row.dept or '') if row else '' }}" placeholder="如：人事行政部">
+    </div>
+    <div class="adm-fld">
+      <label>关联资产</label>
+      <select name="asset_id">
+        <option value="">不关联</option>
+        {% for a in assets %}
+        <option value="{{ a.id }}" {{ 'selected' if row and row.asset_id == a.id else '' }}>
+          {{ a.code }} · {{ a.name }}
+        </option>
+        {% endfor %}
+      </select>
+      <span class="hint">如车辆保险、设备维保合同可关联到对应资产卡片</span>
+    </div>
+    <div class="adm-fld">
+      <label>合同状态</label>
+      <select name="status">
+        {% for v, lb in statuses %}
+        <option value="{{ v }}" {{ 'selected' if (row.status if row else 'active') == v else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld full">
+      <label>付款计划说明</label>
+      <textarea name="pay_plan" placeholder="如：分 12 期，每月 5 日前付 ¥8,000；或一次性付清后无后续">{{ (row.pay_plan or '') if row else '' }}</textarea>
+    </div>
+    <div class="adm-fld full">
+      <label>合同电子版</label>
+      <input type="file" name="file">
+      <span class="hint">
+        支持 pdf / ofd / 图片 / office 文档 / zip，单个不超过 10MB。
+        {% if row and row.file_path %}当前已上传：{{ row.file_name }}（重新上传会覆盖）{% endif %}
+      </span>
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="续签安排、特别条款等">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if row else '登记入库' }}</button>
+    <a class="adm-btn" href="{{ url_for('adm.contracts') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

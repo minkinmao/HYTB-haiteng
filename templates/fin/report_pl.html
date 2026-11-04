@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}利润表 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 利润表{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">利润表
+    <span style="font-size:13px;font-weight:400;color:#9C9288">Income Statement · 会小企02表</span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    从营业收入一路算到净利润。损益类科目取<b style="color:#5C554D">净发生额</b>（按科目余额方向取正），
+    所以收入是加项、成本费用是减项；红字凭证金额为负，自动抵减。
+    <b style="color:#5C554D">取数已剔除「期末结转」系统凭证</b>——所以这一期结不结账，利润表数字都一样。
+  </div>
+
+  {# 关键数概览 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('营业收入', meta.revenue, '#C86432'),
+      ('营业利润', meta.op_profit, '#C9902A'),
+      ('利润总额', meta.total_profit, '#E6823C'),
+      ('净利润', meta.net_profit, '#166534'),
+    ] %}
+    {% for nm, val, color in cards %}
+    <div style="flex:1;min-width:136px;background:#fff;border-radius:8px;padding:14px 16px;
+                box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ nm }}（本期）</div>
+      <div style="font-size:19px;font-weight:700;margin-top:4px;color:{{ color }}">￥{{ '{:,.2f}'.format(val) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 期间切换 + 导出 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.report_pl') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">切换期间</button>
+      <a href="{{ url_for('fin.report_export', kind='pl', period=period) }}"
+         style="font-size:13px;color:#C86432;border:1px solid #E9D9C6;border-radius:8px;
+                padding:8px 16px;text-decoration:none;background:#FCFAF7">导出 Excel</a>
+      <a href="{{ url_for('fin.report_custom', tid=meta.tpl.id, period=period) if meta.tpl else '#' }}"
+         style="font-size:13px;color:#9C9288;padding-bottom:9px">查看 / 修改取数公式 →</a>
+      <span style="font-size:12.5px;color:#9C9288;padding-bottom:10px">
+        本期已记账凭证 {{ meta.vch_count }} 张
+      </span>
+    </form>
+  </div>
+
+  {# 报表主体 #}
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead>
+        <tr style="background:#F7F3EC;color:#6B5D4F">
+          <th style="padding:10px 12px;font-size:12.5px;width:56px;border-bottom:1px solid #EAE2D6">行次</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:left;border-bottom:1px solid #EAE2D6">项目</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:right;width:150px;border-bottom:1px solid #EAE2D6">本期金额</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:right;width:150px;border-bottom:1px solid #EAE2D6">本年累计金额</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr style="{{ 'border-top:1.5px solid #C86432;font-weight:700;background:#FFFDFA' if r.total else '' }}">
+          <td style="padding:8px 12px;text-align:center;color:#9C9288;font-size:12px">{{ r.line or '' }}</td>
+          <td style="padding:8px 12px{% if r.label.startswith('减：') %};padding-left:24px;color:#6B5D4F{% elif r.label.startswith('加：') %};padding-left:24px;color:#6B5D4F{% endif %}">
+            {{ r.label }}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;
+                     {{ 'color:#C86432' if r.total else '' }}">
+            {{ '{:,.2f}'.format(r.value) }}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;
+                     color:{{ '#C86432' if r.total else '#6B5D4F' }}">
+            {{ '{:,.2f}'.format(r.value_b) }}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not rows %}
+        <tr><td colspan="4" style="padding:40px 12px;text-align:center;color:#C0B6A8">
+          没有取到利润表模板。请到「账务管理 → 报表中心」确认内置模板是否已生成。
+        </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">口径说明：</b>
+    ① 「本期金额」是报表期的净发生额，「本年累计金额」是从本年 1 月（年中启用则从启用期）累计到报表期，两列用同一套公式算；
+    ② 公式里只写<b>一级科目</b>——明细科目已由系统汇总到一级（如 500101 已含在 5001 里），再写明细会重复计算；
+    ③ 营业利润 ＝ 营业收入 − 营业成本 − 税金及附加 − 销售费用 − 管理费用 − 财务费用；
+    <br>④ 利润总额 ＝ 营业利润 + 营业外收入 − 营业外支出；净利润 ＝ 利润总额 − 所得税费用。
+  </div>
+{% endblock %}

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>海盈通保 · 内部管理系统（预览版）</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,"Microsoft YaHei",sans-serif; background:#f0f2f5; color:#1f2d3d; }
+    .topbar { background:#1f2d3d; color:#fff; padding:0 24px; height:54px;
+              display:flex; align-items:center; justify-content:space-between; }
+    .brand { font-size:17px; font-weight:600; }
+    .nav { display:flex; gap:0; }
+    .nav a { color:#cbd5e1; text-decoration:none; padding:0 14px; height:54px; line-height:54px; font-size:14px; border-bottom:2px solid transparent; }
+    .nav a:hover, .nav a.active { color:#fff; border-bottom-color:#409eff; }
+    .user { font-size:14px; color:#e2e8f0; }
+    .container { max-width:960px; margin:24px auto; padding:0 16px; }
+    .card { background:#fff; border-radius:8px; padding:16px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; }
+    .tag-blue { background:#dbeafe; color:#1d4ed8; }
+    .tag-orange { background:#fef3c7; color:#92400e; }
+    .tag-green { background:#dcfce7; color:#166534; }
+    .tag-red { background:#fee2e2; color:#991b1b; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { color:#909399; text-align:left; padding:8px; border-bottom:1px solid #e4e7ed; }
+    td { padding:8px; border-bottom:1px solid #f2f2f2; }
+    .btn { display:inline-block; padding:6px 14px; border-radius:6px; font-size:13px; text-decoration:none; cursor:pointer; border:none; }
+    .btn-blue { background:#409eff; color:#fff; }
+    .btn-green { background:#10b981; color:#fff; }
+    .btn-outline { background:#fff; color:#409eff; border:1px solid #dcdfe6; }
+    h2 { font-size:18px; margin:0 0 16px; }
+    .demo-note { background:#fef9c3; border:1px solid #fde047; border-radius:6px; padding:12px 16px; margin-bottom:20px; font-size:13px; color:#854d0e; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">海盈通保 · 内部管理系统</div>
+    <div class="nav">
+      <a href="#" class="active">首页</a>
+      <a href="#oa">OA办公</a>
+      <a href="#hr">人事</a>
+      <a href="#commission">佣金</a>
+      <a href="#admin">权限</a>
+    </div>
+    <div class="user">admin（S级·总经理/老板）</div>
+  </div>
+
+  <div class="container">
+    <div class="demo-note">
+      ⚠️ 这是 <b>静态预览版</b>，展示各页面布局与交互效果。完整功能需在您本机启动 Flask 服务后体验。<br>
+      启动方式：<code style="background:#f0f0f0;padding:2px 6px;border-radius:4px">cd E:\workbuddy\系统开发\haiyingtongbao &amp;&amp; venv\Scripts\pip install -r requirements.txt &amp;&amp; python app.py</code>
+    </div>
+
+    <!-- ============ 首页概览 ============ -->
+    <div class="card" id="home">
+      <h2 style="margin-bottom:12px">👋 欢迎，admin</h2>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px;padding:16px;background:#f8fafc;border-radius:8px">
+          <div style="font-size:12px;color:#94a3b8">数据可见范围</div>
+          <div style="font-size:18px;font-weight:600;margin-top:4px">全量数据</div>
+        </div>
+        <div style="flex:1;min-width:200px;padding:16px;background:#f8fafc;border-radius:8px">
+          <div style="font-size:12px;color:#94a3b8">待审批</div>
+          <div style="font-size:18px;font-weight:600;margin-top:4px;color:#f59e0b">1 条</div>
+        </div>
+        <div style="flex:1;min-width:200px;padding:16px;background:#f8fafc;border-radius:8px">
+          <div style="font-size:12px;color:#94a3b8">员工总数</div>
+          <div style="font-size:18px;font-weight:600;margin-top:4px;color:#166534">4 人</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ OA 办公 ============ -->
+    <div id="oa">
+      <div class="card">
+        <h2>📋 公告公示</h2>
+        <div style="padding:12px 0;border-bottom:1px solid #f2f2f2">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <span class="tag tag-blue" style="margin-right:8px">置顶</span>
+              <strong>欢迎使用海盈通保内部管理系统</strong>
+            </div>
+            <span style="font-size:12px;color:#94a3b8">2026-09-16 16:00</span>
+          </div>
+          <div style="font-size:13px;color:#606266;margin-top:6px">本系统先上线 OA 办公模块（公告公示），后续将逐步扩展营销、财务等模块。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📝 待办事项（1）</h2>
+        <div style="padding:12px 0;border-bottom:1px solid #f2f2f2">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <span class="tag tag-orange">请假</span>
+              <strong style="margin-left:8px">年假申请</strong>
+            </div>
+            <span style="font-size:12px;color:#94a3b8">申请人：admin</span>
+          </div>
+          <div style="font-size:13px;color:#606266;margin-top:4px">申请休年假3天</div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn btn-green" onclick="alert('已通过')">通过</button>
+            <button class="btn btn-outline" style="color:#b91c1c;border-color:#b91c1c" onclick="alert('已驳回')">驳回</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🏃 差勤记录（1）</h2>
+        <div style="padding:12px 0;border-bottom:1px solid #f2f2f2">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <span class="tag tag-blue">请假</span>
+              <strong style="margin-left:8px">年假申请</strong>
+            </div>
+            <span style="font-size:12px;padding:2px 8px;border-radius:10px;background:#fef3c7;color:#92400e">待审批</span>
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">2026-09-16 16:00 提交</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 人事系统 ============ -->
+    <div id="hr">
+      <div class="card">
+        <h2>👥 员工花名册 <span style="font-size:12px;color:#94a3b8;font-weight:400">（4 人）</span></h2>
+        <table>
+          <thead><tr><th>姓名</th><th>工号</th><th>类型</th><th>职级/代理类型</th><th>部门</th><th>职务</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>张伟</td><td>HY001</td><td><span class="tag tag-blue">内勤</span></td><td>S · 最高负责人</td><td>海盈通保</td><td>总经理</td><td><span class="tag tag-green">在职</span></td></tr>
+            <tr><td>李娜</td><td>HY002</td><td><span class="tag tag-blue">内勤</span></td><td>C · 部门主管</td><td>海盈通保</td><td>营销主管</td><td><span class="tag tag-green">在职</span></td></tr>
+            <tr><td>王芳</td><td>HY003</td><td><span class="tag tag-blue">内勤</span></td><td>D · 部门员工</td><td>海盈通保</td><td>财务员工</td><td><span class="tag tag-green">在职</span></td></tr>
+            <tr><td>赵磊</td><td>DL001</td><td><span class="tag tag-orange">外勤</span></td><td>渠道总</td><td>—</td><td>渠道总</td><td><span class="tag tag-green">在职</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>💰 工资清单（仅内勤，3 条）</h2>
+        <table>
+          <thead><tr><th>员工</th><th>月份</th><th>基本</th><th>岗位</th><th>绩效</th><th>补贴</th><th>养老</th><th>医疗</th><th>公积金</th><th>实发</th></tr></thead>
+          <tbody>
+            <tr><td>张伟（HY001）</td><td>2026-08</td><td>20,000</td><td>5,000</td><td>8,000</td><td>1,000</td><td>1,600</td><td>400</td><td>2,000</td><td style="color:#166534;font-weight:600">30,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>📄 合同档案（4 条）</h2>
+        <table>
+          <thead><tr><th>员工</th><th>合同类型</th><th>合同编号</th><th>起始日</th><th>到期日</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>张伟（HY001）</td><td><span class="tag tag-blue">劳动合同</span></td><td>LA-2026-001</td><td>—</td><td>—</td><td><span class="tag tag-green">生效中</span></td></tr>
+            <tr><td>赵磊（DL001）</td><td><span class="tag tag-orange">代理合同</span></td><td>AG-2026-001</td><td>—</td><td>—</td><td><span class="tag tag-green">生效中</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ 佣金系统 ============ -->
+    <div id="commission">
+      <div class="card">
+        <h2>💵 佣金明细（当前用户：赵磊 DL001 渠道总，可查看全部下属）</h2>
+        <table>
+          <thead><tr><th>销售</th><th>月份</th><th>产品</th><th>保费</th><th>佣金率</th><th>佣金</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>赵磊（DL001）渠道总</td><td>2026-08</td><td>安心意外险</td><td>50,000</td><td>30%</td><td style="color:#166534;font-weight:600">15,000</td><td><span class="tag tag-green">已确认</span></td></tr>
+            <tr><td>孙娟（DL101）主管</td><td>2026-08</td><td>安心意外险</td><td>20,000</td><td>25%</td><td style="color:#166534;font-weight:600">5,000</td><td><span class="tag tag-orange">待确认</span></td></tr>
+            <tr><td>吴敏（DL103）代理人</td><td>2026-08</td><td>安心意外险</td><td>10,000</td><td>20%</td><td style="color:#166534;font-weight:600">2,000</td><td><span class="tag tag-green">已确认</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>🏆 奖金池（1 条）</h2>
+        <div style="padding:12px 0;border-bottom:1px solid #f2f2f2">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <strong>第二季度渠道奖励</strong>
+              <span style="font-size:12px;color:#94a3b8;margin-left:8px">2026-Q2</span>
+            </div>
+            <span style="color:#166534;font-weight:600">总额：¥50,000</span>
+          </div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">分配：2 条 · 说明：按渠道业绩分配</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 权限设置 ============ -->
+    <div id="admin">
+      <div class="card">
+        <h2>🔐 职级权限流配置（IT 管理员后台）</h2>
+        <table>
+          <thead><tr><th>职级</th><th>名称</th><th>对应职务</th><th>数据权限</th><th>审批权</th><th>人事权</th><th>佣金权</th></tr></thead>
+          <tbody>
+            <tr><td><strong>S</strong></td><td>最高负责人</td><td>总经理/老板</td><td>✅ 全量</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td><strong>A</strong></td><td>部门负责人</td><td>部门负责人</td><td>✅ 全量</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td><strong>B</strong></td><td>部门总经理</td><td>部门总经理</td><td>✅ 全量</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td><strong>C</strong></td><td>部门主管</td><td>部门主管</td><td>✅ 团队</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td><strong>D</strong></td><td>部门员工</td><td>部门员工</td><td>✅ 本人</td><td>❌</td><td>❌</td><td>❌</td></tr>
+            <tr><td><strong>E</strong></td><td>其他人员</td><td>其他</td><td>✅ 本人</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px">
+      广东海盈通保智能科技有限公司 · 内部管理系统 · 预览版 v1.0
+    </div>
+  </div>
+</body>
+</html>

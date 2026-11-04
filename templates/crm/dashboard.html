@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 经营报表{% endblock %}
+{% block pagename %}核心业务管理系统 · 经营报表{% endblock %}
+{% block content %}
+
+<style>
+  .db-wrap{max-width:1680px;margin:0 auto}
+  .db-filter{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:#FAF7F2;border:1px solid #EAE2D6;border-radius:12px;padding:12px 16px;margin-bottom:16px}
+  .db-filter .fbox{display:flex;flex-direction:column;gap:4px}
+  .db-filter .fbox label{font-size:12px;color:#9C9288}
+  .db-filter input,.db-filter select{padding:7px 9px;border:1px solid #EAE2D6;border-radius:8px;font-size:13px}
+  .db-btn{padding:8px 18px;border-radius:10px;border:1px solid #C86432;background:#C86432;color:#fff;font-weight:600;cursor:pointer;font-size:13px}
+  .db-btn.ghost{background:#fff;color:#9C4E2C;border-color:#EAE2D6}
+  .db-btn:hover{opacity:.92}
+  .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:#fff;border:1px solid #EAE2D6;border-radius:12px;padding:14px 16px}
+  .kpi .k-lab{font-size:12px;color:#9C9288;margin-bottom:6px}
+  .kpi .k-val{font-size:22px;font-weight:700;color:#C86432}
+  .kpi .k-sub{font-size:11px;color:#B5A99C;margin-top:3px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .panel{background:#fff;border:1px solid #EAE2D6;border-radius:12px;padding:12px 14px;min-height:300px}
+  .panel h3{margin:0 0 8px;font-size:14px;color:#7A4326;border-left:4px solid #C86432;padding-left:8px}
+  .panel .chart{width:100%;height:260px}
+  .panel.wide{grid-column:span 2}
+  .empty{color:#9C9288;text-align:center;padding:40px;font-size:13px}
+  @media (max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr}.panel.wide{grid-column:span 1}}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 10px">核心业务经营报表
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（实际经营数据 · 全国地区口径）</small>
+</h2>
+
+<form class="db-filter" method="get" action="{{ url_for('crm.dashboard') }}">
+  <div class="fbox"><label>起始月份</label><input type="month" name="ym_start" value="{{ data.filters.ym_start }}"></div>
+  <div class="fbox"><label>截止月份</label><input type="month" name="ym_end" value="{{ data.filters.ym_end }}"></div>
+  <div class="fbox"><label>省公司</label>
+    <select name="ap"><option value="">全部</option>
+      {% for p in provinces %}<option value="{{ p }}" {{ 'selected' if p==data.filters.ap else '' }}>{{ p }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fbox"><label>保险公司</label>
+    <select name="ins"><option value="">全部</option>
+      {% for i in insurers %}<option value="{{ i }}" {{ 'selected' if i==data.filters.ins else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="db-btn" type="submit">刷新报表</button>
+  <a class="db-btn ghost" href="{{ url_for('crm.dashboard') }}">重置</a>
+</form>
+
+<div class="db-wrap">
+  <div class="kpi-row">
+    <div class="kpi"><div class="k-lab">规模保费（元）</div><div class="k-val">{{ '%.2f' % data.kpi.scale }}</div><div class="k-sub">全部保单规模保费合计</div></div>
+    <div class="kpi"><div class="k-lab">行业标保（元）</div><div class="k-val">{{ '%.2f' % data.kpi.std }}</div><div class="k-sub">折标后标保合计</div></div>
+    <div class="kpi"><div class="k-lab">受理件数</div><div class="k-val">{{ data.kpi.cnt }}</div><div class="k-sub">长期险计件数</div></div>
+    <div class="kpi"><div class="k-lab">开单代理人</div><div class="k-val">{{ data.kpi.agents }}</div><div class="k-sub">去重代理人工号</div></div>
+    <div class="kpi"><div class="k-lab">保单件数</div><div class="k-val">{{ data.kpi.orders }}</div><div class="k-sub">投保订单总数</div></div>
+    <div class="kpi"><div class="k-lab">件均保费（元）</div><div class="k-val">{{ '%.2f' % data.kpi.avg }}</div><div class="k-sub">规模保费 / 件数</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel wide">
+      <h3>月度规模保费 / 行业标保趋势</h3>
+      <div class="chart" id="c_trend"></div>
+    </div>
+    <div class="panel">
+      <h3>险种分布（规模保费占比）</h3>
+      <div class="chart" id="c_itype"></div>
+    </div>
+
+    <div class="panel">
+      <h3>全国地区占比（投保人省份）</h3>
+      <div class="chart" id="c_prov"></div>
+    </div>
+    <div class="panel">
+      <h3>团队（营业组）规模保费 Top10</h3>
+      <div class="chart" id="c_team"></div>
+    </div>
+    <div class="panel">
+      <h3>产品规模保费 Top10</h3>
+      <div class="chart" id="c_product"></div>
+    </div>
+
+    <div class="panel">
+      <h3>保司规模保费 Top10</h3>
+      <div class="chart" id="c_insurer"></div>
+    </div>
+    <div class="panel">
+      <h3>代理人规模保费热榜 Top10</h3>
+      <div class="chart" id="c_agent"></div>
+    </div>
+    <div class="panel">
+      <h3>自互保件占比</h3>
+      <div class="chart" id="c_self"></div>
+    </div>
+    <div class="panel">
+      <h3>长短险占比</h3>
+      <div class="chart" id="c_ls"></div>
+    </div>
+  </div>
+  {% if data.kpi.orders == 0 %}
+  <div class="empty" style="margin-top:16px">当前筛选条件下暂无投保订单数据，请调整筛选或先到「投保订单录入」录入 / 导入数据。</div>
+  {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='js/echarts.min.js') }}"></script>
+<script>
+  var DATA = {{ data|tojson }};
+  var C = '#C86432', C2 = '#E6823C', C3 = '#F0A050', AX = '#9C9288';
+  function money(v){ return (v/10000).toFixed(2) + '万'; }
+  function barH(id, items, nameFmt){
+    var names = items.map(function(i){return i.name;}).reverse();
+    var vals = items.map(function(i){return i.value;}).reverse();
+    var c = echarts.init(document.getElementById(id));
+    c.setOption({
+      tooltip:{trigger:'axis', axisPointer:{type:'shadow'},
+        formatter:function(p){ return p[0].name + '<br/>规模保费：' + p[0].value.toFixed(2) + ' 元'; }},
+      grid:{left:8, right:24, top:10, bottom:6, containLabel:true},
+      xAxis:{type:'value', axisLabel:{color:AX, formatter:money}, splitLine:{lineStyle:{color:'#F0E9DD'}}},
+      yAxis:{type:'category', data:names, axisLabel:{color:'#7A4326'}, axisLine:{lineStyle:{color:'#EAE2D6'}}},
+      series:[{type:'bar', data:vals, itemStyle:{color:C, borderRadius:[0,4,4,0]}, barWidth:'58%'}]
+    });
+    return c;
+  }
+  function line(id, months, s1, s2){
+    var c = echarts.init(document.getElementById(id));
+    c.setOption({
+      tooltip:{trigger:'axis'},
+      legend:{data:['规模保费','行业标保'], textStyle:{color:'#7A4326'}, top:0},
+      grid:{left:8, right:16, top:30, bottom:6, containLabel:true},
+      xAxis:{type:'category', data:months, axisLabel:{color:AX}, axisLine:{lineStyle:{color:'#EAE2D6'}}},
+      yAxis:{type:'value', axisLabel:{color:AX, formatter:money}, splitLine:{lineStyle:{color:'#F0E9DD'}}},
+      series:[
+        {name:'规模保费', type:'line', smooth:true, data:s1, itemStyle:{color:C}, areaStyle:{color:'rgba(200,100,50,0.12)'}},
+        {name:'行业标保', type:'line', smooth:true, data:s2, itemStyle:{color:C2}}
+      ]
+    });
+    return c;
+  }
+  function pie(id, items){
+    var c = echarts.init(document.getElementById(id));
+    c.setOption({
+      tooltip:{trigger:'item', formatter:'{b}: {c} ({d}%)'},
+      legend:{bottom:0, textStyle:{color:'#7A4326'}, type:'scroll'},
+      color:[C, C2, C3, '#D9A066', '#B5773C'],
+      series:[{type:'pie', radius:['38%','66%'], center:['50%','46%'],
+        label:{color:'#7A4326'}, data:items,
+        itemStyle:{borderColor:'#fff', borderWidth:2}}]
+    });
+    return c;
+  }
+  var charts = [];
+  charts.push(line('c_trend', DATA.trend.months, DATA.trend.scale, DATA.trend.std));
+  charts.push(pie('c_itype', DATA.itype));
+  charts.push(barH('c_prov', DATA.province));
+  charts.push(barH('c_team', DATA.team));
+  charts.push(barH('c_product', DATA.product));
+  charts.push(barH('c_insurer', DATA.insurer));
+  charts.push(barH('c_agent', DATA.agent_top.map(function(a){return {name:a.name+'('+a.no+')', value:a.scale};})));
+  charts.push(pie('c_self', DATA.self_pie));
+  charts.push(pie('c_ls', DATA.ls_pie));
+  window.addEventListener('resize', function(){ charts.forEach(function(c){ c.resize(); }); });
+</script>
+{% endblock %}

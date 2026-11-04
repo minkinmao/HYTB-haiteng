@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}OA · {{ atype.name }}{% endblock %}
+{% block content %}
+<style>
+  .af-wrap{max-width:920px}
+  .af-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:20px 22px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:18px}
+  .af-card h3{font-size:14px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .af-card h3::before{content:"";width:4px;height:14px;border-radius:2px;background:#E6823C;flex:none}
+  .af-row{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center;
+          padding:9px 0;border-bottom:1px dashed #F0E9DE}
+  .af-row:last-child{border-bottom:none}
+  .af-row label{font-size:13px;color:#6B5D4F}
+  .af-row .req{color:#C86432;margin-left:3px}
+  .af-in,.af-ta{width:100%;padding:9px 12px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;
+                background:#fff;color:#2A2A2A;box-sizing:border-box;font-family:inherit}
+  .af-in:disabled{background:#F7F3EE;color:#6B5D4F}
+  .af-in:focus,.af-ta:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .af-ta{resize:vertical;min-height:110px;line-height:1.7}
+  .af-hint{font-size:12px;color:#9C9288;margin-top:5px;line-height:1.6}
+  .af-tip{background:#FDF7F0;border:1px solid #F3E2D2;border-radius:10px;padding:12px 15px;
+          font-size:12.5px;color:#8A5A18;line-height:1.75;margin-bottom:18px}
+  .af-btn{padding:10px 26px;border-radius:9px;font-size:14px;font-weight:600;border:none;cursor:pointer;
+          background:#E6823C;color:#fff}
+  .af-btn:hover{background:#C86432}
+  .af-btn.ghost{background:#fff;color:#6B5D4F;border:1px solid #EAE2D6;font-weight:400}
+  .af-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#6B5D4F}
+</style>
+
+<div class="af-wrap">
+<h2 style="font-size:18px;margin:0 0 6px">{{ atype.name }}
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（{{ atype.group }}类 · 通用申请单）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:18px">{{ atype.desc }}</div>
+
+<div class="af-tip">
+  本类申请暂用<b>通用申请单</b>表单受理，提交后进入统一审批流程，可在「我的申请」中跟踪进度。<br>
+  需要专属表单（如多明细、附件上传、额度校验）时可随时升级，不影响已提交的单据。
+</div>
+
+<form method="post" action="{{ url_for('oa.apply_form', code=atype.code) }}">
+  <input type="hidden" name="code" value="{{ atype.code }}">
+
+  <div class="af-card">
+    <h3>申请信息</h3>
+    <div class="af-row">
+      <label>申请单号</label>
+      <input class="af-in" type="text" value="{{ next_code }}" disabled>
+    </div>
+    <div class="af-row">
+      <label>申请类型</label>
+      <input class="af-in" type="text" value="{{ atype.group }} · {{ atype.name }}" disabled>
+    </div>
+    <div class="af-row">
+      <label>申请人</label>
+      <input class="af-in" type="text" disabled
+             value="{{ me.name }}{% if me.employee_no %}（{{ me.employee_no }}）{% endif %}{% if me.org_name %} · {{ me.org_name }}{% endif %}">
+    </div>
+    <div class="af-row">
+      <label>申请日期</label>
+      <input class="af-in" type="text" value="{{ today }}" disabled>
+    </div>
+  </div>
+
+  <div class="af-card">
+    <h3>申请内容</h3>
+    <div class="af-row">
+      <label>申请事由<span class="req">*</span></label>
+      <input class="af-in" type="text" name="title" required maxlength="120"
+             placeholder="一句话说明本次申请事项，如：2026年10月市场部客户答谢会物料采购">
+    </div>
+    <div class="af-row">
+      <label>申请金额（元）</label>
+      <input class="af-in" type="text" name="amount" inputmode="decimal"
+             placeholder="{{ '填写本次申请涉及金额，如 2860.00' if atype.need_amt else '本类申请如无金额可留空' }}">
+      <div></div>
+      <div class="af-hint">填写后会自动计入单据摘要，方便审批人快速判断。</div>
+    </div>
+    <div class="af-row">
+      <label>期望完成日期</label>
+      <input class="af-in" type="date" name="expect_date">
+    </div>
+    <div class="af-row">
+      <label>附件张数</label>
+      <input class="af-in" type="number" name="attachment_count" min="0" max="99" placeholder="0">
+      <div></div>
+      <div class="af-hint">纸质附件请同时交行政 / 财务留存；后续版本支持在线上传扫描件。</div>
+    </div>
+    <div class="af-row">
+      <label style="align-self:start;padding-top:9px">申请说明</label>
+      <textarea class="af-ta" name="detail"
+                placeholder="详细说明申请背景、用途、涉及对象、金额构成等，便于审批人判断：&#10;1. …&#10;2. …"></textarea>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center">
+    <button class="af-btn" type="submit"
+            onclick="return confirm('确认提交《{{ atype.name }}》？提交后将进入审批流程。');">提交申请</button>
+    <a class="af-btn ghost" href="{{ url_for('oa.apply_hub') }}"
+       style="text-decoration:none;display:inline-block">放弃并返回</a>
+  </div>
+</form>
+</div>
+{% endblock %}

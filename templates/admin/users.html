@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% set page_title = '用户管理' %}
+{% block content %}
+<style>
+  .utbl{width:auto;min-width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;table-layout:auto}
+  .utbl th,.utbl td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:13.5px}
+  .utbl th{background:var(--cream-2);color:var(--ink-2);font-weight:600}
+  .utbl tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px}
+  .tag.ok{background:var(--brand-soft);color:var(--brand-deep)}
+  .tag.no{background:#F2F2F2;color:var(--muted)}
+  .tag.adm{background:#EDEAE6;color:#4A443E;font-weight:600}
+  .acts a{margin-right:10px;color:var(--brand-deep);font-weight:600;white-space:nowrap}
+  .acts a:hover{text-decoration:underline}
+  .toolbar{display:flex;justify-content:flex-end;margin-bottom:14px}
+</style>
+
+<h2>用户管理 · 用户与模块权限</h2>
+<p style="color:var(--ink-2);margin:4px 0 16px">
+  在此新建系统账号，并逐账号开通「一级系统 → 二级模块」的访问权限（粒度到二级菜单）。
+  左侧菜单只展示该账号被授权的模块；未授权模块直链访问会被拦截回首页。
+</p>
+
+<div class="toolbar">
+  <a class="btn" href="{{ url_for('admin.user_new') }}">＋ 新建用户</a>
+</div>
+
+<table class="utbl">
+  <tr>
+    <th>登录账号（工号）</th><th>姓名</th><th>职级</th>
+    <th>企微绑定</th><th>已开通模块</th><th>操作</th>
+  </tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.u.username }}</td>
+    <td>{{ (r.emp.name if r.emp else '') or r.u.username }}</td>
+    <td>{{ r.u.level.name if r.u.level else '（未分配）' }}</td>
+    <td>
+      {% if r.u.wecom_userid %}<span class="tag ok">{{ r.u.wecom_userid }}</span>
+      {% else %}<span class="tag no">未绑定</span>{% endif %}
+    </td>
+    <td>
+      {% if r.u.is_admin %}<span class="tag adm">全部（系统管理员）</span>
+      {% elif r.perm_n %}<span class="tag ok">{{ r.perm_n }} 个</span>
+      {% else %}<span class="tag no">0 个</span>{% endif %}
+    </td>
+    <td class="acts">
+      <a href="{{ url_for('admin.user_perms', uid=r.u.id) }}">模块权限</a>
+      <a href="{{ url_for('admin.user_edit', uid=r.u.id) }}">绑定企微</a>
+      <a href="{{ url_for('admin.user_password', uid=r.u.id) }}">重置密码</a>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:18px">暂无用户</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

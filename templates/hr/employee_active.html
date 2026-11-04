@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}在职人员信息维护 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">在职人员信息维护 <span style="font-size:13px;font-weight:400;color:#9C9288">Active Employees</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    在职人员的异动（晋升 / 降职 / 调岗）与离职办理在此进行；新员工入职请走「入职人员信息增加」流程。
+  </div>
+
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for it in items %}
+    <div style="padding:12px 0;border-bottom:1px solid #F3EDE3">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:15px;font-weight:600">{{ it.name }}
+            <span style="font-size:12px;color:#9C9288;font-weight:400">｜ 工号 {{ it.employee_no }}</span>
+            <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#FBEEE2' if it.staff_type=='internal' else '#FDF3E4' }};color:{{ '#C86432' if it.staff_type=='internal' else '#8A5A18' }}">{{ '内勤' if it.staff_type=='internal' else '外勤' }}</span>
+          </div>
+          <div style="font-size:12px;color:#9C9288;margin-top:4px">
+            {% if it.staff_type == 'external' %}{{ it.agent_type or '未设代理类型' }}{% else %}{{ it.level.code if it.level else '未设职级' }}{% endif %} ｜
+            部门：{{ it.org.name if it.org else '未设' }} ｜
+            职务：{{ it.title or '—' }} ｜
+            入职：{{ it.hire_date or '—' }}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <a href="{{ url_for('hr.employee_view', eid=it.id) }}"
+             style="font-size:12px;color:#6B5D4F;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">详情</a>
+          {% if can_manage %}
+          {% if it.employee_no not in accounted_ids %}
+          <form method="post" action="{{ url_for('hr.employee_open_account', eid=it.id) }}" style="display:inline">
+            <button type="submit" onclick="return confirm('确认为 {{ it.name }}（{{ it.employee_no }}）开通办公账号？初始密码 123456')"
+                    style="font-size:12px;color:#C86432;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;background:#fff;cursor:pointer">开通账号</button>
+          </form>
+          {% endif %}
+          <a href="{{ url_for('hr.employee_change', eid=it.id) }}"
+             style="font-size:12px;color:#E6823C;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">异动</a>
+          {# 离职办理：details 展开小表单（离职日期 + 原因） #}
+          <details style="position:relative">
+            <summary style="font-size:12px;color:#b91c1c;cursor:pointer;list-style:none;border:1px solid #F3D9D3;padding:4px 12px;border-radius:6px">离职</summary>
+            <form method="post" action="{{ url_for('hr.employee_off_do', eid=it.id) }}"
+                  style="position:absolute;right:0;z-index:10;margin-top:6px;background:#fff;border:1px solid #E2D8CA;border-radius:8px;padding:12px;box-shadow:0 4px 14px rgba(42,42,42,.12);width:240px">
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px">离职办理：{{ it.name }}</div>
+              <div style="margin-bottom:8px"><div style="font-size:11px;color:#9C9288;margin-bottom:3px">离职日期</div>
+                <input type="date" name="leave_date" style="width:100%;padding:6px 8px;border:1px solid #E2D8CA;border-radius:5px;font-size:13px"></div>
+              <div style="margin-bottom:10px"><div style="font-size:11px;color:#9C9288;margin-bottom:3px">离职原因</div>
+                <input name="leave_reason" placeholder="如 个人发展" style="width:100%;padding:6px 8px;border:1px solid #E2D8CA;border-radius:5px;font-size:13px"></div>
+              <button type="submit" onclick="return confirm('确认将 {{ it.name }}（{{ it.employee_no }}）办理离职？')"
+                      style="width:100%;background:#b91c1c;color:#fff;border:none;padding:7px 0;border-radius:6px;font-size:13px;cursor:pointer">确认离职（转入人才库）</button>
+            </form>
+          </details>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无在职人员</div>
+    {% endfor %}
+  </div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}工资自定义字段 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">工资自定义字段
+  </h2>
+
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增自定义工资项</div>
+    <form method="post" action="{{ url_for('hr.salary_field_new') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">编码 *</div>
+        <input name="code" placeholder="如 traffic_subsidy" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">名称 *</div>
+        <input name="name" placeholder="如 交通补贴" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <label style="font-size:13px;color:#5C554D;display:flex;align-items:center;gap:6px;padding-bottom:8px">
+        <input type="checkbox" name="is_deduction" value="1"> 扣减项（从应发中扣除）</label>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">添加</button>
+    </form>
+  </div>
+
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for it in items %}
+    <div style="padding:12px 0;border-bottom:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:15px;font-weight:600">{{ it.name }}
+        <span style="font-size:12px;color:#9C9288;font-weight:400">｜ {{ it.code }}</span>
+        {% if it.is_deduction %}<span style="font-size:11px;padding:1px 7px;border-radius:9px;background:#FBE3DD;color:#991b1b">扣减项</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('hr.salary_field_delete', fid=it.id) }}" onsubmit="return confirm('确认删除该工资字段？已有工资记录中的对应数值将不再参与计算。')">
+        <button type="submit" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px;cursor:pointer">删除</button>
+      </form>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无自定义字段，可在上方添加（如 交通补贴 / 通讯补贴）</div>
+    {% endfor %}
+  </div>
+{% endblock %}

@@ -1,0 +1,546 @@
+{% extends 'base.html' %}
+{# 六改：side=hq 只呈现总总数据，side=br 只呈现分分数据（另一侧完全不出现） #}
+{% set PRE = 'tt' if side == 'hq' else 'ff' %}
+{% set LBL = '总总' if side == 'hq' else '分分' %}
+{% block title %}CRM · {{ row.product_name }}{% endblock %}
+{% block pagename %}核心业务管理系统 · 产品合约详情{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  /* 十改：① 合约 / ② 方案 的配色统一在 _crm_css.html 的 .blk-* 里，这里让表格融入色块 */
+  .crm-block .crm-table{margin:0;background:transparent}
+  .crm-block .crm-table th{background:rgba(255,255,255,.75)}
+  .crm-block .crm-table td{border-bottom-color:rgba(42,42,42,.07)}
+  .ryc-tb th{font-size:12px;padding:6px 8px}
+  .ryc-tb td{font-size:12.5px;padding:6px 8px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ row.product_name }}
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（{{ row.code }}）</small>
+  {% if row.is_custom %}<span class="crm-tag t-plan" style="font-size:11px;margin-left:6px">定制类产品</span>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  <span class="crm-tag t-brand">{{ dname.get(row.sign_level, row.sign_level or '—') }}</span>
+  <span class="crm-tag t-info" style="margin-left:6px">{{ sname }}</span>
+  <span class="crm-tag {{ {'draft':'t-gray','active':'t-ok','ended':'t-danger'}.get(row.status, 't-gray') }}"
+        style="margin-left:6px">{{ dname.get(row.status, row.status or '—') }}</span>
+  {% if row.insurer_name %}<span style="margin-left:10px">{{ row.insurer_name }}</span>{% endif %}
+  {% if out_cnt %}<span class="crm-tag t-warn" style="margin-left:8px">含 {{ out_cnt }} 项协议外政策</span>{% endif %}
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
+</div>
+
+<div class="crm-tool">
+  {% if can_manage %}
+  <a class="crm-btn dark" href="{{ url_for('crm.hq_contract_edit' if side == 'hq' else 'crm.branch_contract_edit', cid=row.id) }}">编辑合约</a>{% endif %}
+  <button class="crm-btn" type="button" onclick="window.print()">打印</button>
+  <span class="crm-spacer"></span>
+  {% if files %}<a class="crm-btn" href="{{ url_for('crm.contract_attach', cid=row.id) }}">下载协议扫描件</a>{% endif %}
+</div>
+
+<div class="crm-info">
+  <div class="crm-sec">一、归属与签约</div>
+  <dl>
+    <div class="rw"><span class="l">合约编号</span><span class="v">{{ row.code }}</span></div>
+    <div class="rw"><span class="l">保司</span><span class="v">{{ row.insurer_name or '—' }}{% if row.insurer_short %}（{{ row.insurer_short }}）{% endif %}</span></div>
+    <div class="rw"><span class="l">合约口径</span><span class="v">{{ sname }}</span></div>
+    <div class="rw"><span class="l">签约级别</span><span class="v">{{ dname.get(row.sign_level, row.sign_level or '—') }}</span></div>
+    {% if side == 'br' %}
+    <div class="rw"><span class="l">省分公司</span><span class="v">{{ row.branch_name or '—' }}</span></div>
+    {% endif %}
+    <div class="rw"><span class="l">合约状态</span><span class="v">{{ dname.get(row.status, row.status or '—') }}</span></div>
+  </dl>
+</div>
+
+<div class="crm-info">
+  <div class="crm-sec">二、产品与缴费</div>
+  <dl>
+    <div class="rw"><span class="l">产品名称</span><span class="v">{{ row.product_name or '—' }}</span></div>
+    <div class="rw"><span class="l">产品编码</span><span class="v">{{ row.product_code or '—' }}</span></div>
+    <div class="rw"><span class="l">保障期限</span><span class="v">
+      {% if row.coverage_term %}<span class="crm-tag t-gray">{{ row.coverage_term }}</span>
+      {% else %}<span style="color:#B9B0A6">未设</span>{% endif %}</span></div>
+    <div class="rw"><span class="l">险种类型</span><span class="v">{{ row.insurance_type or '—' }}</span></div>
+    {# 四十三改：销售渠道（线下 / 网销），未指定则灰字 #}
+    <div class="rw"><span class="l">销售渠道</span><span class="v">
+      {% if row.sale_channel %}
+        <span class="crm-tag {{ 't-info' if row.sale_channel == 'online' else 't-gray' }}">{{ sale_names.get(row.sale_channel, row.sale_channel) }}</span>
+      {% else %}<span style="color:#B9B0A6">未指定</span>{% endif %}</span></div>
+    <div class="rw"><span class="l">缴费类型</span><span class="v">{{ dname.get(row.pay_type, row.pay_type or '—') }}</span></div>
+    <div class="rw"><span class="l">缴别数量</span><span class="v"><span class="crm-tag t-contract">{{ tiers|length }} 个缴别</span></span></div>
+    <div class="rw"><span class="l">保司阶段产品方案政策</span><span class="v"><span class="crm-tag t-plan">{{ plan_cnt }} 条方案</span></span></div>
+  </dl>
+</div>
+
+{# 二十七改2：定制类产品（组合产品）· 组合组件 —— 仅勾选定制类时展示 #}
+{% if row.is_custom %}
+<div class="crm-card" style="margin-bottom:16px">
+  <div class="crm-sec">二·补充、定制类产品 · 组合组件（{{ components|length }}）
+    <span>本产品由多个基础/附加产品组合搭建；<b>费率（缴别 / FYC / RYC）按组件分别登记</b>，见下方「三、」</span></div>
+  {% if components %}
+  <div style="overflow-x:auto">
+    <table class="crm-table">
+      <thead>
+        <tr><th style="width:48px">#</th><th>组件保司</th><th>组件产品名称</th>
+          <th>产品代码</th><th>险种</th><th>备注</th></tr>
+      </thead>
+      <tbody>
+        {% for cp in components %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ cp.insurer_name or (row.insurer_name or '—') }}</td>
+          <td>{{ cp.product_name or '—' }}</td>
+          <td>{{ cp.product_code or '—' }}</td>
+          <td>{{ cp.insurance_type or '—' }}</td>
+          <td>{{ cp.note or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="font-size:13px;color:#9C9288;padding:6px 2px">
+    {% if row.sign_level in ('tf', 'ff') %}分口径合约：组件结构沿用总公司合约，此处费率按缴别登记。
+    {% else %}未登记组合组件。{% endif %}</div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="crm-card" style="margin-bottom:16px">
+  <div class="crm-sec">三、产品合约费用政策（{{ LBL }}） <span>基础合约：以缴别为单位，FYC 与 RYC 一次呈现</span></div>
+  {% if tiers %}
+  {# 七改：合约起止日所有缴别共用一条，这里只显示一次
+     十二改：方案已独立成「四、」一节，本节只呈现基础合约费用 #}
+  <div class="blk-contract" style="border-radius:9px;padding:9px 14px;font-size:13px;margin-bottom:14px">
+    <b style="color:#2F6BA8">① {{ LBL }}合约有效期</b>
+    <span class="crm-tag t-contract" style="margin-left:6px;font-size:10.5px">协议签订期间</span>
+    <span class="crm-tag t-contract" style="margin-left:4px;font-size:10.5px">所有缴别共用</span>
+    <div class="mono" style="margin-top:4px;color:#2A2A2A">
+      {{ (tiers[0]|attr(PRE ~ '_start')) or '—' }} ~ {{ (tiers[0]|attr(PRE ~ '_end')) or '—' }}</div>
+  </div>
+  {# ===== 四十改（2026-10-29）：续期服务费比例（整个产品共用一份） =====
+     威哥：「定制类的产品，续期佣金又增加了一个系数，而且是对于定制产品整体」。
+     实发 ＝ 该缴别当年基础费率 RYC-N × 本档比例（例：50% × 60% = 30%、18% × 70% = 12.6%）。 #}
+  {% if ryc_ratio and ryc_ratio.rows %}
+  <div style="border:1px solid #DCE9D4;border-radius:10px;padding:11px 14px;margin-bottom:14px;background:#F8FBF6">
+    <div style="font-size:13px;color:#3F6B34;font-weight:600;margin-bottom:3px">
+      ② 续期服务费比例
+      <span class="crm-tag" style="background:#E4F0DC;color:#3F6B34;font-size:10.5px;margin-left:6px">整个产品共用一份</span>
+      <span class="crm-tag" style="background:#E4F0DC;color:#3F6B34;font-size:10.5px;margin-left:4px">按继续率分档</span>
+    </div>
+    <div style="font-size:12px;color:#8A9A84;margin-bottom:8px">
+      {{ ryc_ratio.cnt }} 个区间 · {{ ryc_ratio.years|length }} 个年度 ——
+      <b style="color:#3F6B34">实发 ＝ 该年度基础费率 RYC-N × 本档比例</b>
+      （如 RYC-2 = 50%、继续率 85% 落在 60% 档 → 实发 30%）
+    </div>
+    <table class="crm-table" style="margin:0">
+      <thead>
+        <tr>
+          <th style="text-align:left">继续率区间</th>
+          {% for y in ryc_ratio.years %}
+          <th style="text-align:right">RYC-{{ y }}（{{ '次年' if y == 2 else '第%d年'|format(y) }}）</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in ryc_ratio.rows %}
+        <tr>
+          <td>
+            {%- if row.max is not none -%}
+              {{ '%.2f'|format(row.min or 0) }}% ≤ 继续率 &lt; {{ '%.2f'|format(row.max) }}%
+            {%- else -%}
+              继续率 ≥ {{ '%.2f'|format(row.min or 0) }}%
+            {%- endif -%}
+          </td>
+          {% for y in ryc_ratio.years %}
+          <td class="num">
+            {%- set _v = row.ratios.get(y|string) -%}
+            {{ '%.2f'|format(_v) if _v is not none else '—' }}%
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% for t in tiers %}
+    {# 三十一改：ryc_steps 现在是「区间矩阵」dict（years / rows / full / cnt / n） #}
+    {% set rsb = ryc_steps.get(t.id) %}
+    {% set rs_years = (rsb.years if rsb else []) %}
+    <div style="border:1px solid #E8DCCE;border-radius:10px;padding:12px 14px;margin-bottom:14px;background:#FFFDFA">
+      <div class="tier-hd" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+        <b style="font-size:14px;color:#9C4E2C">缴别 {{ loop.index }}：{{ t.pay_period or '—' }}</b>
+        {# 二十八改：定制类产品按组件录费率 → 卡头标出该费率属于哪个组件 #}
+        {% if t.component_id and comp_names.get(t.component_id) %}
+        <span class="crm-tag t-plan" style="font-size:11px">{{ comp_names.get(t.component_id) }}</span>
+        {% endif %}
+        {% if t.note %}<span style="font-size:12px;color:#9C9288">备注：{{ t.note }}</span>{% endif %}
+      </div>
+      {# ① 合约块：蓝青 · 实线 · 只呈现本口径（总总 或 分分）那一侧 #}
+      <div class="crm-block blk-contract">
+        <div class="blk-hd">
+          <span class="blk-no">①</span>产品合约费用政策
+          <span class="blk-tag">{{ LBL }}</span>
+          <span class="blk-tag">一定时段内保持不变</span>
+        </div>
+        <table class="crm-table">
+          <tbody>
+            <tr><th>{{ LBL }}FYC</th><td class="num crm-hl">{{ '%.2f'|format((t|attr(PRE ~ '_fyc')) or 0) }}%</td></tr>
+          </tbody>
+        </table>
+        {# 三十三改：只列到本缴别实际有的续期年度（有些产品只发 2~3 年），不再一屏 9 列 #}
+        {% set ry = namespace(n=3) %}
+        {% for n in range(2, 11) %}
+          {% if t|attr('ryc_' ~ n) %}{% set ry.n = n %}{% endif %}
+        {% endfor %}
+        {% for y in rs_years %}{% if y > ry.n %}{% set ry.n = y %}{% endif %}{% endfor %}
+        <div style="font-size:12.5px;color:#2F6BA8;margin-top:8px;font-weight:600">
+          续期佣金率 RYC-2 ~ RYC-{{ ry.n }}（%）
+          {% if rsb %}<span style="font-weight:400;color:#9C9288">——
+            <b style="color:#B5532A">＊</b> 该年度涉及继续率考核，此处为<b>满档</b>费率，明细见下方分档表</span>{% endif %}
+        </div>
+        <table class="crm-table ryc-tb" style="margin-top:4px">
+          <thead>
+            <tr>{% for n in range(2, ry.n + 1) %}<th style="text-align:right">RYC-{{ n }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            <tr>{% for n in range(2, ry.n + 1) %}
+              <td class="num">{{ '%.2f'|format((t|attr('ryc_' ~ n)) or 0) }}%{% if n in rs_years %}
+                <b style="color:#B5532A">＊</b>{% endif %}</td>{% endfor %}</tr>
+          </tbody>
+        </table>
+        {# 三十一改：续期继续率分档明细 —— 区间做行 × 年度做列（与录入表单同构） #}
+        {% if rsb %}
+        <div style="margin-top:12px;border:1px solid #EFE0CD;border-radius:9px;background:#FBF6EF;padding:10px 12px">
+          <div style="font-size:12.5px;color:#9C4E2C;font-weight:600;margin-bottom:8px">
+            续期继续率分档（{{ rsb.cnt }} 个区间 · {{ rsb.n }} 档 · {{ rsb.years|length }} 个年度）</div>
+          <table class="crm-table" style="margin:0">
+            <thead>
+              <tr>
+                <th style="text-align:left">继续率区间</th>
+                {% for y in rsb.years %}
+                <th style="text-align:right">RYC-{{ y }}（{{ '次年' if y == 2 else '第%d年'|format(y) }}）</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rsb.rows %}
+              <tr>
+                <td>
+                  {%- if row.max is not none -%}
+                    {{ '%.2f'|format(row.min or 0) }}% ≤ 继续率 &lt; {{ '%.2f'|format(row.max) }}%
+                  {%- else -%}
+                    继续率 ≥ {{ '%.2f'|format(row.min or 0) }}%
+                  {%- endif -%}
+                </td>
+                {% for y in rsb.years %}
+                {% set f = row.fees.get(y|string) %}
+                <td class="num">{% if f is not none %}{{ '%.2f'|format(f) }}%{% else %}—{% endif %}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:#5C554D;margin-top:7px">
+            满档（各年度下限最大的那档，已写入上方 RYC）：
+            {% for y in rsb.years %}
+            <b style="color:#2F6BA8">RYC-{{ y }} {{ '%.2f'|format(rsb.full.get(y|string) or 0) }}%</b>
+            {%- if not loop.last %}　·　{% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      </div>{# /缴别卡 #}
+  {% endfor %}
+  <div style="margin-top:6px;padding:10px 14px;background:#FBF8F4;border-radius:9px;font-size:12.5px;
+       color:#6B5D4F;display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center">
+    <span><span class="crm-tag t-contract">合约</span>
+      <span style="margin-left:6px">{{ LBL }}首年FYC合计之和：<b style="color:#2F6BA8">{{ '%.2f'|format(sum_fyc) }}%</b></span></span>
+    <span><span class="crm-tag t-plan">方案</span>
+      <span style="margin-left:6px">方案条数：<b style="color:#9C4E2C">{{ plan_cnt }} 条</b>
+        · 奖励行：<b style="color:#9C4E2C">{{ award_cnt }} 行</b>（方案 × 缴别）</span></span>
+    <span>协议外方案：<b style="color:#B5532A">{{ out_cnt }} 条</b></span>
+    <span>{{ misc_label }}：<b style="color:#9C4E2C">{{ text_cnt }} 条</b></span>
+  </div>
+  {% elif row.grand_total %}
+  <div class="crm-empty" style="padding:22px 0">
+    该合约为一期存量数据（未拆分缴别）：首年FYC合计 {{ '%.2f'|format(row.fyc_total or 0) }}%，
+    首年方案合计 {{ '%.2f'|format(row.plan_total or 0) }}%，首年总合计 {{ '%.2f'|format(row.grand_total or 0) }}%。
+    编辑并保存后即可按缴别 + 方案拆分。
+  </div>
+  {% else %}
+  <div class="crm-empty">暂无缴别费用政策。点「编辑合约」添加。</div>
+  {% endif %}
+</div>
+
+{# ===== 十二改：保司阶段产品方案政策（独立一节，与表单一致）=====
+   方案头一份（名称 / 费项类型 / 政策归属 / 费用形式 / 方案期间），奖励按缴别分列。 #}
+{% if plan_heads %}
+<div class="crm-card" style="margin-bottom:16px">
+  <div class="crm-sec">四、保司阶段产品方案政策（{{ LBL }}）
+    <span>一份方案头（名称 / 费项类型 / 政策归属 / 费用形式 / 方案期间），各缴别只列自己那一行；
+      <b>系数类</b>方案列奖励系数，<b>文字类</b>方案（现金 / 购物或其他）列文字说明、不参与合并</span></div>
+
+  <div class="blk-plan" style="border-radius:9px;padding:9px 14px;font-size:13px;margin-bottom:14px">
+    <b style="color:#9C4E2C">② {{ LBL }}保司阶段产品方案期间</b>
+    <span class="crm-tag t-plan" style="margin-left:6px;font-size:10.5px">阶段政策生效期间</span>
+    <span class="crm-tag t-plan" style="margin-left:4px;font-size:10.5px">所有方案共用</span>
+    <div class="mono" style="margin-top:4px;color:#2A2A2A">
+      {{ plan_start_d or '—' }} ~ {{ plan_end_d or '—' }}</div>
+  </div>
+
+  {% for h in plan_heads %}
+  <div class="crm-block blk-plan" style="margin-bottom:12px">
+    <div class="blk-hd">
+      <span class="blk-no">{{ loop.index }}</span>{{ h.name or '（未命名方案）' }}
+      <span class="blk-tag">{{ fee_short.get(h.fee, h.fee) }}</span>
+      {% if h.text %}
+        <span class="crm-tag t-plan" style="margin-left:4px">文字描述 · 不合并</span>
+        <span class="crm-tag t-info">{{ dname.get(h.form, h.form) }}</span>
+      {% elif h.scope == 'out' %}
+        <span class="crm-tag t-warn">协议外</span>
+        <span class="crm-tag t-info">{{ dname.get(h.form, h.form) }}</span>
+        {% if h.remark %}<span class="blk-note">{{ h.remark }}</span>{% endif %}
+      {% else %}
+        <span class="crm-tag t-gray">协议内 · 协议内结算</span>
+      {% endif %}
+      <span class="sp"></span>
+      <span class="blk-note">{% if h.text %}文字类方案（不按缴别）{% else %}奖励覆盖 {{ h.rows|length }} 个缴别{% endif %}</span>
+    </div>
+    {% if h.text %}
+    <div style="margin-top:8px;font-size:13px;color:#2A2A2A;line-height:1.9;white-space:pre-wrap;
+                background:#FDF3E4;border:1px solid #F0DCC6;border-radius:8px;padding:10px 12px">{{ h.plan_text or '—' }}</div>
+    {% else %}
+    <table class="crm-table">
+      <thead>
+        <tr><th style="width:120px">缴别</th>
+            <th style="text-align:right">{{ LBL }}系数</th>
+            <th style="text-align:right">合计（系数）</th>
+            <th>其他约定</th></tr>
+      </thead>
+      <tbody>
+        {% for r in h.rows %}
+        <tr>
+          <td class="crm-nm">{{ r.period }}</td>
+          <td class="num">{{ '%.2f'|format((r.p|attr(PRE ~ '_coef')) or 0) }}%</td>
+          <td class="num crm-hl">{{ '%.2f'|format(r.p.plan_total or 0) }}%</td>
+          <td style="font-size:12.5px">{{ (r.p|attr(PRE ~ '_other')) or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if h.note %}
+    <div style="margin-top:8px;font-size:12.5px;color:#6B5D4F">方案备注：{{ h.note }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="crm-card" style="margin-bottom:16px">
+  <div class="crm-sec">五、继续率考核 <span>按「继续率考核规则」板块登记的适用范围自动匹配</span></div>
+  {% if matched_rules %}
+  <div style="font-size:12.5px;color:#9C9288;margin-bottom:8px">
+    共 <b style="color:#9C4E2C">{{ matched_rules|length }}</b> 条规则命中本合约
+    （保司：{{ row.insurer_name or '—' }}{% if row.branch_name %} ／ 分公司：{{ row.branch_name }}{% endif %}
+    ／ 产品：{{ row.product_name or '—' }}）。匹配规则按「保司 + 分公司 + 产品」自动判定。
+  </div>
+  {% for r in matched_rules %}
+  <div style="border:1px solid #E8DCCE;border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#FFFDFA">
+    <div style="font-size:13px;color:#2A2A2A;padding:2px 0 8px">
+      <b>{{ r.name }}</b>
+      {% for c in rule_cycles_map.get(r.id, []) %}<span class="crm-tag t-brand" style="margin-left:6px">{{ c }}</span>{% endfor %}
+      {% for c in (r.award_items or '').split(',') %}{% if c %}
+        <span class="crm-tag t-ok" style="margin-left:4px">{{ dname.get(c, c) }}</span>{% endif %}{% endfor %}
+      {% if r.has_clawback %}<span class="crm-tag t-danger" style="margin-left:6px">有倒扣机制</span>{% endif %}
+      <a class="crm-a" style="margin-left:10px" href="{{ url_for('crm.rule_edit', rid=r.id) }}">编辑规则</a>
+    </div>
+    {% set rbits = rule_items_map.get(r.id, []) | selectattr('cycle', 'ne', ls_cycle) | list %}
+    {% set rlits = rule_items_map.get(r.id, []) | selectattr('cycle', 'equalto', ls_cycle) | list %}
+    {% if rbits %}
+    <table class="crm-table" style="margin-bottom:6px">
+      <thead>
+        <tr><th>继续率考核标准</th><th>继续率区间</th>
+            <th style="text-align:right">继续率奖金系数</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+      {% for it in rbits %}
+        <tr>
+          <td>{{ it.cycle or '—' }}</td>
+          <td class="mono">{{ fmt_range(it) }}</td>
+          <td class="num">{{ '%.2f'|format(it.bonus_coef or 0) }}%</td>
+          <td>{{ it.note or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if rlits %}
+    <table class="crm-table" style="margin-bottom:6px">
+      <thead>
+        <tr><th>继续率区间</th>
+            <th style="text-align:right">长期服务奖系数</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+      {% for it in rlits %}
+        <tr>
+          <td class="mono">{{ fmt_range(it) }}</td>
+          <td class="num">{{ '%.2f'|format(it.long_service_coef or 0) }}%</td>
+          <td>{{ it.note or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if r.has_clawback %}
+    <div style="font-size:12.5px;color:#8A5A18;background:#FDF3E4;padding:8px 12px;border-radius:8px">
+      <b>倒扣：</b>起扣线 {{ '%.1f'|format(round_persist(r.clawback_line or 0)) }}%　｜　基数：{{ cbase_short.get(r.clawback_base or 'all', '全部推广费') }}
+      {% if r.clawback_std %}<br><b>公式：</b>{{ r.clawback_std }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% elif rule %}
+  {# 历史兼容：一期/五改前在合约里显式引用过的规则 #}
+  <div style="font-size:13px;color:#2A2A2A;padding:4px 0 10px">
+    <b>{{ rule.name }}</b>（历史显式引用）
+    {% if rule_cycles %}<span style="color:#6B5D4F">｜考核标准：{{ rule_cycles|join('、') }}</span>{% endif %}
+    {% if rule.has_clawback %}<span class="crm-tag t-danger" style="margin-left:8px">有倒扣机制</span>{% endif %}
+  </div>
+  {% set fbits = rule_items | selectattr('cycle', 'ne', ls_cycle) | list %}
+  {% set flits = rule_items | selectattr('cycle', 'equalto', ls_cycle) | list %}
+  {% if fbits %}
+  <table class="crm-table" style="margin-bottom:10px">
+    <thead>
+      <tr><th>继续率考核标准</th><th>继续率区间</th>
+          <th style="text-align:right">继续率奖金系数</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+    {% for it in fbits %}
+      <tr>
+        <td>{{ it.cycle or '—' }}</td>
+        <td class="mono">{{ fmt_range(it) }}</td>
+        <td class="num">{{ '%.2f'|format(it.bonus_coef or 0) }}%</td>
+        <td>{{ it.note or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if flits %}
+  <table class="crm-table" style="margin-bottom:10px">
+    <thead>
+      <tr><th>继续率区间</th>
+          <th style="text-align:right">长期服务奖系数</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+    {% for it in flits %}
+      <tr>
+        <td class="mono">{{ fmt_range(it) }}</td>
+        <td class="num">{{ '%.2f'|format(it.long_service_coef or 0) }}%</td>
+        <td>{{ it.note or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if rule.has_clawback %}
+  <div style="font-size:12.5px;color:#8A5A18;background:#FDF3E4;padding:10px 14px;border-radius:9px">
+    <b>倒扣：</b>起扣线 {{ '%.1f'|format(round_persist(rule.clawback_line or 0)) }}%　｜　基数：{{ cbase_short.get(rule.clawback_base or 'all', '全部推广费') }}
+    {% if rule.clawback_std %}<br><b>公式：</b>{{ rule.clawback_std }}{% endif %}
+  </div>
+  {% endif %}
+  {% elif row.persist_metric %}
+  <div class="crm-empty" style="padding:20px 0">
+    一期存量数据：{{ row.persist_metric }}（继续率奖金系数 {{ '%.2f'|format(row.persist_coef or 0) }}%，
+    长期服务奖系数 {{ '%.2f'|format(row.long_service_coef or 0) }}%）
+  </div>
+  {% else %}
+  <div class="crm-empty" style="padding:20px 0">
+    暂无适用的继续率考核规则。到
+    <a class="crm-a" href="{{ url_for('crm.rule_new') }}">继续率考核规则</a>
+    新建规则并指明适用范围（保司 / 分公司 / 产品 / 缴别），本合约会自动套用。
+  </div>
+  {% endif %}
+</div>
+
+<div class="crm-card" style="margin-bottom:16px">
+  <div class="crm-sec">六、协议附件（{{ files|length }}）
+    {% if files %}<span class="sp"></span>
+    <a class="crm-btn sm" href="{{ url_for('crm.contract_attach', cid=row.id) }}">下载第一份</a>
+    {% endif %}
+  </div>
+  {# 四十三改（2026-10-29）：附件从「单个扫描件」升级成**文件列表** —— 一份合约可挂多份
+     （协议正文 + 补充协议 + 佣金表…），每行独立下载、独立删除。 #}
+  {% if files %}
+  <table class="crm-table">
+    <thead><tr><th style="min-width:240px">文件名</th><th style="width:100px">大小</th>
+      <th style="width:120px">上传时间</th><th style="width:130px">操作</th></tr></thead>
+    <tbody>
+    {% for f in files %}
+      <tr>
+        <td>{{ f.file_name or '—' }}</td>
+        <td class="mono">
+          {%- set _sz = f.file_size or 0 -%}
+          {%- if _sz >= 1048576 -%}{{ '%.1f MB'|format(_sz / 1048576.0) }}
+          {%- elif _sz >= 1024 -%}{{ '%.1f KB'|format(_sz / 1024.0) }}
+          {%- else -%}{{ _sz }} B{%- endif -%}
+        </td>
+        <td style="white-space:nowrap">{{ f.upload_at.strftime('%Y-%m-%d') if f.upload_at else '—' }}</td>
+        <td style="white-space:nowrap">
+          <a class="crm-a" href="{{ url_for('crm.contract_file_download', cid=row.id, fid=f.id) }}">下载</a>
+          {% if can_manage %}
+          <form method="post" action="{{ url_for('crm.contract_file_delete', cid=row.id, fid=f.id) }}"
+                style="display:inline" onsubmit="return confirm('确定删除附件「{{ f.file_name }}」？删除后不可恢复。')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty" style="padding:20px 0">暂无协议附件。</div>
+  {% endif %}
+  {% if can_manage %}
+  <form class="crm-tool" style="margin:10px 0 0" method="post" enctype="multipart/form-data"
+        action="{{ url_for('crm.contract_attach_upload', cid=row.id) }}">
+    <label>补传扫描件（可多选）</label>
+    <input type="file" name="attach" multiple required>
+    <button class="crm-btn" type="submit">上传</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="crm-card">
+  <div class="crm-sec">该产品的资料库材料（{{ docs|length }}）</div>
+  {% if docs %}
+  <table class="crm-table">
+    <thead><tr><th>资料类型</th><th>标题</th><th>文件名</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for d in docs %}
+      <tr>
+        <td><span class="crm-tag t-info">{{ dname.get(d.doc_type, d.doc_type or '—') }}</span></td>
+        <td>{{ d.title }}</td>
+        <td>{{ d.file_name or '—' }}</td>
+        <td><a class="crm-a" href="{{ url_for('crm.doc_download', did=d.id) }}">下载</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无关联资料。可到「产品资料库」上传条款 / 费率表 / 说明书等材料。</div>
+  {% endif %}
+</div>
+{% endblock %}

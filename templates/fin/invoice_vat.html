@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}增值税测算 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 增值税测算{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">增值税测算 <span style="font-size:13px;font-weight:400;color:#9C9288">VAT</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    从账套启用期起<b style="color:#5C554D">逐期滚动累计</b>：本期应缴 = 销项税额 − 已认证进项税额 − 期初留抵；
+    期末留抵 = 上期留抵 + 已认证进项 − 销项（若为负则归零、差额即本期应缴）。进项在<b style="color:#5C554D">认证所属期</b>抵扣。
+  </div>
+
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.invoice_vat') }}" style="display:flex;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">截至期间</div>
+        <select name="period" style="padding:7px 10px">
+          {% for p in periods %}<option value="{{ p }}" {% if p==to_period %}selected{% endif %}>{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">查看</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:6px 0;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="color:#9C9288;text-align:right;background:#FAF7F2">
+          <th style="text-align:left;padding:10px 12px">所属期</th>
+          <th>销项税额</th>
+          <th>已认证进项</th>
+          <th>未认证进项</th>
+          <th>不予抵扣</th>
+          <th>本期应缴</th>
+          <th>期末留抵</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr style="border-top:1px solid #EAE2D6">
+          <td style="text-align:left;padding:9px 12px">{{ r.period }}</td>
+          <td>{{ '%.2f' % r.out_tax }}</td>
+          <td>{{ '%.2f' % r.in_certed }}</td>
+          <td style="color:#9C9288">{{ '%.2f' % r.in_uncert }}</td>
+          <td style="color:#9C9288">{{ '%.2f' % r.in_noded }}</td>
+          <td style="font-weight:600;color:#C86432">{{ '%.2f' % r.payable }}</td>
+          <td style="font-weight:600;color:#2E7D32">{{ '%.2f' % r.carry }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid #C9C0B4;font-weight:600">
+          <td style="text-align:left;padding:10px 12px">合计（截至 {{ to_period }}）</td>
+          <td>{{ '%.2f' % tot.out_tax }}</td>
+          <td>{{ '%.2f' % tot.in_certed }}</td>
+          <td style="color:#9C9288">{{ '%.2f' % tot.in_uncert }}</td>
+          <td style="color:#9C9288">{{ '%.2f' % tot.in_noded }}</td>
+          <td style="color:#C86432">{{ '%.2f' % tot.payable }}</td>
+          <td style="color:#2E7D32">{{ '%.2f' % tot.carry }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="card" style="padding:14px 18px;margin-top:16px;font-size:12.5px;color:#9C9288;line-height:1.7">
+    <b style="color:#5C554D">口径说明</b>：累计测算的「期末留抵」是接上期滚动的；「本期应缴」已扣减期初留抵。
+    未认证进项暂不抵扣，认证后自动进入对应所属期的已认证进项。
+    城建税 / 教育费附加等附加税费未含在内（在后续纳税申报模块补充）。
+  </div>
+{% endblock %}

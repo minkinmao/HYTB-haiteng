@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}薪酬发放申请单 {{ a.code }} · 海盈通保{% endblock %}
+{% block content %}
+<style>
+  .sd-wrap{max-width:1680px}
+  .sd-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:18px;overflow:hidden}
+  .sd-hd{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+         padding:15px 22px;border-bottom:1px solid #F3EDE3;background:#FDFBF8}
+  .sd-hd .ttl{font-size:15px;font-weight:600}
+  .sd-grid{display:grid;grid-template-columns:118px minmax(0,1fr) 118px minmax(0,1fr);
+           gap:12px 18px;padding:16px 22px}
+  .sd-grid .lb{font-size:13px;color:#9C9288;text-align:right}
+  .sd-grid .vl{font-size:13.5px;color:#2A2A2A;font-weight:600}
+  .sd-grid .vl.money{color:#C86432}
+  .sd-full{grid-column:2 / -1}
+  .sd-badge{font-size:12px;padding:3px 10px;border-radius:10px}
+</style>
+
+<div class="sd-wrap">
+  <div class="sd-card">
+    <div class="sd-hd">
+      <div>
+        <div class="ttl">薪酬发放申请单</div>
+        <div style="font-size:12px;color:#9C9288;margin-top:4px">
+          单号 {{ a.code or '—' }} ｜ 提交 {{ a.created_at.strftime('%Y-%m-%d %H:%M') if a.created_at else '—' }}
+        </div>
+      </div>
+      <span class="sd-badge" style="background:{{ '#FDF3E4' if a.status=='pending' else ('#dcfce7' if a.status=='approved' else '#FBE3DD') }};
+            color:{{ '#8A5A18' if a.status=='pending' else ('#166534' if a.status=='approved' else '#991b1b') }}">
+        {{ '待审批' if a.status=='pending' else ('已通过' if a.status=='approved' else '已驳回') }}
+      </span>
+    </div>
+
+    <div class="sd-grid">
+      <div class="lb">申请人</div>
+      <div class="vl">{{ a.applicant.username if a.applicant else '—' }}</div>
+      <div class="lb">申请人部门</div>
+      <div class="vl">{{ me.org_name or '—' }}</div>
+
+      <div class="lb">薪酬月份</div>
+      <div class="vl">{{ a.sa_month or '—' }}</div>
+      <div class="lb">发薪单位</div>
+      <div class="vl">{{ a.pay_entity or '—' }}</div>
+
+      <div class="lb">发薪人数</div>
+      <div class="vl">{{ a.headcount or 0 }} 人</div>
+      <div class="lb">实发金额</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.actual_amount or 0) }}</div>
+
+      <div class="lb">应发薪酬</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.gross_amount or 0) }}</div>
+      <div class="lb">绩效合计</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.perf_amount or 0) }}</div>
+
+      <div class="lb">薪酬成本</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.salary_cost or 0) }}</div>
+      <div class="lb">单位社保</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.corp_social or 0) }}</div>
+
+      <div class="lb">单位公积金</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.corp_fund or 0) }}</div>
+      <div class="lb">人工成本</div>
+      <div class="vl money">￥{{ '%.2f'|format(a.labor_cost or 0) }}</div>
+
+      <div class="lb">备注说明</div>
+      <div class="sd-full" style="font-size:13px;color:#5C554D;white-space:pre-line">{{ a.title or '—' }}</div>
+
+      <div class="lb">附件</div>
+      <div class="sd-full">
+        {% if a.attach_file %}
+        <a href="{{ url_for('oa.salary_attach', aid=a.id) }}"
+           style="font-size:13px;color:#E6823C;text-decoration:none">📎 下载附件（工资表）</a>
+        {% else %}
+        <span style="font-size:13px;color:#9C9288">未上传附件</span>
+        {% endif %}
+      </div>
+
+      <div class="lb">关联申请</div>
+      <div class="sd-full" style="font-size:13px;color:#5C554D">
+        {{ a.related_code.replace(',', ' ｜ ') if a.related_code else '无' }}
+      </div>
+
+      {% if a.status != 'pending' %}
+      <div class="lb">审批人</div>
+      <div class="vl" style="font-weight:400">{{ a.approver.username if a.approver else '—' }}</div>
+      <div class="lb">审批意见</div>
+      <div class="vl" style="font-weight:400">{{ a.opinion or '—' }}</div>
+      {% endif %}
+    </div>
+
+    {% if a.status == 'pending' and can_approve %}
+    <form method="post" action="{{ url_for('oa.salary_apply_decide', aid=a.id) }}"
+          style="padding:14px 22px;border-top:1px solid #F3EDE3;background:#FDFBF8;
+                 display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:1 1 320px;min-width:220px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">审批意见（驳回时建议填写）</div>
+        <input name="opinion" placeholder="如：金额核对无误，同意发放"
+               style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px">
+      </div>
+      <button name="action" value="approve" type="submit"
+              style="padding:10px 26px;border:none;border-radius:9px;background:#166534;color:#fff;font-size:14px;cursor:pointer">通过</button>
+      <button name="action" value="reject" type="submit"
+              style="padding:10px 26px;border:none;border-radius:9px;background:#fff;color:#991b1b;
+                     border:1px solid #E2D8CA;font-size:14px;cursor:pointer">驳回</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="sd-card" style="padding:14px 22px;font-size:12.5px;color:#9C9288;line-height:1.8">
+    成本口径：<b>薪酬成本 = 应发薪酬 + 单位社保 + 单位公积金</b>；<b>人工成本 = 薪酬成本</b>（如另有其他人工类费用可手工调增）。<br>
+    后续版本将支持：审批通过后自动生成财务计提凭证（借 560201 工资薪酬 / 贷 2211 应付职工薪酬）。
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}五险一金比例 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">五险一金比例配置 <span style="font-size:13px;font-weight:400;color:#9C9288">Social Insurance</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px;line-height:1.8">
+    招募建号时填写薪资构成，系统按此处比例自动测算 <b>个人五险一金</b>；<br>
+    并据此测算 <b>总人力成本 = 总薪资 + 单位五险一金</b>（建号页「人力成本测算」支持双向反推）。比例与缴费基数上下限对接国家最新规定，可随时调整。
+  </div>
+
+  <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05);max-width:640px">
+    <form method="post" action="{{ url_for('hr.social_config') }}" style="display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;align-items:end">
+      <div style="grid-column:1/-1;border-bottom:1px dashed #EAE2D6;padding-bottom:4px;margin-bottom:2px;font-size:13px;font-weight:600;color:#6B5D4F">
+        个人承担比例
+      </div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">养老保险个人比例(%)</div>
+        <input name="pension_pct" type="number" step="0.1" min="0" value="{{ cfg.pension_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">医疗保险个人比例(%)</div>
+        <input name="medical_pct" type="number" step="0.1" min="0" value="{{ cfg.medical_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">失业保险个人比例(%)</div>
+        <input name="unemploy_pct" type="number" step="0.1" min="0" value="{{ cfg.unemploy_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">公积金个人比例(%)</div>
+        <input name="fund_pct" type="number" step="0.1" min="0" value="{{ cfg.fund_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+
+      <div style="grid-column:1/-1;border-bottom:1px dashed #EAE2D6;padding-bottom:4px;margin-top:6px;font-size:13px;font-weight:600;color:#6B5D4F">
+        单位（企业）承担比例 <span style="font-weight:400;color:#9C9288;font-size:12px">—— 用于总人力成本测算</span>
+      </div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">养老保险公司比例(%)</div>
+        <input name="corp_pension_pct" type="number" step="0.1" min="0" value="{{ cfg.corp_pension_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">医疗保险公司比例(%)</div>
+        <input name="corp_medical_pct" type="number" step="0.1" min="0" value="{{ cfg.corp_medical_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">失业保险公司比例(%)</div>
+        <input name="corp_unemploy_pct" type="number" step="0.1" min="0" value="{{ cfg.corp_unemploy_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">工伤保险公司比例(%)</div>
+        <input name="corp_injury_pct" type="number" step="0.1" min="0" value="{{ cfg.corp_injury_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">生育保险公司比例(%)</div>
+        <input name="corp_maternity_pct" type="number" step="0.1" min="0" value="{{ cfg.corp_maternity_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">公积金公司比例(%)</div>
+        <input name="corp_fund_pct" type="number" step="0.1" min="0" value="{{ cfg.corp_fund_pct }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+
+      <div style="grid-column:1/-1;border-bottom:1px dashed #EAE2D6;padding-bottom:4px;margin-top:6px;font-size:13px;font-weight:600;color:#6B5D4F">
+        缴费基数上下限
+      </div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">缴费基数下限</div>
+        <input name="base_min" type="number" step="0.01" min="0" value="{{ cfg.base_min }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">缴费基数上限</div>
+        <input name="base_max" type="number" step="0.01" min="0" value="{{ cfg.base_max }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div style="grid-column:1/-1"><div style="font-size:12px;color:#9C9288;margin-bottom:4px">备注</div>
+        <input name="note" value="{{ cfg.note or '' }}" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="font-size:12px;color:#9C9288">
+          岗位补贴的字段清单（如 通讯费 / 交通费）在
+          <a href="{{ url_for('hr.allowance_config') }}" style="color:#E6823C;text-decoration:none">「岗位补贴项」</a>里维护
+        </div>
+        <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 24px;border-radius:6px;font-size:14px;cursor:pointer">保存配置</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

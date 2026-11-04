@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}账簿查询 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 账簿查询{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">账簿查询 <span style="font-size:13px;font-weight:400;color:#9C9288">Ledger</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    账簿是凭证的成品：<b style="color:#5C554D">只有「已记账」的凭证进账簿</b>——草稿、已审核、已作废都不进；
+    红字凭证金额为负，天然抵减。账是实时算出来的，不会与凭证对不上。
+  </div>
+
+  {# 未建账：账簿还缺"起点"，能看但不完整 #}
+  {% if not cfg.opening_done %}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid #E6823C">
+    <div style="font-size:13.5px;color:#8A5A18">
+      <b>还没完成期初建账</b>，账簿现在只有本期发生额、没有期初余额（余额从 0 起算）。
+    </div>
+    <a href="{{ url_for('fin.opening') }}" style="font-size:13px;color:#C86432">去「期初建账」录入期初余额并确认建账 →</a>
+  </div>
+  {% endif %}
+
+  {# 概览 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('会计期间', period, '#C9902A'),
+      ('本期已记账凭证', meta.vch_count, '#6B5D4F'),
+      ('本期借方发生额', '￥' ~ '{:,.2f}'.format(meta.debit), '#C86432'),
+      ('本期贷方发生额', '￥' ~ '{:,.2f}'.format(meta.credit), '#E6823C'),
+      ('期末借方余额合计', '￥' ~ '{:,.2f}'.format(meta.end_d), '#166534'),
+    ] %}
+    {% for name, val, color in cards %}
+    <div style="flex:1;min-width:126px;background:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ name }}</div>
+      <div style="font-size:{{ '19px' if val is string else '22px' }};font-weight:700;color:{{ color }};margin-top:4px">{{ val }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 试算平衡自检：账簿的自我体检 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">试算平衡自检</div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">
+      {% set checks = [
+        ('期初余额', meta.open_d, meta.open_c, meta.open_balanced),
+        ('本期发生额', meta.debit, meta.credit, meta.flow_balanced),
+        ('期末余额', meta.end_d, meta.end_c, meta.end_balanced),
+      ] %}
+      {% for nm, d, c, ok in checks %}
+      <div style="flex:1;min-width:210px;background:{{ '#E8F5EC' if ok else '#FDECEC' }};
+                  border:1px solid {{ '#BFE3C9' if ok else '#F3C9C9' }};border-radius:8px;padding:10px 14px">
+        <div style="font-size:12px;color:#9C9288">{{ nm }} 借贷平衡</div>
+        <div style="font-size:13.5px;color:{{ '#166534' if ok else '#991b1b' }};margin-top:3px">
+          <b>{{ '✓ 平衡' if ok else '✗ 不平衡' }}</b>
+          ｜ 借 ￥{{ '{:,.2f}'.format(d) }} ＝ 贷 ￥{{ '{:,.2f}'.format(c) }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:10px;font-size:12.5px;color:#9C9288;line-height:1.8">
+      只要凭证借贷相等、期初建账平了，这三项就永远平——这是账务系统最基本的自检。
+      三项里任何一项不平，说明有数据被绕过校验写进了库（正常操作不可能出现），得先查凭证。
+    </div>
+  </div>
+
+  {# 期间切换 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.ledger_hub') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">切换期间</button>
+      {% if cfg.start_period %}
+      <span style="font-size:12.5px;color:#9C9288;padding-bottom:10px">账套启用期间：{{ cfg.start_period }}（账簿的起点）</span>
+      {% endif %}
+    </form>
+  </div>
+
+  {# 三张账入口 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+    {% set books = [
+      ('fin.ledger_balance', 'Balance', '科目余额表',
+       '某期末各科目的期初余额 / 本期发生额 / 期末余额，可按住来按科目区间筛。这是总账口径。'),
+      ('fin.ledger_detail', 'Detail', '明细账',
+       '一个明细科目的逐笔发生与滚动余额，凭证号可直接点开看原凭证。查某一笔是怎么来的用它。'),
+      ('fin.ledger_journal', 'Journal', '现金 / 银行日记账',
+       '出纳口径的收付余三栏账（库存现金 + 银行存款），一期由财务员工兼管。'),
+    ] %}
+    {% for ep, en, nm, tip in books %}
+    <a href="{{ url_for(ep, period=period) }}"
+       style="flex:1;min-width:250px;display:block;background:#fff;border-radius:8px;padding:16px 18px;
+              box-shadow:0 1px 3px rgba(42,42,42,.05);border-left:3px solid #E6823C;text-decoration:none">
+      <div style="font-size:14.5px;font-weight:600;color:#2A2A2A">
+        <span style="color:#E6823C">{{ en }}</span> · {{ nm }}
+        <span style="font-size:12px;color:#C86432;font-weight:400">查看 →</span>
+      </div>
+      <div style="font-size:12.5px;color:#9C9288;margin-top:5px;line-height:1.7">{{ tip }}</div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <div style="font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">取数口径：</b>
+    ① 只取「已记账」凭证；② 期初余额来自期初建账，查更靠后的期间时按已记账发生额逐期滚下来；
+    ③ 汇总科目不单独记账，余额由下级明细科目汇总。
+  </div>
+  <div style="margin-top:6px;font-size:12.5px;color:#9C9288">
+    三大报表（#35）、期末结转与结账（#36）均已开放。
+  </div>
+{% endblock %}

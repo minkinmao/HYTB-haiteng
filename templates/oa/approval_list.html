@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}OA · 审批{% endblock %}
+{% block content %}
+
+{# 提交申请表单 #}
+<form method="post" action="{{ url_for('oa.approval_new') }}"
+      style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:20px">
+  <div style="display:flex;gap:10px;margin-bottom:10px">
+    <select name="type"
+            style="padding:10px 12px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;background:#fff">
+      <option value="请假">请假</option>
+      <option value="报销">报销</option>
+      <option value="通用">通用</option>
+    </select>
+    <input type="text" name="title" placeholder="申请标题" required
+           style="flex:1;padding:10px 12px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+  </div>
+  <textarea name="content" placeholder="申请说明" rows="3"
+            style="width:100%;padding:10px 12px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;resize:vertical;margin-bottom:10px"></textarea>
+  <button type="submit"
+          style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">提交申请</button>
+</form>
+
+{# 审批列表 #}
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:8px 18px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
+  {% if items %}
+    {% for it in items %}
+    <div style="padding:14px 0;border-bottom:1px solid #F3EDE3">
+      <div style="font-size:15px;font-weight:600">
+        {{ it.title }}
+        <span style="background:#DED6C9;color:#5C554D;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">{{ it.type }}</span>
+        {# 状态徽标：三种状态三种颜色 #}
+        {% if it.status == 'pending' %}
+          <span style="background:#FDF3E4;color:#8A5A18;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">待审批</span>
+        {% elif it.status == 'approved' %}
+          <span style="background:#dcfce7;color:#15803d;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">已通过</span>
+        {% else %}
+          <span style="background:#FBE3DD;color:#dc2626;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">已驳回</span>
+        {% endif %}
+      </div>
+      <div style="font-size:14px;color:#5C554D;margin:6px 0;white-space:pre-wrap">{{ it.content }}</div>
+      <div style="font-size:12px;color:#9C9288">
+        申请人：{{ it.applicant.username if it.applicant else '未知' }}
+        ｜ {{ it.created_at.strftime('%Y-%m-%d %H:%M') if it.created_at else '' }}
+        {% if it.status != 'pending' %}
+          ｜ 审批人：{{ it.approver.username if it.approver else '未知' }}
+          ｜ 意见：{{ it.opinion or '无' }}
+        {% endif %}
+      </div>
+      {# 待审批 + 当前用户有审批权限，才显示通过/驳回按钮 #}
+      {% if it.status == 'pending' and can_approve %}
+      <form method="post" action="{{ url_for('oa.approval_decide', aid=it.id) }}" style="margin-top:8px">
+        <input type="text" name="opinion" placeholder="审批意见（可选）"
+               style="padding:7px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;width:240px;margin-right:8px">
+        <button type="submit" name="action" value="approve"
+                style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer">通过</button>
+        <button type="submit" name="action" value="reject"
+                style="background:#dc2626;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer;margin-left:8px">驳回</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="padding:30px 0;text-align:center;color:#9C9288">暂无审批，提交第一条申请吧。</div>
+  {% endif %}
+</div>
+
+{% endblock %}

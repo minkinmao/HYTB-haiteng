@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}记账凭证 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 记账凭证{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">记账凭证 <span style="font-size:13px;font-weight:400;color:#9C9288">Voucher</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    一张凭证 = 一个业务事项的完整会计分录，<b style="color:#5C554D">借方合计必须等于贷方合计</b>才能保存。
+    字别取「收 / 付 / 转」三类，三类各自独立连续编号（如 收-202609-001），不使用统一的「记」字。
+  </div>
+
+  {# 未建账：直接拦在入口，避免录出"没有起点"的账 #}
+  {% if not cfg.opening_done %}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid #E6823C">
+    <div style="font-size:13.5px;color:#8A5A18">
+      <b>还没完成期初建账</b>，暂不能录入凭证。期初余额不平的话，账上的起点就是错的。
+    </div>
+    <a href="{{ url_for('fin.opening') }}" style="font-size:13px;color:#C86432">去「期初建账」录入期初余额并确认建账 →</a>
+  </div>
+  {% endif %}
+
+  {# 概览统计 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('凭证张数', stats.count, '#C9902A'),
+      ('借方合计', '￥' ~ '{:,.2f}'.format(stats.debit), '#C86432'),
+      ('贷方合计', '￥' ~ '{:,.2f}'.format(stats.credit), '#E6823C'),
+      ('分录行数', stats.lines, '#166534'),
+      ('附件张数', stats.attach, '#6B5D4F'),
+    ] %}
+    {% for name, val, color in cards %}
+    <div style="flex:1;min-width:118px;background:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ name }}</div>
+      <div style="font-size:{{ '19px' if val is string else '22px' }};font-weight:700;color:{{ color }};margin-top:4px">{{ val }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 本期平衡提示 #}
+  <div style="background:{{ '#E8F5EC' if stats.balanced else '#FDECEC' }};border:1px solid {{ '#BFE3C9' if stats.balanced else '#F3C9C9' }};
+              border-radius:8px;padding:12px 18px;margin-bottom:18px;font-size:13px;color:{{ '#166534' if stats.balanced else '#991b1b' }}">
+    {% if stats.balanced %}
+      本期账面平衡：借方合计 ￥{{ '{:,.2f}'.format(stats.debit) }} = 贷方合计 ￥{{ '{:,.2f}'.format(stats.credit) }}
+    {% else %}
+      本期借贷不平衡：借方 ￥{{ '{:,.2f}'.format(stats.debit) }}、贷方 ￥{{ '{:,.2f}'.format(stats.credit) }}、差额 ￥{{ '{:,.2f}'.format(stats.diff) }}（请检查凭证）
+    {% endif %}
+    <span style="color:#9C9288;margin-left:8px">
+      草稿 {{ stats.by_status.draft }} ｜ 已审核 {{ stats.by_status.audited }} ｜ 已记账 {{ stats.by_status.posted }} ｜ 已作废 {{ stats.by_status.void }}
+      ｜
+      {% for w, n in stats.by_word.items() %}{{ w }}字 {{ n }}{% if not loop.last %} ｜ {% endif %}{% endfor %}
+    </span>
+  </div>
+
+  {# 已记账口径 + 待办：只有已记账的进账簿报表，这两个数是财务主管每天要看的 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+    <div style="flex:2;min-width:300px;background:#E8F5EC;border:1px solid #BFE3C9;border-radius:8px;
+                padding:12px 18px;font-size:13px;color:#166534">
+      已记账口径（进账簿与报表）：<b>{{ stats.posted_count }}</b> 张 ｜
+      借 ￥{{ '{:,.2f}'.format(stats.posted_debit) }} = 贷 ￥{{ '{:,.2f}'.format(stats.posted_credit) }}
+      <span style="color:#5C9B6E">｜ 草稿与已作废的不进报表{% if stats.red_count %} ｜ 含红字凭证 {{ stats.red_count }} 张{% endif %}</span>
+    </div>
+    <div style="flex:1;min-width:230px;background:{{ '#FDF3E4' if (stats.pending_audit or stats.pending_post) else '#fff' }};
+                border:1px solid {{ '#F0DCC0' if (stats.pending_audit or stats.pending_post) else '#F2EBE1' }};
+                border-radius:8px;padding:12px 18px;font-size:13px;color:#8A5A18">
+      待办：待审核 <b>{{ stats.pending_audit }}</b> 张 ｜ 待记账 <b>{{ stats.pending_post }}</b> 张
+      {% if stats.pending_audit %}
+      <a href="{{ url_for('fin.vouchers', status='draft', period=period or 'all') }}" style="color:#C86432">去看待审核 →</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# 筛选 + 新增 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.vouchers') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">字别</div>
+        <select name="word" style="padding:7px 10px;width:96px">
+          <option value="">全部</option>
+          {% for w in words %}<option value="{{ w }}" {{ 'selected' if w == word else '' }}>{{ w }}</option>{% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">状态</div>
+        <select name="status" style="padding:7px 10px;width:110px">
+          <option value="">全部</option>
+          {% for k, cn in status_options %}<option value="{{ k }}" {{ 'selected' if k == status else '' }}>{{ cn }}</option>{% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:160px">
+        <div style="margin-bottom:4px">关键字（凭证号 / 摘要）</div>
+        <input type="text" name="kw" value="{{ kw }}" placeholder="如 收-202609 或 代理手续费" style="padding:7px 10px;width:100%">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">查询</button>
+      <a href="{{ url_for('fin.vouchers') }}" style="font-size:13px;color:#9C9288;padding:9px 4px">重置</a>
+      <a href="{{ url_for('fin.vouchers', period='all') }}" style="font-size:13px;color:#9C9288;padding:9px 4px">全部期间</a>
+      {% if can_edit and cfg.opening_done %}
+      <a class="btn" href="{{ url_for('fin.voucher_new') }}" style="padding:8px 18px">＋ 新增凭证</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {# 凭证台账 #}
+  <div class="card" style="overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th style="text-align:left;padding:10px 12px">凭证号</th>
+          <th style="text-align:left;padding:10px 8px">日期</th>
+          <th style="text-align:center;padding:10px 8px">字别</th>
+          <th style="text-align:left;padding:10px 8px">摘要</th>
+          <th style="text-align:right;padding:10px 8px">分录</th>
+          <th style="text-align:right;padding:10px 8px">借方合计</th>
+          <th style="text-align:right;padding:10px 8px">贷方合计</th>
+          <th style="text-align:right;padding:10px 8px">附件</th>
+          <th style="text-align:center;padding:10px 8px">状态</th>
+          <th style="text-align:left;padding:10px 12px">制单人</th>
+          <th style="text-align:right;padding:10px 12px">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in items %}
+        {% set st = {'draft': ('#8A5A18', '#FDF3E4'), 'audited': ('#1D4ED8', '#E8EEFB'),
+                     'posted': ('#166534', '#E8F5EC'), 'void': ('#991b1b', '#FDECEC')}[v.status] %}
+        <tr style="border-top:1px solid #F2EBE1">
+          <td style="padding:10px 12px;font-family:monospace;font-weight:600">
+            <a href="{{ url_for('fin.voucher_detail', vid=v.id) }}" style="color:#C86432">{{ v.voucher_no or '（未取号）' }}</a>
+          </td>
+          <td style="padding:10px 8px;color:#5C554D">{{ v.voucher_date.strftime('%Y-%m-%d') if v.voucher_date else '—' }}</td>
+          <td style="padding:10px 8px;text-align:center">
+            <span style="display:inline-block;min-width:20px;padding:2px 7px;border-radius:5px;background:#FBEEE2;color:#C86432;font-weight:700">{{ v.word }}</span>
+          </td>
+          <td style="padding:10px 8px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ v.summary or '—' }}</td>
+          <td style="padding:10px 8px;text-align:right;color:#9C9288">{{ v.entries|length }}</td>
+          <td style="padding:10px 8px;text-align:right">{{ '{:,.2f}'.format(v.amount_debit or 0) }}</td>
+          <td style="padding:10px 8px;text-align:right">{{ '{:,.2f}'.format(v.amount_credit or 0) }}</td>
+          <td style="padding:10px 8px;text-align:right;color:#9C9288">{{ v.attach_count or 0 }}</td>
+          <td style="padding:10px 8px;text-align:center">
+            <span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;color:{{ st[0] }};background:{{ st[1] }}">{{ v.status_cn }}</span>
+            {% if v.period in closed %}
+            <span title="该期间已结账，凭证已锁定" style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;color:#991b1b;background:#FDECEC">已结账</span>
+            {% endif %}
+            {% if v.is_closing %}
+            <span title="期末结转系统凭证" style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;color:#1D4ED8;background:#E8EEFB">结转</span>
+            {% endif %}
+          </td>
+          <td style="padding:10px 12px;color:#9C9288">{{ v.maker_name or '—' }}</td>
+          <td style="padding:10px 12px;text-align:right;white-space:nowrap">
+            <a href="{{ url_for('fin.voucher_detail', vid=v.id) }}" style="font-size:12.5px;color:#C86432">查看</a>
+            {% if can_edit and v.is_editable and not v.is_red %}
+              ｜<a href="{{ url_for('fin.voucher_edit', vid=v.id) }}" style="font-size:12.5px;color:#C86432">修改</a>
+            {% endif %}
+            {% if can_edit and v.is_editable %}
+              ｜<form method="post" action="{{ url_for('fin.voucher_delete', vid=v.id) }}" style="display:inline"
+                        onsubmit="return confirm('确认删除凭证 {{ v.voucher_no }}？删除后不可恢复');">
+                 <button type="submit" style="background:none;border:none;padding:0;font-size:12.5px;color:#991b1b;cursor:pointer">删除</button>
+               </form>
+            {% endif %}
+            {# 流转快捷操作：制单≠审核，自己录的不出「审核」按钮 #}
+            {% if can_flow and v.can_audit and v.maker_id != me %}
+              ｜<form method="post" action="{{ url_for('fin.voucher_audit', vid=v.id) }}" style="display:inline">
+                 <button type="submit" style="background:none;border:none;padding:0;font-size:12.5px;color:#1D4ED8;cursor:pointer">审核</button>
+               </form>
+            {% endif %}
+            {% if can_flow and v.can_post %}
+              ｜<form method="post" action="{{ url_for('fin.voucher_post', vid=v.id) }}" style="display:inline"
+                        onsubmit="return confirm('确认记账 {{ v.voucher_no }}？记账后不可修改，只能红字冲销');">
+                 <button type="submit" style="background:none;border:none;padding:0;font-size:12.5px;color:#166534;cursor:pointer">记账</button>
+               </form>
+            {% endif %}
+            {% if can_flow and v.can_reverse %}
+              ｜<a href="{{ url_for('fin.voucher_detail', vid=v.id) }}" title="红字冲销需填写原因，请在详情页操作"
+                    style="font-size:12.5px;color:#991b1b">红冲</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" style="padding:40px 12px;text-align:center;color:#9C9288">
+          {% if period %}{{ period }} {% endif %}没有凭证记录。
+          {% if can_edit and cfg.opening_done %}
+            点右上角「＋ 新增凭证」录第一张。
+          {% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# 记账与流转规则：写清楚，避免"为什么这张改不了" #}
+  <div style="margin-top:16px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">记账规则提示：</b>
+    ① 借贷必须相等才能保存；② 分录只能选「启用中的明细科目」，汇总科目不能做分录；
+    ③ 必须先完成期初建账；④ 未审核的凭证不能记账；⑤ 已记账的凭证不能再改、不能作废，只能由主管红字冲销。
+  </div>
+  <div style="margin-top:6px;font-size:12.5px;color:#9C9288">
+    <b style="color:#6B5D4F">两条纪律：</b>
+    <b style="color:#8A5A18">制单 ≠ 审核</b>——同一个人不能既录这张凭证又审这张凭证；
+    <b style="color:#8A5A18">只有已记账的凭证进账簿与报表</b>。
+    账簿查询、三大报表、期末结转结账均已开放；某一期结账后，该期间的凭证会整体冻结。
+  </div>
+{% endblock %}

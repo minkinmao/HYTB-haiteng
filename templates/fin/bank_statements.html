@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}银行流水 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 银企对账 · 流水（{{ ba.name }}）{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">{{ ba.name }} <span style="font-size:13px;font-weight:400;color:#9C9288">银行流水</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    开户行：{{ ba.bank_name or '—' }} ｜ 账号：{{ ba.account_no or '—' }} ｜ 对应科目
+    <span style="font-family:monospace">{{ ba.account_code }}</span>。导入网银对账单后，到「对账工作台」与企业账勾对。
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+    <a href="{{ url_for('fin.bank_reconcile', baid=ba.id) }}" class="btn" style="text-decoration:none;padding:8px 18px">对账工作台</a>
+    <a href="{{ url_for('fin.bank_adjust', baid=ba.id) }}" style="text-decoration:none;padding:8px 18px;border:1px solid #EAE2D6;border-radius:9px;color:#5C554D">银行存款余额调节表</a>
+  </div>
+
+  {# 导入流水 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:700;color:#2A2A2A;margin-bottom:6px">导入银行流水（xlsx / csv）</div>
+    <div style="font-size:12.5px;color:#9C9288;margin-bottom:10px">
+      表头识别关键字：日期 / 摘要 / 对方户名 / 借方 / 贷方 / 余额（顺序无所谓，首行含这些字即自动识别列）。
+      无表头时按固定列序：日期, 摘要, 对方户名, 借方, 贷方, 余额。
+    </div>
+    <form method="post" action="{{ url_for('fin.bank_import', baid=ba.id) }}" enctype="multipart/form-data" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <input type="file" name="file" accept=".xlsx,.xls,.csv" style="padding:7px 10px;border:1px solid #EAE2D6;border-radius:9px;font-size:13px">
+      <button type="submit" class="btn" style="padding:8px 18px">导入</button>
+    </form>
+  </div>
+
+  {# 流水列表 #}
+  <div class="card" style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px">
+      <thead>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #EAE2D6">交易日期</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #EAE2D6">摘要</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #EAE2D6">对方户名</th>
+          <th style="text-align:right;padding:8px 12px;border-bottom:1px solid #EAE2D6">借方（银行付）</th>
+          <th style="text-align:right;padding:8px 12px;border-bottom:1px solid #EAE2D6">贷方（银行收）</th>
+          <th style="text-align:right;padding:8px 12px;border-bottom:1px solid #EAE2D6">余额</th>
+          <th style="text-align:center;padding:8px 12px;border-bottom:1px solid #EAE2D6">对账状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stmts %}
+        <tr style="border-top:1px solid #F2EBE1;{{ 'background:#F4FAF6' if s.reconciled else '' }}">
+          <td style="padding:7px 12px;font-family:monospace">{{ s.trans_date }}</td>
+          <td style="padding:7px 12px">{{ s.summary or '—' }}</td>
+          <td style="padding:7px 12px;color:#6B5D4F">{{ s.counterparty or '—' }}</td>
+          <td style="padding:7px 12px;text-align:right;color:#991b1b">{{ amt(s.debit) }}</td>
+          <td style="padding:7px 12px;text-align:right;color:#166534">{{ amt(s.credit) }}</td>
+          <td style="padding:7px 12px;text-align:right">{{ amt(s.balance) }}</td>
+          <td style="padding:7px 12px;text-align:center">
+            {% if s.reconciled %}<span style="font-size:12px;background:#E8F5EC;color:#166534;padding:2px 10px;border-radius:6px">已对账</span>
+            {% else %}<span style="font-size:12px;background:#FDECEC;color:#991b1b;padding:2px 10px;border-radius:6px">待对账</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="padding:40px 12px;text-align:center;color:#9C9288">还没有流水，先导入银行对账单。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

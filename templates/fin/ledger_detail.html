@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}明细账 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 明细账{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">明细账 <span style="font-size:13px;font-weight:400;color:#9C9288">Detail Ledger</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    一个科目的逐笔流水与<b style="color:#5C554D">滚动余额</b>：期初余额起算，一行一行滚到期末。
+    只显示「已记账」凭证的分录；红字凭证金额为负，直接抵减。汇总科目请用科目余额表看。
+  </div>
+
+  {# 筛选 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.ledger_detail') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:240px">
+        <div style="margin-bottom:4px">会计科目（只列明细科目）</div>
+        <select name="code" style="padding:7px 10px;width:100%">
+          {% for key, cn in category_options %}
+            {% set group = accounts | selectattr('category', 'equalto', key) | list %}
+            {% if group %}
+            <optgroup label="{{ cn }}">
+              {% for a in group %}
+              <option value="{{ a.code }}" {{ 'selected' if a.code == code else '' }}>{{ a.code }} {{ a.name }}</option>
+              {% endfor %}
+            </optgroup>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">起始期间</div>
+        <input type="month" name="p_from" value="{{ p_from }}" style="padding:7px 10px;width:150px">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">截止期间</div>
+        <input type="month" name="p_to" value="{{ p_to }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">查询</button>
+      {% if start %}
+      <a href="{{ url_for('fin.ledger_detail', code=code, p_from=start, p_to=p_to) }}"
+         style="font-size:13px;color:#9C9288;padding:9px 4px">从启用期间起</a>
+      {% endif %}
+      <a href="{{ url_for('fin.ledger_detail', code=code) }}" style="font-size:13px;color:#9C9288;padding:9px 4px">重置</a>
+    </form>
+  </div>
+
+  {% if not acc %}
+  <div class="card" style="padding:40px 18px;text-align:center;color:#9C9288">
+    没有可查的明细科目，请先到「会计科目」建科目。
+  </div>
+  {% else %}
+
+  {# 科目概览 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:10px">
+      <div style="font-size:15px;font-weight:600">
+        <span style="font-family:monospace;color:#C86432">{{ acc.code }}</span>
+        {{ acc.name }}
+        <span style="font-size:12px;font-weight:400;color:#9C9288">
+          ｜ {{ acc.category_cn }} ｜ 余额方向：{{ acc.direction_cn }}
+          {% if not acc.enabled %} ｜ <span style="color:#991b1b">已停用</span>{% endif %}
+        </span>
+      </div>
+      <div style="font-size:12.5px;color:#9C9288">{{ p_from }} ～ {{ p_to }}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:14px">
+      {% set cards = [
+        ('期初余额', opening, '#C9902A'),
+        ('本期借方发生', meta.debit, '#C86432'),
+        ('本期贷方发生', meta.credit, '#E6823C'),
+        ('期末余额', meta.closing, '#166534'),
+      ] %}
+      {% for nm, val, color in cards %}
+      <div style="flex:1;min-width:140px;background:#FCFAF7;border-radius:8px;padding:12px 16px;border-top:2px solid {{ color }}">
+        <div style="font-size:12px;color:#9C9288">{{ nm }}</div>
+        <div style="font-size:18px;font-weight:700;color:{{ color }};margin-top:4px">￥{{ '{:,.2f}'.format(val) }}</div>
+      </div>
+      {% endfor %}
+      <div style="flex:1;min-width:110px;background:#FCFAF7;border-radius:8px;padding:12px 16px;border-top:2px solid #6B5D4F">
+        <div style="font-size:12px;color:#9C9288">流水笔数</div>
+        <div style="font-size:18px;font-weight:700;color:#6B5D4F;margin-top:4px">{{ meta.count }}</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:12.5px;color:#9C9288">
+      金额均为「借 − 贷」的净额：正数是借方余额，负数是贷方余额。
+    </div>
+  </div>
+
+  {# 明细流水 #}
+  <div class="card" style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:900px">
+      <thead>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th style="text-align:left;padding:10px 12px">日期</th>
+          <th style="text-align:left;padding:10px 8px">凭证号</th>
+          <th style="text-align:left;padding:10px 8px">摘要</th>
+          <th style="text-align:right;padding:10px 12px">借方</th>
+          <th style="text-align:right;padding:10px 12px">贷方</th>
+          <th style="text-align:right;padding:10px 12px">余额（借 − 贷）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-top:1px solid #F2EBE1;background:#FCFAF7">
+          <td colspan="2" style="padding:9px 12px;color:#9C9288;font-size:12.5px">{{ p_from }} 期初</td>
+          <td style="padding:9px 8px;color:#9C9288;font-size:12.5px">上期结转</td>
+          <td colspan="2" style="padding:9px 12px"></td>
+          <td style="padding:9px 12px;text-align:right;font-weight:700">{{ amt(opening) }}</td>
+        </tr>
+        {% for r in lines %}
+        <tr style="border-top:1px solid #F2EBE1">
+          <td style="padding:9px 12px;color:#5C554D;white-space:nowrap">{{ r.date.strftime('%Y-%m-%d') if r.date else '—' }}</td>
+          <td style="padding:9px 8px;white-space:nowrap">
+            <a href="{{ url_for('fin.voucher_detail', vid=r.voucher_id) }}"
+               style="font-family:monospace;color:#C86432">{{ r.voucher_no }}</a>
+            {% if r.is_red %}<span style="font-size:11px;color:#991b1b">红</span>{% endif %}
+          </td>
+          <td style="padding:9px 8px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ r.summary }}">{{ r.summary }}</td>
+          <td style="padding:9px 12px;text-align:right;color:{{ '#C86432' if r.debit else '' }}">{{ amt(r.debit) }}</td>
+          <td style="padding:9px 12px;text-align:right;color:{{ '#166534' if r.credit else '' }}">{{ amt(r.credit) }}</td>
+          <td style="padding:9px 12px;text-align:right;font-weight:600;color:{{ '#991b1b' if r.balance < 0 else '#2A2A2A' }}">
+            {{ amt(r.balance) }}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:36px 12px;text-align:center;color:#9C9288">
+          {{ acc.code }} {{ acc.name }} 在 {{ p_from }} ～ {{ p_to }} 期间没有已记账的发生额。
+        </td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid #EAE2D6;background:#FAF7F2;font-weight:700">
+          <td colspan="3" style="padding:10px 12px">本期合计</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.debit) }}</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.credit) }}</td>
+          <td style="padding:10px 12px;text-align:right">期末 {{ '{:,.2f}'.format(meta.closing) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div style="margin-top:16px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">对账口诀：</b>
+    期初余额 + 本期借方合计 − 本期贷方合计 = 期末余额。
+    台账上任何一行的「余额」都是从这个科目的期初滚到该行的累计数，可以逐行验算。
+  </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}发票台账 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 发票台账{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">发票台账 <span style="font-size:13px;font-weight:400;color:#9C9288">Invoice</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    进项（收到的发票）与销项（开出的发票）统一管理；进项勾选<b style="color:#5C554D">认证</b>后参与抵扣，
+    增值税测算按<b style="color:#5C554D">认证所属期</b>归集（不是开票期）。
+  </div>
+
+  {# 方向切换 + 筛选 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div style="display:flex;gap:6px">
+        <a href="{{ url_for('fin.invoices', dir='in') }}"
+           style="padding:7px 16px;border-radius:8px;font-size:13px;{% if direction=='in' %}background:#C86432;color:#fff{% else %}background:#F0E9DD;color:#6B5D4F{% endif %}">进项（收票）</a>
+        <a href="{{ url_for('fin.invoices', dir='out') }}"
+           style="padding:7px 16px;border-radius:8px;font-size:13px;{% if direction=='out' %}background:#C86432;color:#fff{% else %}background:#F0E9DD;color:#6B5D4F{% endif %}">销项（开票）</a>
+      </div>
+      <form method="get" action="{{ url_for('fin.invoices') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-left:auto">
+        <input type="hidden" name="dir" value="{{ direction }}">
+        <label style="font-size:12.5px;color:#5C554D">
+          <div style="margin-bottom:4px">所属期</div>
+          <select name="period" style="padding:7px 10px">
+            <option value="">全部</option>
+            {% for p in periods %}<option value="{{ p }}" {% if p==period %}selected{% endif %}>{{ p }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12.5px;color:#5C554D">
+          <div style="margin-bottom:4px">关键字</div>
+          <input type="text" name="q" value="{{ q }}" placeholder="号码/收票方/开票方" style="padding:7px 10px;width:180px">
+        </label>
+        <button type="submit" class="btn" style="padding:8px 18px">筛选</button>
+      </form>
+    </div>
+  </div>
+
+  {# 汇总 + 新增 + 测算 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:18px;align-items:center">
+    <div style="font-size:13px;color:#5C554D">
+      <span style="color:#9C9288">张数</span> <b>{{ sums.cnt }}</b>
+      <span style="color:#9C9288;margin-left:14px">不含税</span> <b>{{ '%.2f' % sums.amount }}</b>
+      <span style="color:#9C9288;margin-left:14px">税额</span> <b>{{ '%.2f' % sums.tax }}</b>
+      <span style="color:#9C9288;margin-left:14px">价税合计</span> <b style="color:#C86432">{{ '%.2f' % sums.total }}</b>
+    </div>
+    <a href="{{ url_for('fin.invoice_vat') }}" class="btn" style="padding:8px 18px">增值税测算 →</a>
+    <a href="{{ url_for('fin.invoice_new') }}?dir={{ direction }}" class="btn"
+       style="margin-left:auto;padding:8px 18px;background:#C86432;color:#fff">+ 新增发票</a>
+  </div>
+
+  {# 列表 #}
+  <div class="card" style="padding:6px 0;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="color:#9C9288;text-align:left;background:#FAF7F2">
+          <th style="padding:10px 12px">开票日期</th>
+          <th>发票号码</th>
+          <th>类型</th>
+          <th>对方（销售方/购买方）</th>
+          <th style="text-align:right">不含税</th>
+          <th style="text-align:right">税率</th>
+          <th style="text-align:right">税额</th>
+          <th style="text-align:right">价税合计</th>
+          {% if direction=='in' %}<th>认证</th>{% endif %}
+          <th style="text-align:right">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr style="border-top:1px solid #EAE2D6">
+          <td style="padding:9px 12px">{{ it.invoice_date or '—' }}</td>
+          <td>{{ it.invoice_no or '—' }}</td>
+          <td>{{ it.invoice_type }}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {% if direction=='in' %}{{ it.seller_name }}{% else %}{{ it.buyer_name }}{% endif %}
+          </td>
+          <td style="text-align:right">{{ '%.2f' % (it.amount or 0) }}</td>
+          <td style="text-align:right">{{ '%.0f' % (it.tax_rate * 100) }}%</td>
+          <td style="text-align:right">{{ '%.2f' % (it.tax or 0) }}</td>
+          <td style="text-align:right;font-weight:600">{{ '%.2f' % (it.total or 0) }}</td>
+          {% if direction=='in' %}
+          <td>
+            {% if it.cert_status=='certed' %}<span style="color:#2E7D32">已认证·{{ it.cert_period }}</span>
+            {% elif it.cert_status=='nodeduct' %}<span style="color:#9C9288">不予抵扣</span>
+            {% else %}<span style="color:#B8860B">未认证</span>{% endif %}
+          </td>
+          {% endif %}
+          <td style="text-align:right;white-space:nowrap">
+            <a href="{{ url_for('fin.invoice_detail', iid=it.id) }}" style="color:#C86432;margin-right:8px">编辑</a>
+            {% if direction=='in' and it.cert_status!='certed' %}
+            <form method="post" action="{{ url_for('fin.invoice_cert', iid=it.id) }}" style="display:inline">
+              <input type="hidden" name="act" value="cert">
+              <input type="hidden" name="cert_period" value="{{ it.period }}">
+              <button type="submit" style="border:none;background:none;color:#2E7D32;cursor:pointer;font-size:13px">认证</button>
+            </form>
+            {% elif direction=='in' and it.cert_status=='certed' %}
+            <form method="post" action="{{ url_for('fin.invoice_cert', iid=it.id) }}" style="display:inline;margin-right:8px">
+              <input type="hidden" name="act" value="uncert">
+              <button type="submit" style="border:none;background:none;color:#9C9288;cursor:pointer;font-size:13px">取消认证</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('fin.invoice_delete', iid=it.id) }}" style="display:inline"
+                  onsubmit="return confirm('确定删除这张发票？');">
+              <button type="submit" style="border:none;background:none;color:#991b1b;cursor:pointer;font-size:13px">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="padding:24px;text-align:center;color:#9C9288">还没有{{ dir_cn }}发票，点右上角「新增发票」</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

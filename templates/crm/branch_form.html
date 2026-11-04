@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ '编辑省分公司' if row else '新增省分公司' }}{% endblock %}
+{% block pagename %}核心业务管理系统 · {{ '编辑省分公司' if row else '新增省分公司' }}{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .lm-row{background:#FFFDFA;border:1px solid #E8DCCE;border-radius:10px;padding:10px 12px;
+    margin-bottom:10px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑省分公司' if row else '新增省分公司' }}</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  {% if row %}
+    所属总公司：{{ row.insurer_name or '—' }}
+  {% else %}
+    所属总公司：{{ insurer.name if insurer else '—' }}
+  {% endif %}
+  ｜ 带 <b style="color:#C86432;font-weight:400">*</b> 为必填
+</div>
+
+{# 四十二改：省分公司一键抓取 —— 分公司全称在监管站精确命中，点一下就能补全 #}
+{% if row %}
+<div class="crm-tool" style="margin-bottom:14px">
+  <form method="post" action="{{ url_for('crm.branch_fetch', bid=row.id) }}" style="display:inline"
+        onsubmit="return confirm('按分公司全称抓取并回填？\n\n默认只补空字段，已填好的不会被覆盖。')">
+    <input type="hidden" name="back_flag" value="{{ back_flag or '' }}">
+    <label style="font-size:12.5px;color:#6B5D4F;margin-right:8px;white-space:nowrap">
+      <input type="checkbox" name="overwrite" value="1"> 覆盖已有值
+    </label>
+    <button class="crm-btn" type="submit">一键抓取分公司信息</button>
+  </form>
+  <a class="crm-btn" href="{{ tyc_url(row.name) }}" target="_blank" rel="noopener">去天眼查查这家</a>
+  <span style="font-size:12.5px;color:#9C9288">
+    监管站按分公司全称精确命中 → 自动补许可证号 / 批准日期；工商字段需天眼查 token，没有就点右边手工抄。
+  </span>
+</div>
+{% else %}
+<div class="crm-tool" style="margin-bottom:14px">
+  <span style="font-size:12.5px;color:#9C9288">
+    填好「分公司全称」保存后，系统会<b>自动抓取一次</b>（许可证号 / 批准日期），不用手填。
+  </span>
+</div>
+{% endif %}
+
+{# 缺项提示：有缺才出现 #}
+{% if row %}
+{% set miss = [] %}
+{% for _k, _v in [('许可证号', row.license_no), ('许可证批准日期', row.license_date),
+                  ('统一社会信用代码', row.credit_code), ('负责人', row.principal),
+                  ('营业地址', row.address), ('成立日期', row.establish_date)] %}
+  {% if not (_v or '').strip() %}{% set _ = miss.append(_k) %}{% endif %}
+{% endfor %}
+{% if miss %}
+<div class="miss-bar">
+  <span>还缺 <b>{{ miss|length }}</b> 项：{{ miss|join('、') }}</span>
+  <a class="crm-btn pri" href="{{ tyc_url(row.name) }}" target="_blank" rel="noopener">去天眼查查这家 →</a>
+  <span class="tip">打开后抄下信用代码 / 负责人 / 地址 / 成立日期，回来粘进下面表单保存</span>
+</div>
+{% endif %}
+{% endif %}
+
+<form class="crm-form" method="post">
+  {# 注意：变量名不能叫 back —— base.html 的「统一返回条」占用了 back，会被覆盖 #}
+  <input type="hidden" name="back_flag" value="{{ back_flag or '' }}">
+  <div class="crm-sec">一、归属与工商登记 <span>保司省级分公司分支机构</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>保司省级分公司分支机构 <b>*</b></label>
+      <input type="text" name="province" id="provInput" value="{{ (row.province or '') if row else '' }}"
+             placeholder="如：广东省 / 深圳市" required>
+      <div class="hint">填好后，下方「分公司全称」按「保司全称 + 本项内容」<b>自动生成</b>。</div>
+    </div>
+    <div class="crm-fld full">
+      <label>分公司全称 <b>*</b></label>
+      <input type="text" name="name" id="nameInput" value="{{ (row.name or '') if row else '' }}"
+             placeholder="如：中国人寿保险股份有限公司广东省分公司" required>
+      <div class="hint">自动生成后可手工修改；手工改过之后，本页不再自动覆盖。</div>
+    </div>
+    <div class="crm-fld">
+      <label>分公司简称</label>
+      <input type="text" name="short_name" value="{{ (row.short_name or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>统一社会信用代码</label>
+      <input type="text" name="credit_code" value="{{ (row.credit_code or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>工商注册号</label>
+      <input type="text" name="reg_no" value="{{ (row.reg_no or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>经营保险业务许可证号</label>
+      <input type="text" name="license_no" value="{{ (row.license_no or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>许可证批准日期 <span style="color:#9C9288;font-weight:400">（监管口径，抓取自动填）</span></label>
+      <input type="date" name="license_date" value="{{ (row.license_date or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>税号</label>
+      <input type="text" name="tax_no" value="{{ (row.tax_no or '') if row else '' }}">
+    </div>
+  </div>
+
+  <div class="crm-sec">二、负责人与联络</div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>负责人（省分总经理）</label>
+      <input type="text" name="principal" value="{{ (row.principal or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>分公司联系电话</label>
+      <input type="text" name="phone" value="{{ (row.phone or '') if row else '' }}">
+    </div>
+    <div class="crm-fld full">
+      <label>营业地址</label>
+      <input type="text" name="address" value="{{ (row.address or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>成立日期</label>
+      <input type="date" name="establish_date" value="{{ (row.establish_date or '') if row else '' }}">
+    </div>
+  </div>
+
+  <div class="crm-sec">三、联系与对接 <span>一个省分公司可登记多个联络人</span></div>
+  <div id="lmBox">
+    {% for lm in linkmen %}
+    <div class="lm-row">
+      <input type="hidden" name="lm_idx" value="{{ loop.index0 }}">
+      <div class="crm-grid">
+        <div class="crm-fld">
+          <label>联络人姓名</label>
+          <input type="text" name="lm_name_{{ loop.index0 }}" value="{{ lm.name or '' }}">
+        </div>
+        <div class="crm-fld">
+          <label>联络人身份与职务</label>
+          <input type="text" name="lm_title_{{ loop.index0 }}" value="{{ lm.title or '' }}" placeholder="如 中介渠道部 渠道经理">
+        </div>
+        <div class="crm-fld">
+          <label>联络人联系电话</label>
+          <input type="text" name="lm_phone_{{ loop.index0 }}" value="{{ lm.phone or '' }}">
+        </div>
+        <div class="crm-fld">
+          <label>联络人邮箱</label>
+          <input type="text" name="lm_email_{{ loop.index0 }}" value="{{ lm.email or '' }}" placeholder="如 name@example.com">
+        </div>
+        <div class="crm-fld full">
+          <label>备注</label>
+          <input type="text" name="lm_note_{{ loop.index0 }}" value="{{ lm.note or '' }}">
+        </div>
+        <div class="crm-fld full" style="text-align:right">
+          <button class="crm-del" type="button" onclick="delLm(this)">删除该联络人</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <button class="crm-btn sm" type="button" onclick="addLm()">＋ 添加联络人</button>
+
+  <div class="crm-sec">四、备注</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <textarea name="note">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.branch_list') if back_flag == 'list' else url_for('crm.insurer_detail', iid=(row.insurer_id if row else insurer.id)) }}">取消</a>
+  </div>
+</form>
+
+<template id="lmTpl">
+  <div class="lm-row">
+    <input type="hidden" name="lm_idx" value="__IX__">
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>联络人姓名</label>
+        <input type="text" name="lm_name___IX__">
+      </div>
+      <div class="crm-fld">
+        <label>联络人身份与职务</label>
+        <input type="text" name="lm_title___IX__" placeholder="如 中介渠道部 渠道经理">
+      </div>
+      <div class="crm-fld">
+        <label>联络人联系电话</label>
+        <input type="text" name="lm_phone___IX__">
+      </div>
+      <div class="crm-fld">
+        <label>联络人邮箱</label>
+        <input type="text" name="lm_email___IX__" placeholder="如 name@example.com">
+      </div>
+      <div class="crm-fld full">
+        <label>备注</label>
+        <input type="text" name="lm_note___IX__">
+      </div>
+      <div class="crm-fld full" style="text-align:right">
+        <button class="crm-del" type="button" onclick="delLm(this)">删除该联络人</button>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+  var LM_TPL = document.getElementById('lmTpl').innerHTML;
+  var LMSEQ = 0;
+  function addLm() {
+    var ix = 'n' + (LMSEQ++);
+    var box = document.createElement('div');
+    box.innerHTML = LM_TPL.replace(/__IX__/g, ix);
+    document.getElementById('lmBox').appendChild(box.firstElementChild);
+  }
+  function delLm(btn) {
+    var r = btn.closest('.lm-row');
+    if (r) { r.parentNode.removeChild(r); }
+  }
+  if (!document.querySelectorAll('#lmBox .lm-row').length) { addLm(); }
+
+  /* ---------- 七改：分公司全称 = 保险公司全称 + 保司省级分公司分支机构 ---------- */
+  var INS_FULL = '{{ (insurer.name if insurer else ((row.insurer_name or "") if row else ""))|e }}';
+  var provEl = document.getElementById('provInput');
+  var nameEl = document.getElementById('nameInput');
+  var autoVal = nameEl ? nameEl.value : '';   // 记住上一次「自动写入」的值
+  function autoFullName() {
+    if (!provEl || !nameEl || !INS_FULL) { return; }
+    // 当前值已被人工改过（≠ 上次自动值）→ 不再覆盖，尊重人工输入
+    if (nameEl.value && nameEl.value !== autoVal) { return; }
+    var nv = INS_FULL + (provEl.value || '').trim();
+    nameEl.value = nv;
+    autoVal = nv;
+  }
+  if (provEl) {
+    provEl.addEventListener('input', autoFullName);
+    provEl.addEventListener('change', autoFullName);
+  }
+</script>
+{% endblock %}

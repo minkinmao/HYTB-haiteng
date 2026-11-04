@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 办公用品出入库{% endblock %}
+{% block pagename %}行政事务 · 办公用品出入库{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">出入库登记
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（{{ r.name }} · {{ r.code }}）</small>
+</h2>
+<div style="font-size:13px;color:#6B5D4F;margin-bottom:16px">
+  当前库存 <b style="color:#C86432;font-size:15px">{{ '%g'|format(r.stock or 0) }}</b> {{ r.unit or '' }}
+  {% if r.min_stock %} · 安全库存 {{ '%g'|format(r.min_stock or 0) }} {{ r.unit or '' }}{% endif %}
+  {% if r.place %} · 存放 {{ r.place }}{% endif %}
+</div>
+
+{% if can_edit %}
+<form class="adm-form" method="post" style="max-width:100%;margin-bottom:16px">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>类型 <b>*</b></label>
+      <select name="direction">
+        <option value="out">领用（出库）</option>
+        <option value="in">入库（采购 / 补货）</option>
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>数量 <b>*</b></label>
+      <input type="number" step="0.01" min="0.01" name="qty" required
+             placeholder="如：2">
+    </div>
+    <div class="adm-fld">
+      <label>日期</label>
+      <input type="date" name="flow_date" value="{{ today }}">
+    </div>
+    <div class="adm-fld">
+      <label>领用人</label>
+      <input type="text" name="who" placeholder="领用时填写">
+    </div>
+    <div class="adm-fld">
+      <label>领用部门</label>
+      <input type="text" name="dept" placeholder="如：营销部">
+    </div>
+    <div class="adm-fld">
+      <label>登记人</label>
+      <input type="text" name="operator" placeholder="如：行政专员">
+    </div>
+    <div class="adm-fld full">
+      <label>用途 / 事由</label>
+      <input type="text" name="purpose" placeholder="如：新员工入职配置 / 月度补货">
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note"></textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">提交登记</button>
+    <a class="adm-btn" href="{{ url_for('adm.supplies') }}">返回用品台账</a>
+  </div>
+</form>
+{% endif %}
+
+<div class="adm-card">
+  <h3 style="font-size:14px;margin:6px 0 12px;display:flex;align-items:center;gap:8px">
+    <span style="width:4px;height:14px;border-radius:2px;background:#E6823C;display:inline-block"></span>
+    出入库流水
+    <span style="font-size:12px;color:#9C9288;font-weight:400">（共 {{ flows|length }} 条）</span>
+  </h3>
+  {% if flows %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>日期</th><th>类型</th><th>数量</th><th>领用人</th><th>部门</th>
+        <th>用途</th><th>登记人</th><th>备注</th>{% if can_edit %}<th>操作</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for f in flows %}
+      <tr>
+        <td class="mono">{{ f.flow_date or '—' }}</td>
+        <td>
+          {% if f.direction == 'in' %}<span class="adm-tag t-ok">入库</span>
+          {% else %}<span class="adm-tag t-info">领用</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if f.direction == 'in' %}
+            <span style="color:#166534">+{{ '%g'|format(f.qty or 0) }}</span>
+          {% else %}
+            <span style="color:#991b1b">-{{ '%g'|format(f.qty or 0) }}</span>
+          {% endif %}
+        </td>
+        <td>{{ f.who or '—' }}</td>
+        <td>{{ f.dept or '—' }}</td>
+        <td>{{ f.purpose or '—' }}</td>
+        <td>{{ f.operator or '—' }}</td>
+        <td>{{ f.note or '—' }}</td>
+        {% if can_edit %}
+        <td>
+          <form method="post" action="{{ url_for('adm.supply_flow_delete', fid=f.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('撤销这条{{ '入库' if f.direction == 'in' else '领用' }}记录？库存会相应回滚。')">
+            <button class="adm-del" type="submit">撤销</button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无出入库记录。</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}银行账户管理 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 银企对账 · 账户管理{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">银行账户管理 <span style="font-size:13px;font-weight:400;color:#9C9288">Bank Accounts</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    一个银行账户 = 一个 1002 银行存款明细科目（在「会计科目」里建好的）。<b style="color:#5C554D">对应科目</b>是对账时抓取凭证分录的桥梁，务必填对。
+  </div>
+
+  {# 新增账户 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:700;color:#2A2A2A;margin-bottom:12px">＋ 新增银行账户</div>
+    <form method="post" action="{{ url_for('fin.bank_account_new') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">账户编码*</div>
+        <input type="text" name="code" placeholder="如 B01" style="padding:7px 10px;width:110px"></label>
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">账户名称/户名*</div>
+        <input type="text" name="name" placeholder="如 招商银行广州分行" style="padding:7px 10px;width:200px"></label>
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">开户行</div>
+        <input type="text" name="bank_name" placeholder="如 招商银行广州分行" style="padding:7px 10px;width:180px"></label>
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">银行账号</div>
+        <input type="text" name="account_no" placeholder="账号" style="padding:7px 10px;width:170px"></label>
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">对应科目*</div>
+        <select name="account_code" style="padding:7px 10px;width:160px">
+          <option value="">请选择 1002 科目</option>
+          {% for s in subs %}<option value="{{ s.code }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}
+        </select></label>
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">币种</div>
+        <input type="text" name="currency" value="CNY" style="padding:7px 10px;width:80px"></label>
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">期初余额</div>
+        <input type="text" name="opening_balance" value="0" style="padding:7px 10px;width:120px"></label>
+      <label style="font-size:12.5px;color:#5C554D;display:flex;align-items:center;gap:6px;padding-bottom:9px">
+        <input type="checkbox" name="is_default" value="1"> 默认账户</label>
+      <button type="submit" class="btn" style="padding:8px 18px">添加</button>
+    </form>
+  </div>
+
+  {# 账户列表：每张卡片 = 一个编辑表单（与删除表单各自独立，避免嵌套 form） #}
+  {% if accounts %}
+  <div style="display:flex;flex-direction:column;gap:12px">
+    {% for ba in accounts %}
+    <div class="card" style="padding:14px 16px">
+      <form method="post" action="{{ url_for('fin.bank_account_edit', baid=ba.id) }}"
+            style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+        <div style="font-family:monospace;font-size:12px;color:#9C9288;align-self:center;padding:0 6px">{{ ba.code }}</div>
+        <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">账户名称*</div>
+          <input type="text" name="name" value="{{ ba.name }}" style="padding:7px 10px;width:190px"></label>
+        <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">开户行</div>
+          <input type="text" name="bank_name" value="{{ ba.bank_name or '' }}" style="padding:7px 10px;width:170px"></label>
+        <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">账号</div>
+          <input type="text" name="account_no" value="{{ ba.account_no or '' }}" style="padding:7px 10px;width:160px"></label>
+        <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">对应科目*</div>
+          <select name="account_code" style="padding:7px 10px;width:160px">
+            {% for s in subs %}<option value="{{ s.code }}" {{ 'selected' if s.code == ba.account_code else '' }}>{{ s.code }} · {{ s.name }}</option>{% endfor %}
+          </select></label>
+        <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">币种</div>
+          <input type="text" name="currency" value="{{ ba.currency or 'CNY' }}" style="padding:7px 10px;width:80px"></label>
+        <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">期初余额</div>
+          <input type="text" name="opening_balance" value="{{ '%.2f' % (ba.opening_balance or 0) }}" style="padding:7px 10px;width:120px"></label>
+        <label style="font-size:12.5px;color:#5C554D;display:flex;align-items:center;gap:6px;padding-bottom:9px">
+          <input type="checkbox" name="is_default" value="1" {{ 'checked' if ba.is_default else '' }}> 默认</label>
+        <button type="submit" class="btn" style="padding:8px 18px">保存</button>
+      </form>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:#9C9288">流水 {{ ba.stmt_count if ba.stmt_count is defined else 0 }} 笔</span>
+        <form method="post" action="{{ url_for('fin.bank_account_delete', baid=ba.id) }}" style="display:inline" onsubmit="return confirm('删除该账户会同时删除其下所有流水，确认？')">
+          <button type="submit" style="padding:6px 14px;font-size:12.5px;border:1px solid #F3C9C9;background:#FDECEC;color:#991b1b;border-radius:9px;cursor:pointer">删除账户</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card" style="padding:40px;text-align:center;color:#9C9288">还没有银行账户，先在上方新增一个。</div>
+  {% endif %}
+{% endblock %}

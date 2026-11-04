@@ -1,0 +1,449 @@
+{% extends 'base.html' %}
+{% block title %}薪酬发放申请单 · 海盈通保{% endblock %}
+{% block content %}
+<style>
+  .sa-wrap{max-width:1680px}
+  .sa-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:0 0 4px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:18px;overflow:hidden}
+  .sa-hd{display:flex;justify-content:space-between;align-items:center;
+         padding:15px 22px;border-bottom:1px solid #F3EDE3;background:#FDFBF8}
+  .sa-hd .ttl{font-size:15px;font-weight:600}
+  .sa-hd .who{font-size:12.5px;color:#9C9288}
+  /* 两列式表单：标签 | 控件 | 标签 | 控件（对齐公司现行《薪酬发放申请单》样式） */
+  .sa-grid{display:grid;grid-template-columns:118px minmax(0,1fr) 118px minmax(0,1fr);
+           gap:14px 18px;padding:18px 22px;align-items:center}
+  .sa-grid .lb{font-size:13px;color:#6B5D4F;text-align:right}
+  .sa-grid .req{color:#C86432;margin-right:3px}
+  .sa-grid .full{grid-column:2 / -1}
+  .sa-grid .full-lb{grid-column:1 / 2}
+  .sa-in{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E2D8CA;border-radius:8px;
+         font-size:13.5px;background:#fff;color:#2A2A2A;font-family:inherit}
+  .sa-in[readonly]{background:#F7F3EE;color:#6B5D4F}
+  .sa-in:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .sa-ta{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #E2D8CA;border-radius:8px;
+         font-size:13.5px;min-height:70px;resize:vertical;font-family:inherit;line-height:1.7}
+  .sa-hint{grid-column:2 / -1;font-size:11.5px;color:#9C9288;margin-top:-6px}
+  .sa-sum{display:flex;gap:22px;flex-wrap:wrap;padding:12px 22px;border-top:1px dashed #F0E9DE;
+          background:#FDFBF8;font-size:12.5px;color:#6B5D4F}
+  .sa-sum b{color:#C86432}
+  .sa-btn{padding:10px 30px;border-radius:9px;font-size:14px;font-weight:600;border:none;cursor:pointer;
+          background:#E6823C;color:#fff}
+  .sa-btn:hover{background:#C86432}
+  .sa-btn.ghost{background:#fff;color:#6B5D4F;border:1px solid #EAE2D6;font-weight:400;
+                text-decoration:none;display:inline-block}
+  .sa-tip{background:#FDF7F0;border:1px solid #F3E2D2;border-radius:10px;padding:12px 15px;
+          font-size:12.5px;color:#8A5A18;line-height:1.75;margin-bottom:16px}
+
+  /* ===== 关联申请：已选 chip 区 ===== */
+  .rc-picked{display:flex;flex-wrap:wrap;gap:8px;min-height:38px;padding:8px 10px;
+             border:1px dashed #E2D8CA;border-radius:8px;background:#FDFBF8}
+  .rc-none{font-size:12px;color:#B6ACA1}
+  .rc-chip{display:inline-flex;align-items:center;gap:6px;background:#FDF1E7;border:1px solid #F3DCC8;
+           border-radius:14px;padding:3px 6px 3px 10px;font-size:12px;color:#8A5A18;max-width:100%}
+  .rc-chip b{font-weight:600}
+  .rc-chip em{font-style:normal;color:#A8784A;overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap;max-width:240px}
+  .rc-chip i{cursor:pointer;font-style:normal;font-size:14px;line-height:1;color:#C08A5A;padding:0 3px}
+  .rc-chip i:hover{color:#C86432}
+  .rc-pick-btn{padding:7px 18px;border-radius:8px;border:1px solid #E6823C;background:#fff;color:#C86432;
+               font-size:13px;font-weight:600;cursor:pointer}
+  .rc-pick-btn:hover{background:#FDF1E7}
+
+  /* ===== 关联申请：弹窗（仿公司《薪酬发放申请单》图例） ===== */
+  .rc-mask{display:none;position:fixed;inset:0;background:rgba(42,42,42,.42);z-index:1200;
+           align-items:center;justify-content:center;padding:24px}
+  .rc-mask.on{display:flex}
+  .rc-dlg{background:#fff;border-radius:12px;width:100%;max-width:980px;max-height:88vh;
+          display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.22)}
+  .rc-dlg-hd{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;
+             border-bottom:1px solid #F0E9DE;font-size:15px;font-weight:600}
+  .rc-x{cursor:pointer;font-size:22px;line-height:1;color:#B6ACA1}
+  .rc-x:hover{color:#C86432}
+  .rc-dlg-bd{padding:16px 20px;overflow:auto}
+  .rc-filter{display:grid;grid-template-columns:1fr 1fr;gap:12px 26px;align-items:center}
+  .rc-f{display:flex;align-items:center;gap:8px}
+  .rc-f-wide{grid-column:1 / -1}
+  .rc-fl{font-size:12.5px;color:#6B5D4F;white-space:nowrap;min-width:64px;text-align:right}
+  .rc-fi{flex:1;min-width:0;padding:7px 10px;border:1px solid #E2D8CA;border-radius:7px;
+         font-size:13px;background:#fff;color:#2A2A2A;font-family:inherit}
+  .rc-fi:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .rc-fi-sm{flex:0 0 96px}
+  .rc-dash{color:#B6ACA1}
+  .rc-f-btns{justify-content:flex-end}
+  .rc-go{padding:7px 22px;border-radius:7px;border:none;background:#E6823C;color:#fff;
+         font-size:13px;font-weight:600;cursor:pointer}
+  .rc-go:hover{background:#C86432}
+  .rc-reset{padding:7px 18px;border-radius:7px;border:1px solid #E2D8CA;background:#fff;color:#6B5D4F;
+            font-size:13px;cursor:pointer}
+  .rc-count{margin:16px 0 8px;font-size:12.5px;color:#9C9288}
+  .rc-count b{color:#C86432}
+  .rc-tabs{display:flex;gap:22px;border-bottom:1px solid #F0E9DE}
+  .rc-tab{padding:9px 2px;font-size:13.5px;color:#6B5D4F;cursor:pointer;
+          border-bottom:2px solid transparent}
+  .rc-tab.on{color:#C86432;font-weight:600;border-bottom-color:#E6823C}
+  .rc-tbl{max-height:330px;overflow:auto;border:1px solid #F3EDE3;border-radius:8px;margin-top:10px}
+  .rc-tbl table{width:100%;border-collapse:collapse;font-size:13px}
+  .rc-tbl th{position:sticky;top:0;background:#FDFBF8;font-weight:600;color:#6B5D4F;text-align:left;
+             padding:9px 10px;border-bottom:1px solid #F0E9DE;font-size:12.5px;z-index:1}
+  .rc-tbl td{padding:9px 10px;border-bottom:1px solid #F7F3EE;color:#2A2A2A;vertical-align:middle}
+  .rc-tbl tr:hover td{background:#FDFBF8}
+  .rc-c1{width:38px}
+  .rc-c2{width:112px}
+  .rc-c3{width:88px}
+  .rc-c4{width:104px}
+  .rc-sum{display:flex;align-items:center;gap:8px;min-width:0}
+  .rc-sum .rc-code{flex:0 0 auto;color:#9C9288;font-size:12px}
+  .rc-sum .rc-txt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+                  white-space:nowrap}
+  .rc-sum .rc-amt{flex:0 0 auto;color:#C86432;font-weight:600}
+  .rc-sum .rc-st{flex:0 0 auto;font-size:11.5px;color:#9C9288;background:#F5F1EB;
+                 border-radius:9px;padding:1px 7px}
+  .rc-empty{text-align:center;color:#B6ACA1;padding:26px 0 !important}
+  .rc-dlg-ft{display:flex;align-items:center;gap:12px;padding:13px 20px;border-top:1px solid #F0E9DE;
+             background:#FDFBF8;border-radius:0 0 12px 12px}
+  .rc-ft-tip{flex:1;font-size:12px;color:#9C9288}
+  .rc-dlg-ft .sa-btn{padding:8px 26px;font-size:13px}
+  .rc-cancel{padding:8px 20px;border-radius:8px;border:1px solid #E2D8CA;background:#fff;color:#6B5D4F;
+             font-size:13px;cursor:pointer;cursor:pointer}
+</style>
+
+<div class="sa-wrap">
+  <h2 style="font-size:18px;margin:0 0 6px">薪酬发放申请单
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（人事类 · 专属表单）</small>
+  </h2>
+  <div style="font-size:12px;color:#9C9288;margin-bottom:16px">
+    用于申请发放当月薪酬；填报后进入统一审批流程，可在「我的申请」中跟踪进度。
+  </div>
+
+  <div class="sa-tip">
+    成本口径：<b>薪酬成本 = 应发薪酬 + 单位社保 + 单位公积金</b>，<b>人工成本 = 薪酬成本</b>（如另有其他人工类费用可手工调增）。
+    这两项由系统自动算好，如与你的口径不同，直接改数即可（改了就以你填的为准）。
+  </div>
+
+  <form method="post" action="{{ url_for('oa.salary_apply') }}" enctype="multipart/form-data" id="saForm">
+    <div class="sa-card">
+      <div class="sa-hd">
+        <span class="ttl">薪酬发放申请单</span>
+        <span class="who">{{ me.org_name or '未设置部门' }} / {{ me.name }}</span>
+      </div>
+
+      <div class="sa-grid">
+        {# —— 第 1 行：申请人 / 申请人部门（自动） —— #}
+        <div class="lb"><span class="req">*</span>申请人</div>
+        <input class="sa-in" readonly value="{{ me.name }}{% if me.employee_no %}（{{ me.employee_no }}）{% endif %}">
+        <div class="lb"><span class="req">*</span>申请人部门</div>
+        <input class="sa-in" readonly value="{{ me.org_name or '未设置' }}">
+
+        {# —— 第 2 行：薪酬月份 / 发薪单位 —— #}
+        <div class="lb"><span class="req">*</span>薪酬月份</div>
+        <input class="sa-in" type="month" name="sa_month" required>
+        <div class="lb"><span class="req">*</span>发薪单位</div>
+        <input class="sa-in" name="pay_entity" list="peList" required placeholder="请选择或输入"
+               autocomplete="off">
+        <datalist id="peList">
+          {% for p in pay_entities %}<option value="{{ p }}"></option>{% endfor %}
+        </datalist>
+
+        {# —— 第 3 行：发薪人数 / 实发金额 —— #}
+        <div class="lb"><span class="req">*</span>发薪人数(人)</div>
+        <input class="sa-in" name="headcount" inputmode="numeric" placeholder="如 12" required>
+        <div class="lb"><span class="req">*</span>实发金额(元)</div>
+        <input class="sa-in" name="actual_amount" inputmode="decimal" placeholder="0.00" required oninput="calc()">
+
+        {# —— 第 4 行：应发薪酬 / 绩效合计 —— #}
+        <div class="lb"><span class="req">*</span>应发薪酬</div>
+        <input class="sa-in" name="gross_amount" inputmode="decimal" placeholder="0.00" required oninput="calc()">
+        <div class="lb"><span class="req">*</span>绩效合计</div>
+        <input class="sa-in" name="perf_amount" inputmode="decimal" placeholder="0.00" oninput="calc()">
+
+        {# —— 第 5 行：薪酬成本 / 单位社保 —— #}
+        <div class="lb"><span class="req">*</span>薪酬成本</div>
+        <input class="sa-in" name="salary_cost" inputmode="decimal" placeholder="自动计算" oninput="manual=true">
+        <div class="lb"><span class="req">*</span>单位社保</div>
+        <input class="sa-in" name="corp_social" inputmode="decimal" placeholder="0.00" oninput="calc()">
+
+        {# —— 第 6 行：单位公积金 / 人工成本 —— #}
+        <div class="lb"><span class="req">*</span>单位公积金</div>
+        <input class="sa-in" name="corp_fund" inputmode="decimal" placeholder="0.00" oninput="calc()">
+        <div class="lb"><span class="req">*</span>人工成本</div>
+        <input class="sa-in" name="labor_cost" inputmode="decimal" placeholder="自动计算" oninput="manual2=true">
+
+        {# —— 备注说明 —— #}
+        <div class="lb full-lb" style="align-self:start;padding-top:9px">备注说明</div>
+        <div class="full">
+          <textarea class="sa-ta" name="remark" maxlength="200"
+                    placeholder="如：2026年9月内勤工资，含 2 名新入职员工首月折算；外勤佣金由海腾代发另行结算。"></textarea>
+        </div>
+
+        {# —— 附件 —— #}
+        <div class="lb"><span class="req">*</span>附件</div>
+        <div class="full">
+          <input type="file" name="attach" required
+                 accept=".pdf,.xls,.xlsx,.doc,.docx,.jpg,.jpeg,.png,.zip">
+          <div style="font-size:11.5px;color:#9C9288;margin-top:6px">
+            请上传<b>工资表</b>（Excel / PDF / 扫描件均可，单个文件 ≤ 10MB）。附件走鉴权下载，不会公开在静态目录。
+          </div>
+        </div>
+
+        {# —— 关联申请：不在页面直接摊开清单，点「请选择」弹窗挑（对齐公司表单图例） —— #}
+        <div class="lb" style="align-self:start;padding-top:9px">关联申请（<span id="rcCnt">0</span>）</div>
+        <div class="full">
+          <div class="rc-picked" id="rcPicked"><span class="rc-none">暂无关联申请</span></div>
+          <div style="margin-top:9px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button type="button" class="rc-pick-btn" onclick="rcOpen()">请选择</button>
+            <span style="font-size:11.5px;color:#9C9288">
+              点击「请选择」打开你的过往申请清单（支持按业务类型 / 审批流程 / 事由 / 金额筛选），
+              勾选后点「确定」即关联到本单；没有需要关联的就留空。
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sa-sum">
+        <span>自动测算：薪酬成本 <b id="costBox">￥0.00</b></span>
+        <span>人工成本 <b id="laborBox">￥0.00</b></span>
+        <span>单人平均应发 <b id="avgBox">￥0.00</b></span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center">
+      <button class="sa-btn" type="submit"
+              onclick="return confirm('确认提交《薪酬发放申请单》？提交后进入审批流程。');">提交申请</button>
+      <a class="sa-btn ghost" href="{{ url_for('oa.apply_hub') }}">放弃并返回</a>
+      <span style="font-size:12px;color:#9C9288">预计单号：{{ next_code }}</span>
+    </div>
+
+    {# ================= 关联申请 弹窗 =================
+       放在 <form> 内：勾选框本身就叫 related_code，提交时天然带上，后端零改动。
+       JS 只负责「按条件显隐行 / 切换页签 / 统计已选 / 画 chip」，不再请求后端。 #}
+    <div class="rc-mask" id="rcMask" onclick="if(event.target===this)rcClose()">
+      <div class="rc-dlg" role="dialog" aria-label="关联申请">
+        <div class="rc-dlg-hd">
+          <span>关联申请</span>
+          <span class="rc-x" onclick="rcClose()" title="关闭">×</span>
+        </div>
+
+        <div class="rc-dlg-bd">
+          <div class="rc-filter">
+            <div class="rc-f">
+              <span class="rc-fl">业务类型：</span>
+              <select class="rc-fi" id="rcKind" onchange="rcApply()">
+                <option value="">全部</option>
+                {% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="rc-f">
+              <span class="rc-fl">审批流程：</span>
+              <select class="rc-fi" id="rcStatus" onchange="rcApply()">
+                <option value="">全部</option>
+                {% for s, cn in statuses %}<option value="{{ s }}">{{ cn }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="rc-f rc-f-wide">
+              <span class="rc-fl">事由/摘要：</span>
+              <input class="rc-fi" id="rcKw" placeholder="请输入事由/摘要" oninput="rcApply()">
+            </div>
+            <div class="rc-f">
+              <span class="rc-fl">数值范围：</span>
+              <select class="rc-fi rc-fi-sm" id="rcMin" onchange="rcApply()">
+                <option value="">最小值</option>
+                {% for v in [100, 500, 1000, 5000, 10000, 50000] %}
+                <option value="{{ v }}">{{ v }}</option>{% endfor %}
+              </select>
+              <span class="rc-dash">—</span>
+              <select class="rc-fi rc-fi-sm" id="rcMax" onchange="rcApply()">
+                <option value="">最大值</option>
+                {% for v in [100, 500, 1000, 5000, 10000, 50000] %}
+                <option value="{{ v }}">{{ v }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="rc-f rc-f-btns">
+              <button type="button" class="rc-go" onclick="rcQuery()">查 询</button>
+              <button type="button" class="rc-reset" onclick="rcReset()">重 置</button>
+            </div>
+          </div>
+
+          <div class="rc-count">已选中 <b id="rcMeCnt">0</b> 条我的申请，<b id="rcApCnt">0</b> 条我已审批</div>
+
+          <div class="rc-tabs">
+            <span class="rc-tab on" data-tab="me" onclick="rcTab('me')">我的申请</span>
+            <span class="rc-tab" data-tab="approved" onclick="rcTab('approved')">我已审批</span>
+          </div>
+
+          <div class="rc-tbl">
+            <table>
+              <thead>
+                <tr>
+                  <th class="rc-c1"></th>
+                  <th class="rc-c2">申请类型</th>
+                  <th class="rc-c3">姓名</th>
+                  <th class="rc-c4">时间</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody id="rcBody">
+                {% for p in related_pool %}
+                <tr data-tab="{{ p.tab }}" data-kind="{{ p.kind }}" data-status="{{ p.status }}"
+                    data-amt="{{ '%.2f'|format(p.amount) }}"
+                    data-kw="{{ p.code }} {{ p.summary }}">
+                  <td><input type="checkbox" class="rc-ck" name="related_code" value="{{ p.code }}"
+                             onclick="rcCheck(this)"></td>
+                  <td>{{ p.kind }}</td>
+                  <td>{{ p.who }}</td>
+                  <td>{{ p.date }}</td>
+                  <td class="rc-sum">
+                    <span class="rc-code">{{ p.code }}</span><span class="rc-txt">{{ p.summary }}</span>
+                    {% if p.amount %}<span class="rc-amt">￥{{ '%.2f'|format(p.amount) }}</span>{% endif %}
+                    <span class="rc-st">{{ p.status_cn }}</span>
+                  </td>
+                </tr>
+                {% endfor %}
+                <tr id="rcEmpty" style="display:none">
+                  <td colspan="5" class="rc-empty">没有符合条件的申请</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="rc-dlg-ft">
+          <span class="rc-ft-tip">勾选后点「确定」即关联到本张薪酬发放申请单；已勾选的卡片可在表单上单独移除。</span>
+          <button type="button" class="sa-btn" onclick="rcConfirm()">确定</button>
+          <button type="button" class="rc-cancel" onclick="rcClose()">取消</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  var manual = false, manual2 = false;   // 用户手改过成本项后，不再自动覆盖
+  function num(n){ var v = parseFloat((document.querySelector('[name=' + n + ']').value || '').replace(/,/g, '')); return isNaN(v) ? 0 : v; }
+  function fmt(v){ return '￥' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function calc(){
+    var gross = num('gross_amount'), soc = num('corp_social'), fund = num('corp_fund');
+    var cost = gross + soc + fund;
+    if (!manual) { document.querySelector('[name=salary_cost]').value = cost ? cost.toFixed(2) : ''; }
+    else { cost = num('salary_cost'); }
+    if (!manual2) { document.querySelector('[name=labor_cost]').value = cost ? cost.toFixed(2) : ''; }
+    else { cost = num('labor_cost'); }
+    document.getElementById('costBox').textContent = fmt(cost);
+    document.getElementById('laborBox').textContent = fmt(num('labor_cost') || cost);
+    var hc = num('headcount');
+    document.getElementById('avgBox').textContent = fmt(hc ? gross / hc : 0);
+  }
+  ['gross_amount','corp_social','corp_fund','headcount','salary_cost','labor_cost'].forEach(function(n){
+    var el = document.querySelector('[name=' + n + ']');
+    if (el) el.addEventListener('input', calc);
+  });
+  /* ============ 关联申请 弹窗（纯前端：筛选显隐 + 页签 + 勾选统计 + 已选 chip） ============ */
+  var rcCurTab = 'me';
+  function rcVal(id){ var el = document.getElementById(id); return el ? (el.value || '') : ''; }
+  function rcRowEls(){ return document.querySelectorAll('#rcBody tr[data-tab]'); }
+
+  // 按筛选条件计算每一行是否显示；返回可见行数
+  function rcApply(){
+    var k = rcVal('rcKind'), st = rcVal('rcStatus');
+    var kw = rcVal('rcKw').toLowerCase();
+    var mn = parseFloat(rcVal('rcMin')), mx = parseFloat(rcVal('rcMax'));
+    var shown = 0;
+    rcRowEls().forEach(function(tr){
+      var ok = (tr.getAttribute('data-tab') === rcCurTab);
+      if (ok && k && tr.getAttribute('data-kind') !== k) ok = false;
+      if (ok && st && tr.getAttribute('data-status') !== st) ok = false;
+      if (ok && kw && (tr.getAttribute('data-kw') || '').toLowerCase().indexOf(kw) < 0) ok = false;
+      var amt = parseFloat(tr.getAttribute('data-amt')) || 0;
+      if (ok && !isNaN(mn) && amt < mn) ok = false;
+      if (ok && !isNaN(mx) && amt > mx) ok = false;
+      tr.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    document.getElementById('rcEmpty').style.display = shown ? 'none' : '';
+    return shown;
+  }
+
+  function ckRowsOf(code){
+    return document.querySelectorAll('#rcBody .rc-ck[value="' + code + '"]');
+  }
+
+  // 勾选联动：同一张单可能同时出现在「我的申请」和「我已审批」两个页签里，
+  // 勾一处就把另一个页签上的同一张单一起勾上 / 取消，避免重复关联同一个单号。
+  function rcCheck(ck){
+    ckRowsOf(ck.value).forEach(function(o){ if (o !== ck) o.checked = ck.checked; });
+    rcSync();
+  }
+
+  // 勾选变化 → 统计（按单号去重）+ 重画表单上的 chip
+  function rcSync(){
+    var me = 0, ap = 0, codes = [];
+    rcRowEls().forEach(function(tr){
+      var ck = tr.querySelector('.rc-ck');
+      if (!ck || !ck.checked) return;
+      if (codes.indexOf(ck.value) < 0) codes.push(ck.value);
+      if (tr.getAttribute('data-tab') === 'me') me++; else ap++;
+    });
+    document.getElementById('rcMeCnt').textContent = me;
+    document.getElementById('rcApCnt').textContent = ap;
+    rcPaint(codes);
+    return codes;
+  }
+
+  // 用 createElement / textContent 构建 chip，避免把用户输入当 HTML 解析（防注入）
+  function rcPaint(codes){
+    var box = document.getElementById('rcPicked');
+    document.getElementById('rcCnt').textContent = codes.length;
+    box.innerHTML = '';
+    if (!codes.length){
+      var sp = document.createElement('span');
+      sp.className = 'rc-none'; sp.textContent = '暂无关联申请';
+      box.appendChild(sp); return;
+    }
+    codes.forEach(function(c){
+      var list = ckRowsOf(c);
+      var ck = list.length ? list[0] : null;
+      var tr = ck ? ck.closest('tr') : null;
+      var kind = tr ? tr.getAttribute('data-kind') : '';
+      var kwEl = tr ? tr.querySelector('.rc-txt') : null;
+      var txt = kwEl ? kwEl.textContent : '';
+
+      var chip = document.createElement('span'); chip.className = 'rc-chip';
+      var b = document.createElement('b'); b.textContent = c;
+      var em = document.createElement('em');
+      em.textContent = kind + (txt ? ' ｜ ' + txt.slice(0, 18) : '');
+      var x = document.createElement('i'); x.textContent = '×'; x.title = '移除该关联';
+      x.onclick = function(){
+        ckRowsOf(c).forEach(function(o){ o.checked = false; });
+        rcSync();
+      };
+      chip.appendChild(b); chip.appendChild(em); chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+
+  function rcOpen(){ document.getElementById('rcMask').classList.add('on'); rcApply(); }
+  function rcClose(){ document.getElementById('rcMask').classList.remove('on'); }
+  function rcTab(t){
+    rcCurTab = t;
+    document.querySelectorAll('.rc-tab').forEach(function(el){
+      el.classList.toggle('on', el.getAttribute('data-tab') === t);
+    });
+    rcApply();
+  }
+  function rcQuery(){ rcApply(); }
+  function rcReset(){
+    ['rcKind','rcStatus','rcKw','rcMin','rcMax'].forEach(function(id){
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    rcApply();
+  }
+  function rcConfirm(){ rcSync(); rcClose(); }
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') rcClose();
+  });
+
+  rcApply();   // 初始化：默认「我的申请」页签，另一页签隐藏
+  rcSync();
+  calc();
+</script>
+{% endblock %}

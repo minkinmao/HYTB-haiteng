@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}OA · 费用申请单{% endblock %}
+{% block content %}
+<style>
+  .ex-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px 20px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:18px}
+  .ex-card h3{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .ex-card h3::before{content:"";width:4px;height:14px;border-radius:2px;background:#E6823C;flex:none}
+  .f-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .f-lab{display:block;font-size:12.5px;color:#9C9288;margin-bottom:5px}
+  .f-grid input,.f-grid select,textarea{width:100%;padding:9px 11px;font-family:inherit;font-size:13.5px;
+      background:#FCFAF7;border:1px solid #E2D8CA;border-radius:9px;color:#2A2A2A;outline:none}
+  .f-grid input:focus,.f-grid select:focus,textarea:focus{background:#fff;border-color:#E6823C}
+  .ro{background:#FAF7F2 !important;color:#6B5D4F}
+  .btn-main{padding:10px 22px;border-radius:9px;border:none;cursor:pointer;font:inherit;font-size:13.5px;
+            font-weight:600;background:#E6823C;color:#fff}
+  .btn-main:hover{background:#C86432}
+  .btn-ghost{padding:10px 22px;border-radius:9px;border:1px solid #EAE2D6;background:#fff;
+             color:#6B5D4F;font:inherit;font-size:13.5px;cursor:pointer;text-decoration:none;display:inline-block}
+  .warn{background:#FFF9EE;border:1px solid #F1D3A8;border-radius:10px;padding:10px 13px;
+        font-size:12.5px;color:#8A5A18;margin-top:12px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">费用申请单
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（事前申请费用额度，批准后可在报销时关联）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+  本单只是「额度批准」，不是报销凭证；实际发生的费用走报销单并关联本单编号。
+</div>
+
+<form method="post">
+  <div class="ex-card">
+    <h3>基本信息</h3>
+    <div class="f-grid">
+      <div>
+        <label class="f-lab">申请单号（自动）</label>
+        <input class="ro" value="{{ code_preview }}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">申请人（自动）</label>
+        <input class="ro" value="{{ me.name }}{% if me.employee_no %}（工号 {{ me.employee_no }}）{% endif %}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">所属部门（自动）</label>
+        <input class="ro" value="{{ me.org_name or '—' }}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">申请日期（自动）</label>
+        <input class="ro" value="{{ today }}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">费用大类 <span style="color:#C86432">*</span></label>
+        <select name="category">
+          {% for gname, gitems in category_groups %}
+          <optgroup label="{{ gname }}">
+            {% for cname, cacc in gitems %}<option value="{{ cname }}">{{ cname }}</option>{% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="f-lab">申请金额（元） <span style="color:#C86432">*</span></label>
+        <input name="amount" placeholder="如 3000.00" autocomplete="off">
+      </div>
+      <div>
+        <label class="f-lab">使用期间 · 起</label>
+        <input type="date" name="period_start">
+      </div>
+      <div>
+        <label class="f-lab">使用期间 · 止</label>
+        <input type="date" name="period_end">
+      </div>
+      <div>
+        <label class="f-lab">款项方式</label>
+        <select name="pay_mode">
+          <option value="prepay">预支（公司先付给我）</option>
+          <option value="self">不预支（我垫付后报销）</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="f-lab">事由说明 <span style="color:#C86432">*</span></label>
+      <textarea name="purpose" rows="3" placeholder="如：9月12-13日赴清远拜访重点客户，需预支差旅费用，含高铁、住宿、市内交通及工作餐。"></textarea>
+    </div>
+    <div class="warn">
+      提交后进入审批；批准后状态为「已批准」，报销时可在报销单里选择本单编号关联核销。
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px">
+    <button class="btn-main" type="submit">提交审批</button>
+  </div>
+</form>
+
+{% endblock %}

@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+{% block title %}凭证 {{ v.voucher_no }} · 海盈通保{% endblock %}
+{% block pagename %}FMS · 记账凭证{% endblock %}
+{% block content %}
+  {% set st = {'draft': ('#8A5A18', '#FDF3E4'), 'audited': ('#1D4ED8', '#E8EEFB'),
+               'posted': ('#166534', '#E8F5EC'), 'void': ('#991b1b', '#FDECEC')}[v.status] %}
+
+  <h2 style="font-size:18px;margin:0 0 6px">
+    记账凭证 <span style="font-size:13px;font-weight:400;color:#9C9288">Voucher</span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    凭证号的字别取「收 / 付 / 转」，三类各自独立连续编号；借贷相等是本表最硬的约束。
+  </div>
+
+  {# ---------- 期间锁定提示（#36 结账后整期冻结） ---------- #}
+  {% if locked %}
+  <div class="card" style="padding:12px 18px;margin-bottom:16px;border-left:3px solid #991b1b">
+    <div style="font-size:13.5px;color:#991b1b">
+      <b>本期（{{ v.period }}）已结账，整期冻结。</b>
+      该期间凭证不能修改 / 删除 / 审核 / 记账 / 作废 / 红冲。如需调整，请先到
+      <a href="{{ url_for('fin.closing', period=v.period) }}" style="color:#C86432">期末结转与结账</a>
+      反结账。
+    </div>
+  </div>
+  {% endif %}
+
+  {% if v.is_closing %}
+  <div class="card" style="padding:12px 18px;margin-bottom:16px;border-left:3px solid #1D4ED8">
+    <div style="font-size:13.5px;color:#1D4ED8">
+      <b>这是系统生成的「期末结转」凭证</b>（由结账动作自动产生，制单记「系统（期末结转）」）。
+      它不接受手工修改 / 删除 / 作废 / 红冲——要撤销请走反结账。
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---------- 抬头 ---------- #}
+  <div class="card" style="padding:18px 20px;margin-bottom:16px">
+    <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:baseline">
+      <div style="font-family:monospace;font-size:22px;font-weight:700;color:#C86432;letter-spacing:1px">
+        {{ v.voucher_no or '（未取号）' }}
+      </div>
+      <span style="display:inline-block;padding:4px 13px;border-radius:20px;font-size:12.5px;
+                   color:{{ st[0] }};background:{{ st[1] }}">{{ v.status_cn }}</span>
+      {% if v.is_red %}<span style="display:inline-block;padding:4px 13px;border-radius:20px;font-size:12.5px;color:#991b1b;background:#FDECEC">红字冲销</span>{% endif %}
+      {% if v.is_closing %}
+      <span style="font-size:12.5px;color:#1D4ED8">系统凭证：由结账动作产生，要撤销请反结账</span>
+      {% elif not v.is_editable %}
+      <span style="font-size:12.5px;color:#991b1b">已锁定：当前状态下不可修改，只能由主管红字冲销</span>
+      {% endif %}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;font-size:13px;color:#5C554D;margin-top:14px">
+      <div>凭证日期：<b style="color:#2A2A2A">{{ v.voucher_date.strftime('%Y-%m-%d') if v.voucher_date else '—' }}</b></div>
+      <div>会计期间：<b style="color:#2A2A2A">{{ v.period_cn or '—' }}</b></div>
+      <div>字别：<b style="color:#2A2A2A">{{ v.word }}</b></div>
+      <div>附件：<b style="color:#2A2A2A">{{ v.attach_count or 0 }} 张</b></div>
+      <div>来源：<b style="color:#2A2A2A">{{ v.source_cn }}</b></div>
+      <div>制单人：<b style="color:#2A2A2A">{{ v.maker_name or '—' }}</b></div>
+      <div>最后修改：<b style="color:#2A2A2A">{{ v.updated_at.strftime('%Y-%m-%d %H:%M') if v.updated_at else '—' }}</b></div>
+    </div>
+    <div style="margin-top:12px;font-size:13.5px">
+      <span style="color:#9C9288">摘要：</span><b>{{ v.summary or '—' }}</b>
+    </div>
+  </div>
+
+  {# ---------- 分录 ---------- #}
+  <div class="card" style="overflow:hidden;margin-bottom:16px">
+    <div style="padding:14px 18px;font-size:14px;font-weight:600;border-bottom:1px solid #F2EBE1">会计分录</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+      <colgroup>
+        <col style="width:52px"><col style="width:30%"><col><col style="width:150px"><col style="width:150px">
+      </colgroup>
+      <thead>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th style="padding:10px 8px">行</th>
+          <th style="text-align:left;padding:10px 8px">摘要</th>
+          <th style="text-align:left;padding:10px 8px">会计科目</th>
+          <th style="text-align:right;padding:10px 8px">借方金额</th>
+          <th style="text-align:right;padding:10px 8px">贷方金额</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in v.entries %}
+        <tr style="border-top:1px solid #F2EBE1">
+          <td style="padding:10px 8px;text-align:center;color:#9C9288">{{ e.seq }}</td>
+          <td style="padding:10px 8px;color:#5C554D">{{ e.summary or v.summary or '' }}</td>
+          <td style="padding:10px 8px">
+            <span style="font-family:monospace;color:#C86432">{{ e.account_code }}</span>
+            {{ e.account_name }}
+          </td>
+          <td style="padding:10px 8px;text-align:right">{{ '{:,.2f}'.format(e.debit or 0) if (e.debit or 0) else '' }}</td>
+          <td style="padding:10px 8px;text-align:right">{{ '{:,.2f}'.format(e.credit or 0) if (e.credit or 0) else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid #EAE2D6;background:#FCFAF7">
+          <td colspan="3" style="padding:12px 10px;text-align:right;font-size:12.5px;color:#5C554D">
+            合计（{{ v.entries|length }} 行分录）
+          </td>
+          <td style="padding:12px 8px;text-align:right;font-weight:700;color:#C86432">￥{{ '{:,.2f}'.format(v.amount_debit or 0) }}</td>
+          <td style="padding:12px 8px;text-align:right;font-weight:700;color:#C86432">￥{{ '{:,.2f}'.format(v.amount_credit or 0) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {# ---------- 平衡状态 + 备注 + 操作 ---------- #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <div style="font-size:13px">
+      {% if (v.amount_debit or 0)|round(2) == (v.amount_credit or 0)|round(2) %}
+      <span style="display:inline-block;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:600;color:#166534;background:#E8F5EC">借贷平衡</span>
+      <span style="color:#9C9288;margin-left:8px">借方合计 = 贷方合计 = ￥{{ '{:,.2f}'.format(v.amount_debit or 0) }}</span>
+      {% else %}
+      <span style="display:inline-block;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:600;color:#991b1b;background:#FDECEC">借贷不平衡</span>
+      <span style="color:#991b1b;margin-left:8px">借方 ￥{{ '{:,.2f}'.format(v.amount_debit or 0) }}、贷方 ￥{{ '{:,.2f}'.format(v.amount_credit or 0) }}</span>
+      {% endif %}
+    </div>
+    {% if v.remark %}
+    <div style="margin-top:12px;font-size:13px;color:#5C554D">
+      <span style="color:#9C9288">备注：</span>{{ v.remark }}
+    </div>
+    {% endif %}
+
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px">
+      {% if can_edit %}
+      <a class="btn" href="{{ url_for('fin.voucher_edit', vid=v.id) }}" style="padding:8px 22px">修改凭证</a>
+      <form method="post" action="{{ url_for('fin.voucher_delete', vid=v.id) }}" style="display:inline"
+            onsubmit="return confirm('确认删除凭证 {{ v.voucher_no }}？删除后不可恢复');">
+        <button type="submit" style="background:none;border:1px solid #E9C9C9;border-radius:9px;padding:8px 18px;
+                font-size:13.5px;color:#991b1b;cursor:pointer">删除凭证</button>
+      </form>
+      {% elif v.is_red and v.status == 'draft' and can_flow %}
+      {# 红字凭证不能手工改，但误点了红冲要能撤销——删掉它即可 #}
+      <form method="post" action="{{ url_for('fin.voucher_delete', vid=v.id) }}" style="display:inline"
+            onsubmit="return confirm('确认删除这张红字凭证 {{ v.voucher_no }}？原凭证不受影响');">
+        <button type="submit" style="background:none;border:1px solid #E9C9C9;border-radius:9px;padding:8px 18px;
+                font-size:13.5px;color:#991b1b;cursor:pointer">删除这张红字凭证</button>
+      </form>
+      {% endif %}
+      <button type="button" onclick="window.print()"
+              style="background:#FCFAF7;border:1px solid #E2D8CA;border-radius:9px;padding:8px 18px;
+                     font-size:13.5px;color:#5C554D;cursor:pointer">打印 / 另存 PDF</button>
+    </div>
+  </div>
+
+  {# ---------- 红字关系（双向可追溯） ---------- #}
+  {% if origin or reds %}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px;border-left:3px solid #D9534F">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">红字冲销关系</div>
+    {% if origin %}
+    <div style="font-size:13px;color:#5C554D;margin-bottom:8px">
+      本张是红字凭证，冲销的是
+      <a href="{{ url_for('fin.voucher_detail', vid=origin.id) }}" style="color:#C86432;font-family:monospace">{{ origin.voucher_no }}</a>
+      <span style="color:#9C9288">（原凭证金额 {{ '{:,.2f}'.format(origin.amount_debit or 0) }}）</span>
+    </div>
+    {% endif %}
+    {% if reds %}
+    <div style="font-size:13px;color:#5C554D">
+      本张已被 {{ reds|length }} 张红字凭证冲销：
+      {% for r in reds %}
+      <a href="{{ url_for('fin.voucher_detail', vid=r.id) }}" style="color:#C86432;font-family:monospace">{{ r.voucher_no }}</a>
+      <span style="display:inline-block;padding:1px 8px;border-radius:20px;font-size:11.5px;color:{{ '#166534' if r.status == 'posted' else '#8A5A18' }};background:{{ '#E8F5EC' if r.status == 'posted' else '#FDF3E4' }}">{{ r.status_cn }}</span>
+      {% if not loop.last %}　{% endif %}
+      {% endfor %}
+      {% if reds|selectattr('status', 'equalto', 'posted')|list|length == reds|length %}
+      <div style="margin-top:6px;color:#166534">原凭证与红字凭证已对冲，账上净额为 0。</div>
+      {% else %}
+      <div style="margin-top:6px;color:#8A5A18">红字凭证尚未记账，账上暂时还挂着原凭证的金额（红字凭证需经审核 → 记账才生效）。</div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ---------- 凭证流转操作 ---------- #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600">凭证流转</div>
+      <div style="font-size:12.5px;color:#9C9288">
+        草稿 → 已审核 → 已记账；未记账可作废，已记账只能红字冲销
+      </div>
+    </div>
+    <div style="font-size:13px;color:#5C554D;margin-bottom:14px">
+      轨迹：<b style="color:#2A2A2A">{{ v.flow_cn }}</b>
+      {% if v.checked_at %}<span style="color:#9C9288">（审核于 {{ v.checked_at.strftime('%Y-%m-%d %H:%M') }}）</span>{% endif %}
+      {% if v.posted_at %}<span style="color:#9C9288">（记账于 {{ v.posted_at.strftime('%Y-%m-%d %H:%M') }}）</span>{% endif %}
+      {% if v.void_at %}<span style="color:#991b1b">（作废于 {{ v.void_at.strftime('%Y-%m-%d %H:%M') }}）</span>{% endif %}
+    </div>
+
+    {% if not can_flow %}
+    <div style="font-size:12.5px;color:#9C9288">
+      你的职级没有「凭证审核记账」权限（该权限归财务主管层）。可以查看，但不能审核 / 记账 / 红冲。
+    </div>
+    {% elif v.status == 'void' %}
+    <div style="font-size:13px;color:#991b1b">
+      该凭证已作废，留痕保留、不参与账簿与报表，无需再做任何操作。
+    </div>
+    {% else %}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      {% if v.can_audit %}
+        {% if self_made %}
+        <span style="font-size:12.5px;color:#8A5A18;background:#FDF3E4;border-radius:8px;padding:9px 14px">
+          <b>制单与审核必须是两个人</b>：这张凭证是你自己录的，请换一位财务主管来审
+        </span>
+        {% else %}
+        <form method="post" action="{{ url_for('fin.voucher_audit', vid=v.id) }}" style="display:inline">
+          <button type="submit" class="btn" style="padding:9px 22px">审核通过</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('fin.voucher_void', vid=v.id) }}" style="display:inline"
+              onsubmit="var r = prompt('作废原因（可留空）：'); if (r === null) return false; this.void_reason.value = r; return true;">
+          <input type="hidden" name="void_reason" value="">
+          <button type="submit" style="background:none;border:1px solid #E9C9C9;border-radius:9px;padding:9px 18px;
+                  font-size:13.5px;color:#991b1b;cursor:pointer">作废</button>
+        </form>
+      {% elif v.status == 'audited' %}
+        <form method="post" action="{{ url_for('fin.voucher_post', vid=v.id) }}" style="display:inline"
+              onsubmit="return confirm('确认记账凭证 {{ v.voucher_no }}？记账后不可修改，只能红字冲销');">
+          <button type="submit" class="btn" style="padding:9px 24px">记账</button>
+        </form>
+        <form method="post" action="{{ url_for('fin.voucher_unaudit', vid=v.id) }}" style="display:inline">
+          <button type="submit" style="background:#FCFAF7;border:1px solid #E2D8CA;border-radius:9px;padding:9px 18px;
+                  font-size:13.5px;color:#5C554D;cursor:pointer">弃审（退回草稿）</button>
+        </form>
+        <form method="post" action="{{ url_for('fin.voucher_void', vid=v.id) }}" style="display:inline"
+              onsubmit="var r = prompt('作废原因（可留空）：'); if (r === null) return false; this.void_reason.value = r; return true;">
+          <input type="hidden" name="void_reason" value="">
+          <button type="submit" style="background:none;border:1px solid #E9C9C9;border-radius:9px;padding:9px 18px;
+                  font-size:13.5px;color:#991b1b;cursor:pointer">作废</button>
+        </form>
+      {% elif v.status == 'posted' %}
+        {% if reds %}
+        <span style="font-size:12.5px;color:#8A5A18">该凭证已生成红字冲销凭证，如需再次冲销请谨慎（会造成过度冲销）</span>
+        {% endif %}
+        <form method="post" action="{{ url_for('fin.voucher_reverse', vid=v.id) }}" style="display:inline"
+              onsubmit="var r = prompt('红冲原因（可留空）：'); if (r === null) return false; this.reverse_reason.value = r; return true;">
+          <input type="hidden" name="reverse_reason" value="">
+          <button type="submit" style="background:none;border:1px solid #E9C9C9;border-radius:9px;padding:9px 18px;
+                  font-size:13.5px;color:#991b1b;cursor:pointer">红字冲销</button>
+        </form>
+      {% endif %}
+    </div>
+    {% if v.status == 'posted' %}
+    <div style="margin-top:12px;font-size:12.5px;color:#9C9288">
+      红字冲销会生成一张<b>同字别、同期间、金额取负</b>的新凭证，原凭证保持原样不动（会计上不涂改历史账）。
+      新凭证仍需经「审核 → 记账」才真正入账。
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  <div style="font-size:12.5px;color:#9C9288;line-height:1.9">
+    只有<b style="color:#6B5D4F">已记账</b>的凭证才进账簿与报表；草稿与已作废的凭证只留档，不参与结账。
+    账簿 / 报表 / 期末结转结账均已开放；若本凭证的期间已结账，全部操作会冻结（需先反结账）。
+  </div>
+{% endblock %}

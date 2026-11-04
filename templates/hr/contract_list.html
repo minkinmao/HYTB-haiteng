@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}员工合同档案 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">员工合同档案
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（内勤=劳动合同，外勤=代理合同）</small>
+  </h2>
+
+  {# 新增合同表单：仅拥有 hr.employee.manage 权限者可见 #}
+  {% if can_manage %}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增合同</div>
+    <form method="post" action="{{ url_for('hr.contract_new') }}" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">员工 *</div>
+        <select name="employee_id" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}（{{ e.employee_no }}）· {{ '内勤' if e.staff_type=='internal' else '外勤' }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">合同编号</div>
+        <input name="contract_no" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">起始日</div>
+        <input type="date" name="start_date" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">到期日</div>
+        <input type="date" name="end_date" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">状态</div>
+        <select name="status" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="active">生效中</option><option value="expired">已到期</option>
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">电子版合同</div>
+        <input type="file" name="contract_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx" style="font-size:13px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">文件/备注</div>
+        <input name="file_path" placeholder="存放路径或备注" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:180px"></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">添加</button>
+    </form>
+    <div style="font-size:11.5px;color:#9C9288;margin-top:8px">电子版合同支持 PDF / Word / 图片 / 表格，上传后可在列表中下载备份。</div>
+  </div>
+  {% endif %}
+
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for it in items %}
+    <div style="padding:12px 0;border-bottom:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:15px;font-weight:600">{{ it.employee.name if it.employee else '—' }}
+          <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#FBEEE2' if it.contract_type=='labor' else '#FDF3E4' }};color:{{ '#C86432' if it.contract_type=='labor' else '#8A5A18' }}">
+            {{ '劳动合同' if it.contract_type=='labor' else '代理合同' }}</span></div>
+        <div style="font-size:12px;color:#9C9288;margin-top:4px">
+          编号：{{ it.contract_no or '—' }} ｜
+          {{ it.start_date or '—' }} ~ {{ it.end_date or '—' }} ｜
+          {{ it.file_path or '' }}
+          {% if it.file_name %}<span style="color:#166534">｜ 电子版已备份</span>{% endif %}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <span style="font-size:12px;padding:2px 8px;border-radius:10px;background:{{ '#dcfce7' if it.status=='active' else '#FBE3DD' }};color:{{ '#166534' if it.status=='active' else '#991b1b' }}">
+          {{ '生效中' if it.status=='active' else '已到期' }}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          {% if it.file_name %}
+          <a href="{{ url_for('hr.contract_download', cid=it.id) }}" style="font-size:12px;color:#166534;text-decoration:none;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px">下载电子版</a>
+          {% endif %}
+          {% if can_manage %}
+          <a href="{{ url_for('hr.contract_edit', cid=it.id) }}" style="font-size:12px;color:#E6823C;text-decoration:none;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px">编辑</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无合同档案</div>
+    {% endfor %}
+  </div>
+{% endblock %}

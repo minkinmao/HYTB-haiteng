@@ -1,0 +1,351 @@
+{% extends 'base.html' %}
+{% block title %}OA · 费用报销单{% endblock %}
+{% block content %}
+<style>
+  .ex-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px 20px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:18px}
+  .ex-card h3{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .ex-card h3::before{content:"";width:4px;height:14px;border-radius:2px;background:#E6823C;flex:none}
+  .f-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .f-lab{display:block;font-size:12.5px;color:#9C9288;margin-bottom:5px}
+  .f-grid input,.f-grid select,textarea{width:100%;padding:9px 11px;font-family:inherit;font-size:13.5px;
+      background:#FCFAF7;border:1px solid #E2D8CA;border-radius:9px;color:#2A2A2A;outline:none}
+  .f-grid input:focus,.f-grid select:focus,textarea:focus{background:#fff;border-color:#E6823C}
+  .ro{background:#FAF7F2 !important;color:#6B5D4F}
+  .radios{display:flex;gap:10px;flex-wrap:wrap}
+  .radios label{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;cursor:pointer;
+                border:1px solid #EAE2D6;border-radius:11px;padding:12px 15px;background:#fff;
+                flex:1 1 250px;min-width:0}
+  .radios label.sel{border-color:#E5B58C;background:#FBEEE2}
+  .radios input{width:auto;flex:none;margin-top:3px}
+  .radios .rd{font-weight:600}
+  .radios .rs{font-size:11.5px;color:#9C9288;display:block;margin-top:2px}
+  .relbox{border:1px solid #BEE3C9;background:#F3FBF5;border-radius:11px;padding:13px 15px;margin-top:14px}
+  .relbox .rt{font-size:12.5px;font-weight:700;color:#166534;margin-bottom:9px}
+  .relgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;
+           font-size:12.5px;color:#3B5C45}
+  .relgrid b{color:#166534;font-variant-numeric:tabular-nums}
+  .ex-table{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;table-layout:auto}
+  .ex-table th{text-align:left;font-weight:600;color:#6B5D4F;background:#FAF7F2;font-size:12.5px;
+               padding:8px 9px;border-bottom:1px solid #EAE2D6;white-space:nowrap}
+  .ex-table td{padding:6px 7px;border-bottom:1px solid #F5F0E8;vertical-align:middle}
+  .ex-table input,.ex-table select{width:100%;padding:6px 8px;font-family:inherit;font-size:12.5px;
+      background:#FCFAF7;border:1px solid #E2D8CA;border-radius:7px;color:#2A2A2A;outline:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .sum{margin-top:12px;text-align:right;font-size:13.5px}
+  .sum b{font-size:20px;color:#C86432;font-variant-numeric:tabular-nums}
+  .btn-main{padding:10px 22px;border-radius:9px;border:none;cursor:pointer;font:inherit;font-size:13.5px;
+            font-weight:600;background:#E6823C;color:#fff}
+  .btn-main:hover{background:#C86432}
+  .btn-mini{padding:6px 13px;border-radius:8px;border:1px solid #EAE2D6;background:#fff;color:#6B5D4F;
+            font:inherit;font-size:12.5px;cursor:pointer}
+  .warn{background:#FFF9EE;border:1px solid #F1D3A8;border-radius:10px;padding:10px 13px;
+        font-size:12.5px;color:#8A5A18;margin-top:12px}
+  .del{color:#C86432;cursor:pointer;font-weight:600}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">费用报销单
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（垫付后凭票报销；可选关联费用申请形成闭环）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+  <b style="color:#C86432">直接报销</b>：无前置申请，凭票直接报；
+  <b style="color:#C86432">关联费用申请</b>：先选一张已批准且有余额的申请单，报销额超出余额时需说明原因。
+</div>
+
+<form method="post" id="reimbForm" enctype="multipart/form-data">
+  <div class="ex-card">
+    <h3>报销方式</h3>
+    <div class="radios">
+      <label id="rd1" onclick="pickMode(1)">
+        <input type="radio" name="mode" value="direct" onclick="pickMode(1)">
+        <span><span class="rd">直接报销</span>
+          <span class="rs">没有事前申请，垫付后凭票直接报（小额、偶发费用）</span></span>
+      </label>
+      <label id="rd2" class="sel" onclick="pickMode(2)">
+        <input type="radio" name="mode" value="apply" checked onclick="pickMode(2)">
+        <span><span class="rd">关联费用申请</span>
+          <span class="rs">先申请后报销，必须选一张已批准的费用申请单，形成闭环</span></span>
+      </label>
+    </div>
+
+    <div class="relbox" id="relbox">
+      <div class="rt">✓ 关联费用申请单（闭环校验）</div>
+      {% if avail %}
+        <div class="f-grid" style="margin-bottom:10px">
+          <div>
+            <label class="f-lab">选择已批准的费用申请</label>
+            <select name="claim_id" id="claimSel" onchange="showClaim()">
+              <option value="">— 请选择 —</option>
+              {% for c in avail %}
+              <option value="{{ c.id }}">{{ c.code }} · {{ c.purpose[:20] }} · {{ c.category }} · 可用 ￥{{ '%.2f'|format(c.remain_amount) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="f-lab">本次可报销余额（自动）</label>
+            <input class="ro" id="remainBox" value="—" readonly>
+          </div>
+        </div>
+        <div class="relgrid" id="claimDetail" style="display:none">
+          <div>申请金额：<b id="csAmount">—</b></div>
+          <div>已报销：<b id="csUsed">—</b></div>
+          <div>可用余额：<b id="csRemain">—</b></div>
+          <div>使用期间：<b id="csPeriod">—</b></div>
+          <div>批准人：<b id="csApprover">—</b></div>
+        </div>
+        <div style="font-size:12px;color:#3B5C45;margin-top:9px">
+          本单合计金额 ≤ 可用余额 → 直接放行；超出时下方会要求填写「超额原因」。
+        </div>
+      {% else %}
+        <div style="font-size:12.5px;color:#8A5A18">
+          当前没有「已批准且仍有余额」的费用申请单，请先发起
+          <a href="{{ url_for('oa.expense_claim_new') }}" style="color:#C86432">费用申请单</a>，
+          或改用「直接报销」。
+        </div>
+      {% endif %}
+      <div id="overbox" style="display:none;margin-top:10px">
+        <label class="f-lab" style="color:#8A5A18">超额原因 <span style="color:#C86432">*</span></label>
+        <input name="over_reason" id="overReason" placeholder="报销金额超出申请余额，请说明原因（如行程变更、临时加人）">
+      </div>
+    </div>
+  </div>
+
+  <div class="ex-card">
+    <h3>基本信息</h3>
+    <div class="f-grid">
+      <div>
+        <label class="f-lab">报销单号（自动）</label>
+        <input class="ro" value="{{ code_preview }}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">报销人（自动）</label>
+        <input class="ro" value="{{ me.name }}{% if me.employee_no %}（工号 {{ me.employee_no }}）{% endif %}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">所属部门（自动）</label>
+        <input class="ro" value="{{ me.org_name or '—' }}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">报销日期（自动）</label>
+        <input class="ro" value="{{ today }}" readonly>
+      </div>
+      <div>
+        <label class="f-lab">费用大类 <span style="color:#C86432">*</span></label>
+        <select name="category">
+          {% for gname, gitems in category_groups %}
+          <optgroup label="{{ gname }}">
+            {% for cname, cacc in gitems %}<option value="{{ cname }}">{{ cname }}</option>{% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="f-lab">事由说明 <span style="color:#C86432">*</span></label>
+      <textarea name="purpose" rows="2" placeholder="如：9月12-13日赴清远拜访重点客户，含往返高铁、市内交通与住宿。"></textarea>
+    </div>
+  </div>
+
+  <div class="ex-card">
+    <h3>费用明细 <small style="font-size:12px;color:#9C9288;font-weight:400">（一行一张票据；合计金额决定审批层级）</small></h3>
+    <table class="ex-table">
+      <thead>
+        <tr>
+          <th style="width:130px">发生日期</th>
+          <th style="width:150px">费用类别</th>
+          <th>费用说明</th>
+          <th style="width:104px">金额(含税)</th>
+          <th style="width:88px">其中税额</th>
+          <th style="width:130px">发票类型</th>
+          <th style="width:130px">发票号码</th>
+          <th style="width:38px"></th>
+        </tr>
+      </thead>
+      <tbody id="itemBody">
+        <tr>
+          <td><input type="date" name="item_date"></td>
+          <td>
+            <select name="item_category">
+              {% for gname, gitems in category_groups %}
+              <optgroup label="{{ gname }}">
+                {% for cname, cacc in gitems %}<option value="{{ cname }}">{{ cname }}</option>{% endfor %}
+              </optgroup>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input name="item_detail" placeholder="费用说明"></td>
+          <td><input class="num" name="item_amount" oninput="calcTotal()" placeholder="0.00"></td>
+          <td><input class="num" name="item_tax" oninput="calcTotal()" placeholder="0.00"></td>
+          <td>
+            <select name="item_invoice_type">
+              <option>增值税电子普票</option><option>增值税专用发票</option>
+              <option>普通发票</option><option>无票</option>
+            </select>
+          </td>
+          <td><input name="item_invoice_no" placeholder="票号（无票可空）"></td>
+          <td style="text-align:center"><span class="del" onclick="delRow(this)">✕</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:10px"><button class="btn-mini" type="button" onclick="addRow()">+ 再加一行明细</button></div>
+    <div class="sum">
+      合计金额：<b id="totalBox">￥0.00</b>
+      <span style="font-size:12.5px;color:#9C9288;margin-left:10px">其中可抵扣进项税额 <span id="taxBox">￥0.00</span></span>
+    </div>
+    <div class="warn">
+      保留「税额 + 发票类型 + 票号」才能让财务抵扣进项税；无票费用请选「无票」并在说明里写明原因。
+    </div>
+  </div>
+
+  {# ============ 电子发票上传（支持多选；提交后在详情页也可继续补传） ============ #}
+  <div class="ex-card">
+    <h3>电子发票 / 票据附件
+      <small style="font-size:12px;color:#9C9288;font-weight:400">（可多选，也可先提交、再在详情页补传）</small>
+    </h3>
+    <input type="file" name="invoices" multiple
+           accept=".pdf,.ofd,.xml,.jpg,.jpeg,.png,.bmp,.xls,.xlsx,.zip">
+    <div class="warn" style="margin-top:10px">
+      支持 <b>PDF / OFD / XML（数电票）/ 图片 / Excel / zip</b>，单个文件 ≤ 10MB。<br>
+      上传的发票走<b>登录鉴权下载</b>，不会公开在静态目录；系统会按单号自动重命名，避免重名与中文乱码。
+    </div>
+  </div>
+
+  <div class="ex-card">
+    <h3>收款信息</h3>
+    <div class="f-grid">
+      <div>
+        <label class="f-lab">收款方式</label>
+        <select name="pay_method">
+          <option>银行转账（对私）</option><option>冲抵预支款</option><option>现金</option>
+        </select>
+      </div>
+      <div>
+        <label class="f-lab">收款户名</label>
+        <input name="payee_name" value="{{ me.name }}">
+      </div>
+      <div>
+        <label class="f-lab">开户行</label>
+        <input name="bank_name" placeholder="如 中国银行广州天河支行">
+      </div>
+      <div>
+        <label class="f-lab">银行账号</label>
+        <input name="bank_account" placeholder="如 6217 **** **** 4321">
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-bottom:26px">
+    <button class="btn-main" type="submit">提交审批</button>
+  </div>
+</form>
+
+<script>
+  var CLAIMS = {{ claim_json|tojson }};
+  var curTotal = 0;
+
+  function pickMode(n){
+    var b1 = document.getElementById('rd1'), b2 = document.getElementById('rd2');
+    var box = document.getElementById('relbox');
+    if (n === 2){
+      b2.classList.add('sel'); b1.classList.remove('sel');
+      b2.querySelector('input').checked = true;
+      if (box) box.style.display = 'block';
+    } else {
+      b1.classList.add('sel'); b2.classList.remove('sel');
+      b1.querySelector('input').checked = true;
+      if (box) box.style.display = 'none';
+    }
+    checkOver();
+  }
+
+  function showClaim(){
+    var sel = document.getElementById('claimSel');
+    if (!sel) return;
+    var id = sel.value, box = document.getElementById('claimDetail');
+    var found = null;
+    for (var i = 0; i < CLAIMS.length; i++){
+      if (String(CLAIMS[i].id) === String(id)) { found = CLAIMS[i]; break; }
+    }
+    var rb = document.getElementById('remainBox');
+    if (!found){
+      if (box) box.style.display = 'none';
+      if (rb) rb.value = '—';
+      checkOver();
+      return;
+    }
+    if (box) box.style.display = 'grid';
+    document.getElementById('csAmount').textContent = '￥' + found.amount;
+    document.getElementById('csUsed').textContent = '￥' + found.used;
+    document.getElementById('csRemain').textContent = '￥' + found.remain;
+    document.getElementById('csPeriod').textContent = found.period;
+    document.getElementById('csApprover').textContent = found.approver || '—';
+    if (rb) rb.value = '￥' + found.remain;
+    checkOver();
+  }
+
+  function currentClaim(){
+    var sel = document.getElementById('claimSel');
+    if (!sel || !sel.value) return null;
+    for (var i = 0; i < CLAIMS.length; i++){
+      if (String(CLAIMS[i].id) === String(sel.value)) return CLAIMS[i];
+    }
+    return null;
+  }
+
+  function calcTotal(){
+    var amts = document.getElementsByName('item_amount');
+    var txs = document.getElementsByName('item_tax');
+    var t = 0, x = 0;
+    for (var i = 0; i < amts.length; i++){
+      var v = parseFloat((amts[i].value || '0').replace(/,/g, ''));
+      if (!isNaN(v)) t += v;
+      var w = parseFloat(((txs[i] && txs[i].value) || '0').replace(/,/g, ''));
+      if (!isNaN(w)) x += w;
+    }
+    curTotal = Math.round(t * 100) / 100;
+    document.getElementById('totalBox').textContent = '￥' + curTotal.toFixed(2);
+    document.getElementById('taxBox').textContent = '￥' + (Math.round(x * 100) / 100).toFixed(2);
+    checkOver();
+  }
+
+  function checkOver(){
+    var ob = document.getElementById('overbox');
+    if (!ob) return;
+    var modeApply = document.getElementById('rd2').classList.contains('sel');
+    var c = modeApply ? currentClaim() : null;
+    if (c && curTotal > parseFloat(c.remain) + 0.005){
+      ob.style.display = 'block';
+    } else {
+      ob.style.display = 'none';
+    }
+  }
+
+  {# 类别下拉的选项 HTML（分组）——新增明细行时直接复用，保证与服务端渲染完全一致 #}
+  var CAT_OPTS = {% set _opts %}{% for gname, gitems in category_groups %}<optgroup label="{{ gname }}">{% for cname, cacc in gitems %}<option value="{{ cname }}">{{ cname }}</option>{% endfor %}</optgroup>{% endfor %}{% endset %}{{ _opts|tojson }};
+
+  function addRow(){
+    var tb = document.getElementById('itemBody');
+    var tr = document.createElement('tr');
+    tr.innerHTML = ''
+      + '<td><input type="date" name="item_date"></td>'
+      + '<td><select name="item_category">' + CAT_OPTS + '</select></td>'
+      + '<td><input name="item_detail" placeholder="费用说明"></td>'
+      + '<td><input class="num" name="item_amount" oninput="calcTotal()" placeholder="0.00"></td>'
+      + '<td><input class="num" name="item_tax" oninput="calcTotal()" placeholder="0.00"></td>'
+      + '<td><select name="item_invoice_type"><option>增值税电子普票</option><option>增值税专用发票</option><option>普通发票</option><option>无票</option></select></td>'
+      + '<td><input name="item_invoice_no" placeholder="票号（无票可空）"></td>'
+      + '<td style="text-align:center"><span class="del" onclick="delRow(this)">✕</span></td>';
+    tb.appendChild(tr);
+  }
+
+  function delRow(el){
+    var tb = document.getElementById('itemBody');
+    if (tb.rows.length <= 1){ return; }
+    el.closest('tr').remove();
+    calcTotal();
+  }
+
+  showClaim();
+  calcTotal();
+</script>
+{% endblock %}

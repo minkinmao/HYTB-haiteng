@@ -1,0 +1,454 @@
+{% extends 'base.html' %}
+{% block title %}SALES · 销售支持系统 · 计划书引擎配置{% endblock %}
+{% block pagename %}SALES · 销售支持系统 · 计划书引擎配置（智能体）{% endblock %}
+{% block content %}
+<div class="pe-wrap">
+  <div class="pe-hd">
+    <h2>智能体工作台 · 产品计划书引擎配置</h2>
+    <p>选产品 → 上传保司文件 → 智能体自动解析（可人工核对列映射）→ 输入要素试跑 → 确认后安装。
+      安装完成即在「计划书」中可直接出计划书。换一家公司只是多一条配置，不改代码。</p>
+  </div>
+
+  {% if todo %}
+  <div class="pe-sec">
+    <div class="pe-sec-t">① 已签约但还没配计划书引擎的产品（{{ todo|length }} 个）</div>
+    <div class="pe-tip-box">
+      <b>建议优先配置这些</b>——已经签了合约，配置好就能直接出计划书给客户。
+    </div>
+    <table class="pe-tbl">
+      <thead><tr><th>保司</th><th>产品</th><th>险种</th><th>操作</th></tr></thead>
+      <tbody>
+      {% for s in todo %}
+        <tr>
+          <td>{{ s.insurer or '—' }}</td>
+          <td>{{ s.product }}</td>
+          <td>{{ s.insurance_type or '—' }}</td>
+          <td><button type="button" class="pe-btn sm" onclick="PE.use('{{ s.insurer }}','{{ s.product }}','{{ s.insurance_type }}')">带入配置</button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="pe-sec">
+    <div class="pe-sec-t">② 选择产品分类（不同分类＝不同的智能体）</div>
+    <div class="pe-tip-box">
+      每家保司给的文件结构都不一样：<b>爱心人寿</b>是因子档＋红利因子档＋建议书三个文件，
+      <b>幸福人寿</b>是一张试算工具表把费率/现价/红利/增额全装进不同 sheet。
+      先定分类，再由该分类的智能体决定：<b>要收哪些文件、认哪些列、能出哪几种演示口径、缺什么当场拦住</b>。
+      不选也行，智能体会按「产品名关键字 + 有没有红利列」自动归类。
+    </div>
+    <div class="pe-cats" id="pe-cats">
+      {% for c in cats %}
+      <label class="pe-cat" data-key="{{ c.key }}">
+        <input type="radio" name="pe-cat" value="{{ c.key }}">
+        <div class="pe-cat-b">
+          <div class="pe-cat-n">{{ c.name }}</div>
+          <div class="pe-cat-d">{{ c.desc }}</div>
+          <div class="pe-cat-m">演示口径：{% if c.modes %}{% for m in c.modes %}{{ mode_label.get(m, m) }}{% if not loop.last %} / {% endif %}{% endfor %}{% else %}无红利演示（保证即全部）{% endif %}</div>
+          <ul class="pe-cat-t">{% for t in c.tips %}<li>{{ t }}</li>{% endfor %}</ul>
+        </div>
+      </label>
+      {% endfor %}
+      <label class="pe-cat auto" data-key="">
+        <input type="radio" name="pe-cat" value="" checked>
+        <div class="pe-cat-b"><div class="pe-cat-n">自动归类（推荐）</div>
+          <div class="pe-cat-d">让智能体按产品名与文件内容自己判断，解析结果里会告诉你它归到了哪一类。</div></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="pe-sec">
+    <div class="pe-sec-t">③ 上传文件并解析</div>
+    <div class="pe-grid">
+      <div class="fld"><label>保司名称<span class="pe-req">*</span></label>
+        <input type="text" id="pe-ins" placeholder="如 爱心人寿"></div>
+      <div class="fld"><label>产品名称<span class="pe-req">*</span></label>
+        <input type="text" id="pe-prod" placeholder="如 映山红（心悦版）终身寿险（分红型）"></div>
+      <div class="fld"><label>险种（选填）</label>
+        <input type="text" id="pe-type" placeholder="如 终身寿险"></div>
+      <div class="fld"><label>EXCEL 版计划书 <span class="pe-opt">（有就传这一个即可）</span></label>
+        <input type="file" id="pe-planfile" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>费率表 <span class="pe-opt">（没计划书时传）</span></label>
+        <input type="file" id="pe-rate" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>现金价值表 <span class="pe-opt">（没计划书时传）</span></label>
+        <input type="file" id="pe-cash" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>红利表 <span class="pe-opt">（分红型：红利单独成文件时传）</span></label>
+        <input type="file" id="pe-div" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>&nbsp;</label>
+        <button class="pe-btn" id="pe-btn-parse" onclick="PE.parse()">智能体解析</button></div>
+    </div>
+    <div id="pe-unsign" class="pe-unsign" style="display:none"></div>
+    <div id="pe-parse-resp" class="pe-resp"></div>
+  </div>
+
+  <div class="pe-sec" id="pe-sec-map" style="display:none">
+    <div class="pe-sec-t">④ 智能体识别到的列映射（核对一下，错了告诉我改解析规则）</div>
+    <div id="pe-map" class="pe-map"></div>
+    <div class="pe-sec-t" style="margin-top:16px">⑤ 试跑：输入投保要素，先看结果对不对</div>
+    <div class="pe-grid">
+      <div class="fld"><label>性别</label>
+        <select id="pe-sex"><option value="M">男</option><option value="F">女</option></select></div>
+      <div class="fld"><label>投保年龄</label><input type="number" id="pe-age" value="40" min="0" max="80"></div>
+      <div class="fld"><label>交费方式</label>
+        <select id="pe-pt">
+          <option value="0">趸交</option><option value="3">3年交</option>
+          <option value="5" selected>5年交</option><option value="10">10年交</option>
+          <option value="15">15年交</option><option value="20">20年交</option>
+        </select></div>
+      <div class="fld"><label>年交保费（元）</label><input type="number" id="pe-prem" value="10000" min="1" step="100"></div>
+      <div class="fld"><label>红利领取方式 <span class="pe-opt">（分红型，条款3.1）</span></label>
+        <select id="pe-dm2">
+          <option value="accum">累积生息（年复利）</option>
+          <option value="cash">现金分红（现金领取）</option>
+          <option value="pua">购买交清增额保险</option>
+        </select></div>
+      <div class="fld"><label>累积生息年利率（%）<span class="pe-opt">（保司公布，默认1.75）</span></label>
+        <input type="number" id="pe-rate2" value="1.75" min="0" max="10" step="0.01"></div>
+      <div class="fld"><label>&nbsp;</label>
+        <button class="pe-btn" id="pe-btn-trial" onclick="PE.trial()">试跑</button></div>
+    </div>
+    <div id="pe-trial-resp" class="pe-resp"></div>
+    <form method="post" action="{{ url_for('crm.proposal_engine_install') }}" id="pe-install-form">
+      <input type="hidden" name="token" id="pe-token">
+      <input type="hidden" name="insurer" id="pe-ins2">
+      <input type="hidden" name="product" id="pe-prod2">
+      <input type="hidden" name="insurance_type" id="pe-type2">
+      <input type="hidden" name="category" id="pe-cat2">
+      <div id="pe-install-box" style="display:none;margin-top:16px">
+        <div class="pe-grid">
+          <div class="fld"><label>红利演示口径</label>
+            <select name="div_mode" id="pe-divmode">
+              <option value="">不分红 / 未确定</option>
+              <option value="cash">现金分红（现金领取）</option>
+              <option value="accum">累积生息（年复利）</option>
+              <option value="pua">购买交清增额保险</option>
+            </select></div>
+          <div class="fld"><label>累积生息年利率（%）<span class="pe-opt">（默认1.75）</span></label>
+            <input type="number" name="accum_rate" id="pe-rate" value="1.75" min="0" max="10" step="0.01"></div>
+          <div class="fld"><label>试跑结论（选填，留档）</label>
+            <input type="text" name="trial_note" placeholder="如：与保司官方建议书第10年现价一致"></div>
+          <div class="fld"><label>&nbsp;</label>
+            <button type="submit" class="pe-btn ok">确认安装到系统</button></div>
+        </div>
+        <div class="pe-tip-box">安装＝配置落库 + 因子入库（同产品全量替换），装完「计划书」里就能选到这个产品。</div>
+      </div>
+    </form>
+  </div>
+
+  <div class="pe-sec">
+    <div class="pe-sec-t">⑥ 已配置的产品引擎（{{ configs|length }} 个）</div>
+    {% if not configs %}<div class="pe-empty">还没有配置任何产品引擎。</div>{% else %}
+    <table class="pe-tbl">
+      <thead><tr>
+        <th>编号</th><th>保司</th><th>产品</th><th>分类（智能体）</th><th>签约</th><th>分红</th>
+        <th>因子行数</th><th>状态</th><th>安装时间</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+      {% for c in configs %}
+        <tr>
+          <td>{{ c.code or '—' }}</td>
+          <td>{{ c.insurer_name }}</td>
+          <td>{{ c.product_name }}</td>
+          <td>{{ cat_label.get(c.category, '—') }}</td>
+          <td>
+            {% if c.signed == 'yes' %}<span class="pe-ok">已签约</span>
+            {% else %}<span class="pe-bad">未签约<br><span style="font-size:11px">请及时签约</span></span>{% endif %}
+          </td>
+          <td>{% if c.has_dividend %}是{% if c.div_mode %}（{{ '现金分红' if c.div_mode=='cash' else '累积生息' }}）{% endif %}{% else %}—{% endif %}</td>
+          <td>{{ c.factor_rows }}</td>
+          <td>{{ '已安装' if c.status=='installed' else ('停用' if c.status=='disabled' else '草稿') }}</td>
+          <td>{{ c.installed_at or '—' }}</td>
+          <td>
+            {% if can_manage %}
+            <form method="post" action="{{ url_for('crm.proposal_engine_delete') }}" style="display:inline"
+                  onsubmit="return confirm('确定删除「{{ c.insurer_name }} {{ c.product_name }}」的配置？会同时清掉已入库的 {{ c.factor_rows }} 行因子。')">
+              <input type="hidden" name="cfg_id" value="{{ c.id }}">
+              <button type="submit" class="pe-btn sm danger">删除</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.pe-wrap{max-width:1680px;margin:0 auto;padding:18px 20px 40px}
+.pe-hd h2{margin:0 0 6px;font-size:19px;color:#2A2A2A}
+.pe-hd p{margin:0 0 16px;font-size:12.5px;color:#6B5D4F;line-height:1.7}
+.pe-sec{background:#fff;border:1px solid #EAE2D6;border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.pe-sec-t{font-size:14px;font-weight:700;color:#8A4B2A;margin-bottom:10px;padding-left:9px;border-left:3px solid #C86432}
+.pe-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px}
+.pe-grid .fld{display:flex;flex-direction:column;gap:4px}
+.pe-grid label{font-size:12px;color:#6B5D4F}
+.pe-grid input,.pe-grid select{height:32px;padding:0 9px;border:1px solid #DDD3C4;border-radius:6px;font-size:13px;background:#fff}
+.pe-req{color:#C0392B}.pe-opt{color:#999;font-weight:400}
+.pe-btn{height:32px;padding:0 16px;border:0;border-radius:6px;background:#C86432;color:#fff;font-size:13px;cursor:pointer}
+.pe-btn:hover{background:#B5532A}
+.pe-btn.ok{background:#2E7D32}.pe-btn.ok:hover{background:#256428}
+.pe-btn.sm{height:26px;padding:0 10px;font-size:12px}
+.pe-btn.danger{background:#B5532A}
+.pe-tbl{width:auto;min-width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;table-layout:auto}
+.pe-tbl th{background:#F7F1E8;color:#6B5D4F;font-weight:600;padding:7px 8px;text-align:left;border:1px solid #EAE2D6;white-space:nowrap}
+.pe-tbl td{padding:7px 8px;border:1px solid #EAE2D6;color:#2A2A2A}
+.pe-tip-box{background:#FBF6EF;border:1px dashed #E0CDB8;border-radius:6px;padding:9px 12px;font-size:12px;color:#6B5D4F;margin-bottom:10px;line-height:1.6}
+.pe-unsign{background:#FDECEA;border:1px solid #F0B8B0;border-radius:6px;padding:9px 12px;font-size:12.5px;color:#A03226;margin-top:10px}
+.pe-resp{margin-top:10px;font-size:12.5px;color:#2A2A2A;line-height:1.7}
+.pe-resp .ok{color:#2E7D32}.pe-resp .bad{color:#A03226}
+.pe-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;font-size:12.5px}
+.pe-map .m{background:#FAF7F2;border:1px solid #EAE2D6;border-radius:6px;padding:7px 10px}
+.pe-map .m b{color:#8A4B2A}
+.pe-empty{color:#8A7B6B;font-size:13px;padding:14px 0}
+.pe-ok{color:#2E7D32;font-weight:600}
+.pe-bad{color:#C0392B;font-weight:600}
+.pe-map-tbl{width:auto;min-width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;table-layout:auto}
+.pe-map-tbl th{background:#F7F1E8;padding:6px 8px;border:1px solid #EAE2D6;text-align:left;color:#6B5D4F}
+.pe-map-tbl td{padding:6px 8px;border:1px solid #EAE2D6}
+.pe-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:10px}
+.pe-cat{display:block;cursor:pointer}
+.pe-cat input{margin-right:6px;vertical-align:top;margin-top:9px}
+.pe-cat-b{border:1px solid #EAE2D6;border-radius:8px;padding:10px 12px;background:#FCFAF6;display:inline-block;width:calc(100% - 22px);vertical-align:top}
+.pe-cat input:checked + .pe-cat-b{border-color:#C86432;background:#FBF3EA;box-shadow:0 0 0 2px rgba(200,100,50,.12)}
+.pe-cat-n{font-size:13px;font-weight:700;color:#8A4B2A;margin-bottom:4px}
+.pe-cat-d{font-size:12px;color:#6B5D4F;line-height:1.6}
+.pe-cat-m{font-size:11.5px;color:#8A7B6B;margin-top:5px}
+.pe-cat-t{margin:6px 0 0;padding-left:16px;font-size:11.5px;color:#7A6A5A;line-height:1.65}
+.pe-chk{margin-top:10px;font-size:12.5px}
+.pe-chk table{border-collapse:collapse;width:100%}
+.pe-chk th{background:#F7F1E8;padding:6px 8px;border:1px solid #EAE2D6;text-align:left;color:#6B5D4F}
+.pe-chk td{padding:6px 8px;border:1px solid #EAE2D6}
+</style>
+
+<script>
+const DM_NAME = {cash: '现金分红（现金领取）', accum: '累积生息（年复利）', pua: '购买交清增额保险'};
+const MODE_KEY = {cash: ['cum_cash', 'total_cash', '累计已领(现金)'],
+                  accum: ['cum_acc', 'total_acc', '累积红利(生息)'],
+                  pua: ['cum_pua', 'total_pua', '增额部分现价']};
+const PE = {
+  token: '',
+  cat: '',
+  cat() {
+    const el = document.querySelector('input[name="pe-cat"]:checked');
+    return el ? el.value : '';
+  },
+  use(ins, prod, type) {
+    document.getElementById('pe-ins').value = ins || '';
+    document.getElementById('pe-prod').value = prod || '';
+    document.getElementById('pe-type').value = type || '';
+    document.getElementById('pe-unsign').style.display = 'none';
+    document.getElementById('pe-ins').scrollIntoView({behavior:'smooth', block:'center'});
+  },
+  extOk(f) {
+    if (!f) return true;
+    const e = f.name.split('.').pop().toLowerCase();
+    return e === 'xlsx' || e === 'xlsm';
+  },
+  parse() {
+    const ins = document.getElementById('pe-ins').value.trim();
+    const prod = document.getElementById('pe-prod').value.trim();
+    const resp = document.getElementById('pe-parse-resp');
+    resp.innerHTML = '';
+    if (!ins || !prod) { resp.innerHTML = '<span class="bad">请填写保司名称与产品名称</span>'; return; }
+    const fd = new FormData();
+    fd.append('insurer', ins); fd.append('product', prod);
+    fd.append('category', PE.cat());
+    const map = {planfile:'plan_file', rate:'rate_file', cash:'cash_file', div:'div_file'};
+    const lbl = {planfile:'计划书', rate:'费率表', cash:'现金价值表', div:'红利表'};
+    let any = false;
+    for (const k in map) {
+      const f = document.getElementById('pe-' + k).files[0];
+      if (!f) continue;
+      if (!PE.extOk(f)) { resp.innerHTML = '<span class="bad">' + lbl[k] + '「' + f.name + '」不是 Excel 文件，只支持 .xlsx/.xlsm</span>'; return; }
+      fd.append(map[k], f); any = true;
+    }
+    if (!any) { resp.innerHTML = '<span class="bad">请至少上传一个文件</span>'; return; }
+    document.getElementById('pe-btn-parse').disabled = true;
+    resp.innerHTML = '智能体解析中…（大文件约需十几秒）';
+    fetch('{{ url_for("crm.proposal_engine_parse") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => {
+        document.getElementById('pe-btn-parse').disabled = false;
+        if (!d.ok) { resp.innerHTML = '<span class="bad">' + d.msg + '</span>'; return; }
+        PE.token = d.token;
+        PE.cat = d.category || '';
+        PE.showParse(d);
+      }).catch(e => {
+        document.getElementById('pe-btn-parse').disabled = false;
+        resp.innerHTML = '<span class="bad">解析出错</span>';
+      });
+  },
+  showParse(d) {
+    const resp = document.getElementById('pe-parse-resp');
+    let h = '<span class="ok">✓ 解析完成：共 <b>' + d.total + '</b> 行'
+      + '（费率 ' + d.rate_total + ' / 现金价值 ' + d.cash_total
+      + (d.div_total ? ' / 含红利 ' + d.div_total : '') + '）</span>';
+    if (d.sheet) h += '<div style="color:#8A7B6B">主工作表：' + d.sheet + '（表头第 ' + d.header_row + ' 行）</div>';
+    if (d.warn && d.warn.length) h += '<div class="bad">⚠ ' + d.warn.join('；') + '</div>';
+    // —— 分类智能体：归到哪一类 + 该类要求的字段体检结果 ——
+    if (d.category_name) {
+      h += '<div style="margin-top:6px">分类智能体：<b>' + d.category_name + '</b>'
+        + (d.cat_detected ? '（未指定，系统自动归类）' : '（手工指定）')
+        + (d.pua_total ? '　<span class="ok">✓ 识别到交清增额因子，可演示第三种领取方式</span>' : '') + '</div>';
+    }
+    if (d.checks && d.checks.length) {
+      let ch = '<div class="pe-chk"><table><thead><tr><th>级别</th><th>字段</th><th>结果</th><th>说明</th></tr></thead><tbody>';
+      d.checks.forEach(c => {
+        ch += '<tr><td>' + c.level + '</td><td>' + c.name + '</td>'
+          + (c.ok ? '<td class="ok">✓ 已识别</td>' : (c.level === '必须'
+              ? '<td class="bad">✗ 缺失</td>' : '<td style="color:#8A7B6B">— 未给</td>'))
+          + '<td style="color:#8A7B6B">' + (c.msg || '') + '</td></tr>';
+      });
+      h += ch + '</tbody></table></div>';
+    }
+    if (d.cat_tips && d.cat_tips.length) {
+      h += '<div style="margin-top:6px;color:#6B5D4F">该类智能体的对表要点：<ul style="margin:4px 0 0;padding-left:18px">'
+        + d.cat_tips.map(t => '<li>' + t + '</li>').join('') + '</ul></div>';
+    }
+    resp.innerHTML = h;
+
+    const cnx = {sex:'性别', issue_age:'投保年龄', pay_term:'交费期间', policy_year:'保单年度',
+                sa:'基本保险金额', cv:'现金价值', cv_begin:'年初现金价值', premium:'保险费',
+                div_g:'红利(保证)', div_d:'红利(演示/非保证)', dividend_rate:'分红利率',
+                pua_sa:'累积增额保额', pua_add:'当年新增增额保额', pua_cv:'增额现价单价(每千元)',
+                tr:'责任准备金', trnp:'净保费责任准备金', cvnp:'CVNP', sb:'SB', convert_cv:'转换现价'};
+    let mh = '<table class="pe-map-tbl"><thead><tr><th>系统字段</th><th>识别到的原表头</th></tr></thead><tbody>';
+    let n = 0;
+    for (const f in d.col_map) {
+      mh += '<tr><td>' + (cnx[f] || f) + '</td><td><b>' + d.col_map[f] + '</b></td></tr>'; n++;
+    }
+    mh += '</tbody></table>';
+    if (!n) mh = '<div style="color:#8A7B6B">未能提取表头明细（不影响解析，可用试跑验证）</div>';
+    document.getElementById('pe-map').innerHTML = mh;
+
+    document.getElementById('pe-sec-map').style.display = 'block';
+    document.getElementById('pe-token').value = d.token;
+    document.getElementById('pe-ins2').value = d.insurer;
+    document.getElementById('pe-prod2').value = d.product;
+    document.getElementById('pe-type2').value = document.getElementById('pe-type').value.trim();
+    document.getElementById('pe-cat2').value = d.category || '';
+    document.getElementById('pe-trial-resp').innerHTML = '';
+    document.getElementById('pe-install-box').style.display = 'none';
+    // 试跑/安装的口径下拉：按该分类支持的口径重建（没有增额因子就不给选「购买交清增额」）
+    const want = d.cat_modes || ['cash', 'accum'];
+    ['pe-dm2', 'pe-divmode'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const keepFirst = id === 'pe-divmode' ? sel.options[0] : null;
+      sel.innerHTML = keepFirst ? keepFirst.outerHTML : '';
+      want.forEach(m => {
+        if (m === 'pua' && !d.pua_total) return;
+        const o = document.createElement('option');
+        o.value = m; o.textContent = DM_NAME[m] || m; o.selected = (m === (d.cat_default_mode || 'accum'));
+        sel.appendChild(o);
+      });
+    });
+  },
+  trial() {
+    const resp = document.getElementById('pe-trial-resp');
+    if (!PE.token) { resp.innerHTML = '<span class="bad">请先解析</span>'; return; }
+    const fd = new FormData();
+    fd.append('token', PE.token);
+    fd.append('sex', document.getElementById('pe-sex').value);
+    fd.append('age', document.getElementById('pe-age').value);
+    fd.append('pay_term', document.getElementById('pe-pt').value);
+    fd.append('premium', document.getElementById('pe-prem').value);
+    // 分红演示口径（条款3.2）：现金领取 / 累积生息 + 累积生息年利率
+    fd.append('div_mode', document.getElementById('pe-dm2').value);
+    fd.append('accum_rate', document.getElementById('pe-rate2').value);
+    resp.innerHTML = '试跑中…';
+    fetch('{{ url_for("crm.proposal_engine_trial") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => {
+        if (!d.ok) { resp.innerHTML = '<span class="bad">' + d.msg + '</span>'; return; }
+        PE.showTrial(d.data);
+      }).catch(e => { resp.innerHTML = '<span class="bad">试跑出错</span>'; });
+  },
+  showTrial(data) {
+    const resp = document.getElementById('pe-trial-resp');
+    const rows = data.rows || [];
+    const pick = [0, 4, 9, 19].filter(i => i < rows.length);
+    if (rows.length) pick.push(rows.length - 1);
+    const uniq = Array.from(new Set(pick));
+    // 分红演示：三种领取口径（条款3.1）——以后端返回的为准（后端会把不支持的口径自动回落）
+    const dm = data.div_mode || 'accum';
+    const MK = MODE_KEY[dm] || MODE_KEY.accum;
+    const cumKey = MK[0], totKey = MK[1], cumName = MK[2];
+    const cfg = data.div_cfg || {};
+    let h = '<div><span class="ok">✓ 试跑完成</span>　基本保险金额：<b>'
+      + data.base_sa.toLocaleString() + '</b> 元（'
+      + (data.pay_term === 0 ? '趸交' : data.pay_term + '年交') + '）'
+      + '　共 ' + rows.length + ' 个保单年度'
+      + (data.has_div ? '　<span style="color:#8A4B2A">含分红演示（'
+          + (dm === 'cash' ? '现金领取'
+             : dm === 'pua' ? '购买交清增额保险'
+             : '累积生息 ' + ((data.accum_rate || 0) * 100).toFixed(2) + '%')
+          + '）</span>' : '') + '</div>';
+    if (data.has_div && (cfg.demo_rate || cfg.ratio)) {
+      h += '<div style="color:#2E7D32">✓ 读到保司分红参数：'
+        + (cfg.demo_rate ? '红利演示利率 ' + (cfg.demo_rate * 100).toFixed(2) + '%' : '')
+        + (cfg.ratio ? '｜分红比例 ' + (cfg.ratio * 100).toFixed(0) + '%' : '')
+        + '｜累积生息利率 ' + ((data.accum_rate || 0) * 100).toFixed(2) + '%</div>';
+    }
+    if (data.category_name) {
+      h += '<div style="color:#8A7B6B">分类智能体：<b>' + data.category_name + '</b>'
+        + '（该类支持的演示口径：现金领取 / 累积生息'
+        + (data.has_pua ? ' / 购买交清增额保险' : '') + '）</div>';
+    }
+    h += '<table class="pe-map-tbl"><thead><tr>'
+      + ['保单年度','年末年龄','累计保费','年末现金价值','单利%','IRR%'].map(t => '<th>' + t + '</th>').join('')
+      + (data.has_div ? '<th>当年红利</th><th>' + cumName + '</th><th>年末总利益</th>' : '')
+      + '</tr></thead><tbody>';
+    uniq.forEach(i => {
+      const r = rows[i];
+      h += '<tr><td>' + r.year + '</td><td>' + r.age_end + '</td><td>' + r.cum_prem.toLocaleString()
+        + '</td><td>' + r.cv.toLocaleString() + '</td><td>' + r.simple + '</td><td>' + r.irr + '</td>'
+        + (data.has_div ? '<td>' + r.div_d.toLocaleString() + '</td><td>' + r[cumKey].toLocaleString()
+            + '</td><td>' + r[totKey].toLocaleString() + '</td>' : '') + '</tr>';
+    });
+    h += '</tbody></table>';
+    if (data.has_div && rows.length) {
+      const last = rows[rows.length - 1];
+      const y20 = rows.length >= 20 ? rows[19] : last;
+      // 三种领取口径的「累计到手」横评（IRR/单利随所选口径，见主表对应行）
+      let ch = '<div style="margin-top:8px;color:#6B5D4F">第 ' + y20.year
+        + ' 年末三种领取方式横评——退保金均为 <b>' + y20.cv.toLocaleString() + '</b> 元：</div>';
+      ch += '<table class="pe-map-tbl"><thead><tr><th>领取方式</th><th>累计到手红利/增额现价</th>'
+        + '<th>年末总利益</th></tr></thead><tbody>';
+      [['cash', '现金领取'], ['accum', '累积生息'], ['pua', '购买交清增额保险']].forEach(m => {
+        if (m[0] === 'pua' && !data.has_pua) return;
+        const K = MODE_KEY[m[0]];
+        ch += '<tr' + (m[0] === dm ? ' style="background:#FBF3EA"' : '') + '><td>' + m[1]
+          + (m[0] === dm ? '（本次演示）' : '') + '</td><td>' + (y20[K[0]] || 0).toLocaleString()
+          + '</td><td>' + (y20[K[1]] || 0).toLocaleString() + '</td></tr>';
+      });
+      ch += '</tbody></table>';
+      h += ch;
+    }
+    h += '<div style="color:#8A7B6B">（收益表只显示第 1/5/10/20 年度与末年；'
+      + '请拿这几个数与保司官方建议书逐项比对，对不上先别安装）</div>';
+    resp.innerHTML = h;
+    document.getElementById('pe-install-box').style.display = 'block';
+    // 安装口径默认沿用试跑口径（条款3.1：现金领取 / 累积生息 / 购买交清增额保险）
+    document.getElementById('pe-divmode').value = data.has_div ? dm : '';
+    document.getElementById('pe-rate').value = document.getElementById('pe-rate2').value;
+    document.getElementById('pe-cat2').value = data.category || PE.cat;
+  }
+};
+document.getElementById('pe-prod').addEventListener('change', function () {
+  const box = document.getElementById('pe-unsign');
+  const ins = document.getElementById('pe-ins').value.trim();
+  const prod = this.value.trim();
+  if (!prod) { box.style.display = 'none'; return; }
+  const hit = ({{ signed|tojson }}).some(s => s.product === prod && (!ins || s.insurer === ins));
+  if (hit) { box.style.display = 'none'; }
+  else {
+    box.style.display = 'block';
+    box.innerHTML = '⚠️ <b>「' + prod + '」在产品合约里查不到签约记录</b>——可以手工配置，'
+      + '但请尽快到「CRM / 产品合约」补签合约，否则后续佣金与继续率口径无法关联。';
+  }
+});
+</script>
+{% endblock %}

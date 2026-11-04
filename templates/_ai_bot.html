@@ -1,0 +1,429 @@
+{# _ai_bot.html —— 核心业务管理系统 · AI 悬浮机器人（四十四改，2026-10-29）
+   全站一份，由 base.html 在 </body> 前 include。纯原生 JS（项目红线：不用前端框架）。
+
+   能力：打开 / 最小化 / 输入问题 / 发送消息 / 加载提示 / 消息自动滚动
+        ＋ 上传产品合约协议 → 后端识别 → 生成「待审草稿」→ 人工审核后保存转正。
+   口径：AI 只写草稿（ai_draft=1），草稿列表默认不显示，绝不直接落正式合约。 #}
+{% if session.get('user_id') %}
+<style>
+  /* ⚠️ 铁律：面板/附件条是用 hidden 属性开关的，但它们自己的规则里写了 display:flex，
+     而浏览器默认的 [hidden]{display:none} 优先级极低、会被压过去 ——
+     结果就是「点最小化属性变了、面板却还在」，看着像按钮失灵。
+     下面这条必须留着（!important 不能少）。 */
+  .ai-panel[hidden],.ai-file[hidden]{display:none !important}
+
+  /* ---------- 悬浮球 ---------- */
+  .ai-launch{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;
+    border:0;cursor:pointer;z-index:9960;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#E6823C 0%,#C86432 100%);
+    box-shadow:0 8px 22px rgba(200,100,50,.38),0 2px 6px rgba(0,0,0,.12);
+    transition:transform .18s ease,box-shadow .18s ease}
+  .ai-launch:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 12px 28px rgba(200,100,50,.46)}
+  .ai-launch svg{width:28px;height:28px;display:block}
+  .ai-launch .ai-ping{position:absolute;top:-1px;right:-1px;width:13px;height:13px;border-radius:50%;
+    background:#2FA36B;border:2px solid #fff;display:none}
+  .ai-launch.on .ai-ping{display:block}
+
+  /* ---------- 面板 ---------- */
+  .ai-panel{position:fixed;right:24px;bottom:92px;width:392px;height:min(632px,78vh);
+    display:flex;flex-direction:column;z-index:9961;background:#fff;border-radius:16px;
+    box-shadow:0 18px 48px rgba(42,42,42,.22),0 2px 8px rgba(42,42,42,.10);
+    border:1px solid #EAE2D6;overflow:hidden;
+    transform-origin:right bottom;animation:aiIn .18s ease-out}
+  @keyframes aiIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:none}}
+  @media (max-width:520px){
+    .ai-panel{right:10px;left:10px;width:auto;bottom:84px;height:min(76vh,600px)}
+    .ai-launch{right:16px;bottom:16px}
+  }
+
+  .ai-head{display:flex;align-items:center;gap:8px;padding:11px 12px;
+    background:linear-gradient(135deg,#2A2A2A 0%,#3A342E 100%);color:#fff;flex:0 0 auto}
+  .ai-head b{font-size:13.5px;font-weight:600;letter-spacing:.3px;font-family:var(--serif,serif)}
+  .ai-head .ai-tag{font-size:10px;padding:1px 6px;border-radius:8px;
+    background:rgba(230,130,60,.24);color:#F5C79E;border:1px solid rgba(230,130,60,.4)}
+  .ai-head .ai-sp{flex:1}
+  .ai-ico{width:24px;height:24px;border-radius:6px;border:0;background:rgba(255,255,255,.10);
+    color:#fff;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;
+    justify-content:center;padding:0}
+  .ai-ico:hover{background:rgba(255,255,255,.22)}
+
+  .ai-body{flex:1;overflow-y:auto;padding:14px 12px;background:#FAF7F2;
+    display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+  .ai-body::-webkit-scrollbar{width:6px}
+  .ai-body::-webkit-scrollbar-thumb{background:#DED5C7;border-radius:3px}
+
+  .ai-msg{max-width:86%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.62;
+    word-break:break-word;white-space:pre-wrap}
+  .ai-msg.u{align-self:flex-end;background:linear-gradient(135deg,#E6823C,#D06F2E);color:#fff;
+    border-bottom-right-radius:4px}
+  .ai-msg.a{align-self:flex-start;background:#fff;color:#2A2A2A;border:1px solid #EAE2D6;
+    border-bottom-left-radius:4px}
+  .ai-msg.e{align-self:flex-start;background:#FDF0EE;color:#A63A22;border:1px solid #F3CFC7;
+    border-bottom-left-radius:4px}
+
+  /* 加载提示：三点跳动 */
+  .ai-typing{align-self:flex-start;background:#fff;border:1px solid #EAE2D6;border-radius:12px;
+    border-bottom-left-radius:4px;padding:10px 13px;display:flex;align-items:center;gap:8px;
+    font-size:12px;color:#8A7F72}
+  .ai-dots{display:inline-flex;gap:3px}
+  .ai-dots i{width:5px;height:5px;border-radius:50%;background:#E6823C;display:block;
+    animation:aiBlink 1.2s infinite ease-in-out}
+  .ai-dots i:nth-child(2){animation-delay:.18s}
+  .ai-dots i:nth-child(3){animation-delay:.36s}
+  @keyframes aiBlink{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+  /* 快捷问题 */
+  .ai-quick{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 2px}
+  .ai-quick button{border:1px solid #E7D9C6;background:#fff;color:#8A6A4B;border-radius:14px;
+    padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+  .ai-quick button:hover{background:#FBEEE2;border-color:#E6823C;color:#C86432}
+
+  /* 草稿卡片 */
+  .ai-card{align-self:flex-start;max-width:94%;background:#fff;border:1px solid #CBE3D4;
+    border-left:4px solid #2FA36B;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#2A2A2A}
+  .ai-card .t{font-weight:600;color:#1E7A4E;margin-bottom:6px;font-size:13px}
+  .ai-card .r{color:#5C554D;line-height:1.75}
+  .ai-card .r b{color:#2A2A2A;font-weight:600}
+  .ai-card .go{display:inline-block;margin-top:9px;padding:7px 15px;border-radius:8px;
+    background:linear-gradient(135deg,#E6823C,#C86432);color:#fff;font-size:12.5px;
+    text-decoration:none;font-weight:600}
+  .ai-card .go:hover{filter:brightness(1.06)}
+  .ai-card .hint{margin-top:7px;color:#9C9288;font-size:11.5px;line-height:1.6}
+
+  /* 附件 chip */
+  .ai-file{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 12px;
+    background:#FBEEE2;border-top:1px solid #F0DCC8;font-size:12px;color:#8A5A2E}
+  .ai-file span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ai-file button{border:0;background:transparent;color:#A8774A;cursor:pointer;font-size:15px;
+    line-height:1;padding:0 2px}
+
+  /* 输入区 */
+  .ai-foot{flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;padding:10px 12px;
+    background:#fff;border-top:1px solid #EAE2D6}
+  .ai-clip{width:32px;height:32px;border-radius:8px;border:1px solid #EAE2D6;background:#FAF7F2;
+    cursor:pointer;font-size:15px;line-height:1;flex:0 0 auto;color:#8A7F72}
+  .ai-clip:hover{background:#FBEEE2;border-color:#E6823C}
+  .ai-foot textarea{flex:1;min-height:32px;max-height:96px;resize:none;border:1px solid #EAE2D6;
+    border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;line-height:1.5;
+    outline:none;background:#FAF7F2;color:#2A2A2A}
+  .ai-foot textarea:focus{border-color:#E6823C;background:#fff}
+  .ai-send{height:32px;padding:0 15px;border-radius:9px;border:0;cursor:pointer;flex:0 0 auto;
+    background:linear-gradient(135deg,#E6823C,#C86432);color:#fff;font-size:13px;font-weight:600}
+  .ai-send:disabled{opacity:.5;cursor:not-allowed}
+</style>
+
+<button class="ai-launch" id="aiLaunch" type="button" onclick="aiToggle()" title="AI 助手（合约协议识别）">
+  <span class="ai-ping"></span>
+  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="3.5" y="7.5" width="17" height="12.5" rx="4"/>
+    <circle cx="9" cy="13" r="1.15" fill="#fff" stroke="none"/>
+    <circle cx="15" cy="13" r="1.15" fill="#fff" stroke="none"/>
+    <path d="M12 7.5V4.2"/><circle cx="12" cy="3.1" r="1.15" fill="#fff" stroke="none"/>
+    <path d="M1.6 12v3.6M22.4 12v3.6"/>
+  </svg>
+</button>
+
+<div class="ai-panel" id="aiPanel" hidden>
+  <div class="ai-head">
+    <b>海盈通保 AI 助手</b>
+    <span class="ai-tag">条款专家</span>
+    <span class="ai-sp"></span>
+    <button class="ai-ico" type="button" onclick="aiCfg()" title="AI 配置（API Key）">⚙</button>
+    <button class="ai-ico" type="button" onclick="aiMin()" title="最小化">—</button>
+  </div>
+
+  <div class="ai-body" id="aiBody"></div>
+
+  <div class="ai-file" id="aiFileBar" hidden>
+    <span id="aiFileName"></span>
+    <button type="button" onclick="aiClearFile()" title="移除">×</button>
+  </div>
+
+  <div class="ai-foot">
+    <button class="ai-clip" type="button" onclick="document.getElementById('aiInputFile').click()"
+            title="上传产品合约协议（pdf / doc / docx / xlsx / 扫描件照片 jpg·png）">📎</button>
+    <textarea id="aiText" rows="1" placeholder="问我，或点 📎 上传协议让我识别…"></textarea>
+    <button class="ai-send" id="aiSend" type="button" onclick="aiSend()">发送</button>
+  </div>
+  <input type="file" id="aiInputFile" hidden
+         accept=".pdf,.doc,.docx,.xlsx,.xlsm,.txt,.md,.csv,.jpg,.jpeg,.png,.bmp,.webp"
+         onchange="aiPickFile(this)">
+</div>
+
+<script>
+(function () {
+  var AI = { open: false, busy: false, file: null, history: [], inited: false };
+  var panel = document.getElementById('aiPanel');
+  var body  = document.getElementById('aiBody');
+  var ta    = document.getElementById('aiText');
+  var btn   = document.getElementById('aiSend');
+  var launch= document.getElementById('aiLaunch');
+  var fileBar = document.getElementById('aiFileBar');
+  var fileName= document.getElementById('aiFileName');
+  var fileIn  = document.getElementById('aiInputFile');
+  window.AI = AI;
+
+  /* ---------- 打开 / 最小化 ---------- */
+  window.aiToggle = function () {
+    AI.open = !AI.open;
+    panel.hidden = !AI.open;
+    launch.classList.toggle('on', AI.open);
+    if (AI.open) {
+      if (!AI.inited) { AI.inited = true; aiBoot(); }
+      aiScroll();
+      setTimeout(function () { ta.focus(); }, 60);
+    }
+  };
+
+  /* 首次打开：先问后端「配没配 Key」——没配就直接给配置卡片，别让人打完字才被拦。 */
+  function aiBoot() {
+    aiWelcome();
+    fetch('/ai/status').then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ready === false) { cfgTip(d.msg || ''); }
+    }).catch(function () { /* 状态查不到就当能用，等发送时再报错 */ });
+  }
+  // 「最小化」＝收回悬浮球（不是关闭，下次点球原样弹出，聊天记录还在）
+  window.aiMin = function () {
+    AI.open = false;
+    panel.hidden = true;
+    launch.classList.remove('on');
+  };
+  // 齿轮 → 去填 API Key。跳转时带上当前位置，配置页的「返回 / 保存并返回」才能回到原页面。
+  // ⚠️ 已经站在配置页时不要再 location.href（同一地址刷新＝看着像按钮失灵），只提示一句。
+  window.aiCfg = function () {
+    if (location.pathname === '/ai/config') {
+      bubble('a', '你已经在「AI 配置」页面了 —— 直接在页面左边那块填 Key、点「测试连接」，'
+        + '通了再点「保存并返回」回到原来的页面。');
+      return;
+    }
+    location.href = '/ai/config?from=' + encodeURIComponent(location.pathname + location.search);
+  };
+
+
+  /* ---------- 消息渲染 ---------- */
+  function bubble(kind, text) {
+    var d = document.createElement('div');
+    d.className = 'ai-msg ' + kind;
+    d.textContent = text;            // 用 textContent：AI 回复不解析 HTML，杜绝注入
+    body.appendChild(d);
+    aiScroll();
+    return d;
+  }
+
+  function aiScroll() {
+    // 消息滚动：每次新增都贴到底部，保证最新一条可见
+    requestAnimationFrame(function () { body.scrollTop = body.scrollHeight; });
+  }
+
+  var typingEl = null;
+  function thinking(on, label) {
+    if (on) {
+      if (typingEl) return;
+      typingEl = document.createElement('div');
+      typingEl.className = 'ai-typing';
+      var t = document.createElement('span');
+      t.textContent = label || '正在思考…';
+      var dots = document.createElement('span');
+      dots.className = 'ai-dots';
+      dots.innerHTML = '<i></i><i></i><i></i>';
+      typingEl.appendChild(dots);
+      typingEl.appendChild(t);
+      body.appendChild(typingEl);
+      aiScroll();
+    } else if (typingEl) {
+      typingEl.remove();
+      typingEl = null;
+    }
+  }
+
+  function setBusy(b) {
+    AI.busy = b;
+    btn.disabled = b;
+    btn.textContent = b ? '···' : '发送';
+  }
+
+  /* ---------- 欢迎语 + 快捷问题 ---------- */
+  function aiWelcome() {
+    bubble('a', '我是海盈通保的合约条款助手。\n\n'
+      + '① 有问题直接问我（FYC / RYC 口径、继续率、方案政策都行）\n'
+      + '② 点左下角 📎 传产品合约协议（PDF / Word / Excel 都行，**盖章扫描件和手机拍的照片也能读**），'
+      + '我读完会把合约信息、各缴别费率和续期服务费比例填成一条**待审草稿**，你核对无误再点保存。');
+    var q = document.createElement('div');
+    q.className = 'ai-quick';
+    var list = ['续期服务费比例怎么算？', 'FYC 和 RYC 有什么区别？', '继续率奖金率怎么定档？'];
+    list.forEach(function (txt) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = txt;
+      b.onclick = function () { ta.value = txt; aiSend(); };
+      q.appendChild(b);
+    });
+    body.appendChild(q);
+    aiScroll();
+  }
+
+  /* ---------- 附件 ---------- */
+  window.aiPickFile = function (inp) {
+    var f = inp.files && inp.files[0];
+    if (!f) return;
+    AI.file = f;
+    fileName.textContent = '📄 ' + f.name + '（' + (f.size / 1024).toFixed(0) + ' KB）';
+    fileBar.hidden = false;
+    aiScroll();
+  };
+  window.aiClearFile = function () {
+    AI.file = null;
+    fileIn.value = '';
+    fileBar.hidden = true;
+    fileName.textContent = '';
+  };
+
+  /* ---------- 发送 ---------- */
+  window.aiSend = function () {
+    if (AI.busy) return;
+    var q = (ta.value || '').trim();
+    if (!q && !AI.file) { ta.focus(); return; }
+    ta.value = '';
+    ta.style.height = 'auto';
+    if (AI.file) { aiAnalyze(q); } else { aiChat(q); }
+  };
+
+  function aiChat(q) {
+    bubble('u', q);
+    var hist = AI.history.slice(-8);
+    AI.history.push({ role: 'user', content: q });
+    setBusy(true);
+    thinking(true, '正在思考…');
+    fetch('/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: q, history: hist })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      thinking(false); setBusy(false);
+      if (!d.ok) { bubble('e', d.error || '出了点问题，再试一次'); if (d.need_config) cfgTip(); return; }
+      bubble('a', d.reply || '（空回复）');
+      AI.history.push({ role: 'assistant', content: d.reply || '' });
+    }).catch(function (e) {
+      thinking(false); setBusy(false);
+      bubble('e', '请求失败：' + e + '\n服务可能重启了，刷新页面再试。');
+    });
+  }
+
+  function aiAnalyze(q) {
+    var f = AI.file;
+    bubble('u', '📄 ' + f.name + (q ? '\n' + q : ''));
+    setBusy(true);
+    thinking(true, '正在阅读协议并识别条款…若遇到扫描件会逐页 OCR，一页约 10 秒，请别关页面。');
+    var fd = new FormData();
+    fd.append('file', f);
+    if (q) fd.append('question', q);
+    fetch('/ai/analyze', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        thinking(false); setBusy(false);
+        window.aiClearFile();
+        if (!d.ok) { bubble('e', d.error || '识别失败'); if (d.need_config) cfgTip(); return; }
+        draftCard(d);
+      }).catch(function (e) {
+        thinking(false); setBusy(false);
+        bubble('e', '识别请求失败：' + e + '\n如果是超时，说明模型太慢，再点一次或换小一点的协议。');
+      });
+  }
+
+  /* ---------- 草稿卡片 ---------- */
+  function draftCard(d) {
+    var card = document.createElement('div');
+    card.className = 'ai-card';
+    var t = document.createElement('div');
+    t.className = 't';
+    t.textContent = '✅ 已生成待审草稿 ' + (d.code || '');
+    card.appendChild(t);
+
+    var r = document.createElement('div');
+    r.className = 'r';
+    var rows = [
+      ['产品', d.product || '—'],
+      ['保司', d.insurer || '（未匹配，审核时手动选）'],
+      ['缴别', (d.tiers || 0) + ' 条费率']
+    ];
+    rows.forEach(function (kv) {
+      var line = document.createElement('div');
+      var b = document.createElement('b');
+      b.textContent = kv[0] + '：';
+      line.appendChild(b);
+      line.appendChild(document.createTextNode(kv[1]));
+      r.appendChild(line);
+    });
+    if (d.note) {
+      var s = document.createElement('div');
+      s.style.marginTop = '5px';
+      s.textContent = '摘要：' + d.note;
+      r.appendChild(s);
+    }
+    card.appendChild(r);
+
+    var go = document.createElement('a');
+    go.className = 'go';
+    go.href = d.url;
+    go.textContent = '去审核并录入 →';
+    card.appendChild(go);
+
+    var hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = '草稿不会直接进正式数据。请在打开的页面逐项核对（保司、缴别、FYC/RYC、续期比例），'
+      + '改好后点「保存」才转为正式合约；不想要就点该页顶部的「放弃草稿」。';
+    card.appendChild(hint);
+
+    if (d.warn && d.warn.length) {
+      var w = document.createElement('div');
+      w.className = 'hint';
+      w.style.color = '#A8622E';
+      w.textContent = '⚠ ' + d.warn.join('；');
+      card.appendChild(w);
+    }
+    body.appendChild(card);
+    aiScroll();
+  }
+
+  function cfgTip(msg) {
+    var d = document.createElement('div');
+    d.className = 'ai-card';
+    d.style.borderLeftColor = '#E6823C';
+    var t = document.createElement('div');
+    t.className = 't';
+    t.style.color = '#A8622E';
+    t.textContent = '还没配置大模型';
+    d.appendChild(t);
+    if (msg) {
+      var m = document.createElement('div');
+      m.className = 'r';
+      m.style.marginBottom = '6px';
+      m.textContent = msg;
+      d.appendChild(m);
+    }
+    var g = document.createElement('a');
+    g.className = 'go';
+    g.href = '/ai/config';
+    g.textContent = '去填 API Key →';
+    d.appendChild(g);
+    var h = document.createElement('div');
+    h.className = 'hint';
+    h.textContent = '用智谱 GLM-4-Flash 就够：注册实名后每天 100 万 token 免费，'
+      + '一份几十页的协议能一次读完，不花钱。'
+      + '（这一步只有管理员能做；配好之后所有人都能用。）';
+    d.appendChild(h);
+    body.appendChild(d);
+    aiScroll();
+  }
+
+  /* ---------- 输入框：自动高 + 回车发送 ---------- */
+  ta.addEventListener('input', function () {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 96) + 'px';
+  });
+  ta.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); }
+  });
+})();
+</script>
+{% endif %}

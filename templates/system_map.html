@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}系统总览 · 海盈通保OA管理系统{% endblock %}
+{% block pagename %}系统总览{% endblock %}
+{% block content %}
+
+  <!-- 员工工卡：左侧入职照片，右侧个人信息（按工号对应员工花名册；未匹配时降级显示账号信息） -->
+  <div class="card" style="padding:20px 24px;margin-bottom:26px;border-top:3px solid var(--brand)">
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- 入职照片：无照片时用姓名首字占位，避免空白方框 -->
+      <div style="flex:0 0 104px">
+        <div style="width:104px;height:132px;border-radius:10px;overflow:hidden;border:1px solid var(--line);
+                    background:linear-gradient(160deg,#FDF3E8,#F3E2CD);
+                    display:flex;align-items:center;justify-content:center">
+          {% if emp and emp.photo %}
+            <img src="{{ url_for('static', filename=emp.photo) }}" alt="入职照片"
+                 style="width:100%;height:100%;object-fit:cover;display:block">
+          {% else %}
+            <span style="font-family:var(--serif);font-size:40px;color:var(--brand-deep);opacity:.7">
+              {{ ((emp.name if emp else '') or user.username)[:1] }}</span>
+          {% endif %}
+        </div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:7px;letter-spacing:1px">入职照片</div>
+      </div>
+
+      <!-- 个人信息 -->
+      <div style="flex:1 1 320px;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-family:var(--serif);font-size:20px;font-weight:600;letter-spacing:1px">
+            {{ (emp.name if emp else '') or user.username }}</span>
+          <span style="font-size:12px;background:var(--brand-soft);color:var(--brand-deep);border:1px solid #F3DCC6;
+                       padding:2px 11px;border-radius:20px;white-space:nowrap">
+            工号 {{ (emp.employee_no if emp else '') or user.username }}</span>
+          <span style="font-size:12px;background:#EEF3FB;color:#3B5B8C;border:1px solid #D9E4F5;
+                       padding:2px 11px;border-radius:20px;white-space:nowrap">
+            应用角色 {{ session.get('level_code') or '—' }} 级 · {{ session.get('level_name') or '未分配职级' }}</span>
+          <!-- 个人资料入口（右上角）：进个人资料页 → 左侧「人事卡片」看正式版人事卡片 -->
+          <a href="{{ url_for('hr.profile') }}"
+             style="margin-left:auto;font-size:12.5px;font-weight:600;color:var(--brand-deep);
+                    background:#FCFAF7;border:1px solid var(--line);border-radius:20px;
+                    padding:5px 15px;white-space:nowrap">个人资料 →</a>
+        </div>
+
+        {% if not emp %}
+        <div style="font-size:12px;color:#8A5A18;background:#FDF3E4;border:1px solid #F4DFBE;
+                    border-radius:8px;padding:7px 11px;margin-top:10px">
+          该登录账号未按工号匹配到员工花名册档案，以下仅显示账号本身信息
+          （可在 HR「员工花名册」把工号设为与登录账号一致，即可自动关联）。
+        </div>
+        {% endif %}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 20px;
+                    margin-top:14px;font-size:13px">
+          <div style="min-width:0;overflow-wrap:anywhere">
+            <span style="color:var(--muted)">入职时间：</span>{{ hire_str or '—' }}</div>
+          <div style="min-width:0;overflow-wrap:anywhere">
+            <span style="color:var(--muted)">部门：</span>{{ org_name or '—' }}</div>
+          <div style="min-width:0;overflow-wrap:anywhere">
+            <span style="color:var(--muted)">职务：</span>{{ (emp.title if emp else '') or '—' }}</div>
+          <div style="min-width:0;overflow-wrap:anywhere">
+            <span style="color:var(--muted)">邮箱：</span>{{ (emp.email if emp else '') or '—' }}</div>
+          <div style="min-width:0;overflow-wrap:anywhere">
+            <span style="color:var(--muted)">手机号码：</span>{{ (emp.phone if emp else '') or '—' }}</div>
+        </div>
+
+        <div style="margin-top:15px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="display:inline-block;background:var(--brand-soft);color:var(--brand-deep);
+                       border:1px solid #F3DCC6;padding:5px 15px;border-radius:20px;font-size:12px;font-weight:600">
+            数据范围：{{ scope }}</span>
+          <span style="font-size:12px;color:var(--muted)">该角色当前可用权限 {{ perm_n }} 项</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 欢迎区：导航统一交给左侧层级菜单，本页只作工作台首页，不再以页面方式呈现各模块 -->
+  <div class="card" style="padding:26px 28px;margin-bottom:22px;border-left:3px solid var(--brand)">
+    <h2 style="margin:0 0 8px;font-family:var(--serif);font-size:20px;letter-spacing:1px">欢迎使用海盈通保 OA 管理系统</h2>
+    <p style="margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.9">
+      请使用左侧「系统导航」菜单进入各业务模块。当前账号已开通
+      <b style="color:var(--brand-deep)">{% set ns = namespace(c=0) %}{% for s in menu_tree %}{% set ns.c = ns.c + s.subs|length %}{% endfor %}{{ ns.c }}</b>
+      个模块的访问权限（由信息技术管理系统按账号开通）。如需调整可见模块，请联系 IT 管理员。
+    </p>
+  </div>
+
+  <div style="font-size:12px;color:var(--muted);text-align:center;letter-spacing:2px;margin-top:8px">
+    海盈通保 · 科技 · 服务 · 价值
+  </div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{{ system.en }} · {{ system.name }} · 海盈通保OA管理系统{% endblock %}
+{% block pagename %}{{ system.en }} · {{ system.name }}{% endblock %}
+{% block content %}
+
+  <!-- 系统标识卡 -->
+  <div class="card" style="padding:22px 24px;margin-bottom:20px;border-top:3px solid {{ system.color }}">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="width:54px;height:54px;flex:0 0 54px;border-radius:14px;background:{{ system.soft }};
+                  color:{{ system.color }};display:flex;align-items:center;justify-content:center;
+                  font-weight:800;font-size:15px;letter-spacing:.5px">{{ system.en }}</div>
+      <div>
+        <div style="font-family:var(--serif);font-size:19px;font-weight:600;letter-spacing:1px">{{ system.name }}</div>
+        <div style="font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-top:4px">{{ system.desc }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 业务模块 -->
+  <div class="card" style="padding:20px 24px;margin-bottom:18px">
+    <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:14px">
+      <div style="font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.8px">业务模块</div>
+      <span style="font-size:10.5px;color:var(--muted);letter-spacing:1.5px">BUSINESS MODULES</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:9px">
+      {% for m in system.modules %}
+        {% if m.url %}
+          <a class="chip" href="{{ url_for(m.url) }}"
+             style="padding:10px 16px;font-size:13.5px"><span class="en">{{ m.en }}</span> · {{ m.name }}</a>
+        {% else %}
+          {# 带上 from=<系统key>：占位页据此返回到本系统，而不是笼统回总览 #}
+          <a class="chip plan" href="{{ url_for('stub', name=m.name) }}?from={{ system.key }}"
+             style="padding:10px 16px;font-size:13.5px"><span class="en">{{ m.en }}</span> · {{ m.name }}
+            <span style="font-size:10.5px">规划中</span></a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {# 十七改：核心业务（CRM）版块 —— 合约到期提醒（临期 / 已过期），点条目直达合约详情 #}
+  {% if expiry %}
+  <div class="card" style="padding:20px 24px;margin-bottom:18px;border-left:3px solid #C86432">
+    <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:14px">
+      <div style="font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.8px">合约到期提醒</div>
+      <span style="font-size:10.5px;color:var(--muted);letter-spacing:1.5px">EXPIRY ALERTS</span>
+      <span style="font-size:12px;color:var(--ink-2)">
+        临期 {{ expiry_kpi.expiring }} 条 · 已过期 {{ expiry_kpi.expired }} 条
+      </span>
+      <a href="{{ url_for('crm.contracts', st='expiring') }}" style="margin-left:auto;font-size:12.5px;color:var(--brand)">查看全部 →</a>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for x in expiry %}
+      <a href="{{ url_for('crm.contract_detail', cid=x.c.id) }}"
+         style="padding:6px 12px;border-radius:8px;font-size:12.5px;text-decoration:none;
+                {% if x.state == 'expired' %}background:#FBE3DD;color:#991b1b
+                {% elif x.state == 'danger' %}background:#FBE3DD;color:#991b1b
+                {% else %}background:#FDF3E4;color:#8A5A18{% endif %}"
+         title="{{ x.short }} · {{ x.name }}">
+        {{ x.short }} · {{ x.name }}
+        {% if x.state == 'expired' %}已过期 {{ -x.days }} 天{% else %}{{ x.days }} 天后到期{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 本版块设置 -->
+  <div class="card" style="padding:20px 24px">
+    <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:14px">
+      <div style="font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.8px">本版块设置</div>
+      <span style="font-size:10.5px;color:var(--muted);letter-spacing:1.5px">MODULE SETTINGS</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:9px">
+      {% for st in system.settings %}
+        {% if st.url %}
+          <a class="chip" href="{{ url_for(st.url) }}"
+             style="padding:10px 16px;font-size:13.5px"><span class="en">{{ st.en }}</span> · {{ st.name }}</a>
+        {% else %}
+          <a class="chip plan" href="{{ url_for('system_settings', key=system.key) }}"
+             style="padding:10px 16px;font-size:13.5px"><span class="en">{{ st.en }}</span> · {{ st.name }}
+            <span style="font-size:10.5px">规划中</span></a>
+        {% endif %}
+      {% endfor %}
+      <a class="chip" href="{{ url_for('system_settings', key=system.key) }}"
+         style="padding:10px 16px;font-size:13.5px;background:{{ system.soft }};border-color:{{ system.color }};
+                color:{{ system.color }};font-weight:600">系统设置与权限配置</a>
+    </div>
+  </div>
+{% endblock %}

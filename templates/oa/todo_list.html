@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}OA · 待办{% endblock %}
+{% block content %}
+
+{# ① 待我审批：有审批权限的人才能看到这里的内容 #}
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:8px 18px;box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:20px">
+  <h3 style="font-size:15px;margin:14px 0">待我审批
+    <span style="background:#FBE3DD;color:#dc2626;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">{{ to_approve|length }}</span>
+  </h3>
+  {% if to_approve %}
+    {% for it in to_approve %}
+    <div style="padding:12px 0;border-bottom:1px solid #F3EDE3">
+      <div style="font-size:15px;font-weight:600">
+        {{ it.title }}
+        <span style="background:#DED6C9;color:#5C554D;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">{{ it.type }}</span>
+      </div>
+      <div style="font-size:12px;color:#9C9288;margin:4px 0">
+        申请人：{{ it.applicant.username if it.applicant else '未知' }}
+        ｜ {{ it.created_at.strftime('%Y-%m-%d %H:%M') if it.created_at else '' }}
+      </div>
+      {# 直接在此处理，复用审批接口（approval_decide 已有权限闸门兜底） #}
+      <form method="post" action="{{ url_for('oa.approval_decide', aid=it.id) }}" style="margin-top:6px">
+        <input type="text" name="opinion" placeholder="审批意见（可选）"
+               style="padding:7px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;width:240px;margin-right:8px">
+        <button type="submit" name="action" value="approve"
+                style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer">通过</button>
+        <button type="submit" name="action" value="reject"
+                style="background:#dc2626;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer;margin-left:8px">驳回</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="padding:18px 0;text-align:center;color:#9C9288;font-size:13px">暂无待我审批的事项</div>
+  {% endif %}
+</div>
+
+{# ② 我发起的待处理：申请人是我、且仍在审批中的 #}
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:8px 18px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
+  <h3 style="font-size:15px;margin:14px 0">我发起的待处理
+    <span style="background:#FDF3E4;color:#8A5A18;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">{{ mine_pending|length }}</span>
+  </h3>
+  {% if mine_pending %}
+    {% for it in mine_pending %}
+    <div style="padding:12px 0;border-bottom:1px solid #F3EDE3">
+      <div style="font-size:15px;font-weight:600">
+        {{ it.title }}
+        <span style="background:#DED6C9;color:#5C554D;font-size:11px;padding:1px 8px;border-radius:10px;vertical-align:middle">{{ it.type }}</span>
+      </div>
+      <div style="font-size:12px;color:#9C9288;margin-top:4px">
+        提交时间：{{ it.created_at.strftime('%Y-%m-%d %H:%M') if it.created_at else '' }}
+        ｜ 状态：<span style="color:#8A5A18">审批中</span>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="padding:18px 0;text-align:center;color:#9C9288;font-size:13px">没有待处理的发起事项</div>
+  {% endif %}
+</div>
+
+{% endblock %}

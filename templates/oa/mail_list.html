@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}OA · 邮箱{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <h2 style="font-size:18px;margin:0">站内邮箱
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（公司内部人员互发邮件）</small>
+  </h2>
+  <div style="display:flex;gap:8px">
+    <a href="{{ url_for('oa.mails', box='in') }}"
+       style="padding:7px 16px;border-radius:6px;font-size:13px;text-decoration:none;
+              {{ 'background:#E6823C;color:#fff' if box != 'out' else 'background:#fff;color:#5C554D;border:1px solid #E2D8CA' }}">
+      收件箱{% if unread %}<span style="margin-left:4px;background:#dc2626;color:#fff;border-radius:8px;padding:0 6px;font-size:11px">{{ unread }}</span>{% endif %}
+    </a>
+    <a href="{{ url_for('oa.mails', box='out') }}"
+       style="padding:7px 16px;border-radius:6px;font-size:13px;text-decoration:none;
+              {{ 'background:#E6823C;color:#fff' if box == 'out' else 'background:#fff;color:#5C554D;border:1px solid #E2D8CA' }}">
+      发件箱
+    </a>
+  </div>
+</div>
+
+{# 写信表单（可折叠，简洁起见直接常驻顶部） #}
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:20px">
+  <div style="font-size:14px;font-weight:600;margin-bottom:12px">写邮件</div>
+  <form method="post" action="{{ url_for('oa.mail_send') }}">
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <select name="recipient_id" required
+              style="padding:10px 12px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;background:#fff;min-width:180px">
+        <option value="">选择收件人…</option>
+        {% for u in users %}
+        <option value="{{ u.id }}">{{ u.username }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="title" placeholder="邮件标题" required
+             style="flex:1;padding:10px 12px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+    </div>
+    <textarea name="content" placeholder="邮件正文" rows="4"
+              style="width:100%;padding:10px 12px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;resize:vertical;margin-bottom:10px"></textarea>
+    <button type="submit"
+            style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">发送</button>
+  </form>
+</div>
+
+{# 邮件列表 #}
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:8px 18px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
+  {% if items %}
+    {% for m in items %}
+    <div style="padding:14px 0;border-bottom:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center">
+      <a href="{{ url_for('oa.mail_detail', mid=m.id) }}"
+         style="text-decoration:none;color:#2A2A2A;flex:1">
+        <div style="font-size:15px;{{ 'font-weight:600' if (box != 'out' and not m.is_read) else '' }}">
+          {% if box != 'out' and not m.is_read %}<span style="color:#E6823C">●</span> {% endif %}{{ m.title }}
+        </div>
+        <div style="font-size:12px;color:#9C9288;margin-top:4px">
+          {{ '发件人' if box == 'out' else '收件人' }}：
+          {{ (m.recipient.username if box == 'out' else m.sender.username) if (m.recipient if box == 'out' else m.sender) else '未知' }}
+          ｜ {{ m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '' }}
+        </div>
+      </a>
+      <form method="post" action="{{ url_for('oa.mail_delete', mid=m.id) }}"
+            onsubmit="return confirm('确定删除这封邮件？')" style="margin-left:12px">
+        <button type="submit" style="background:none;border:none;color:#dc2626;font-size:12px;cursor:pointer">删除</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="padding:30px 0;text-align:center;color:#9C9288">{{ '暂无发件' if box == 'out' else '收件箱为空' }}</div>
+  {% endif %}
+</div>
+
+{% endblock %}

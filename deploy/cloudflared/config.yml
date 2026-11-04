@@ -1,0 +1,18 @@
+# Cloudflare Tunnel 配置 —— 海盈通保OA管理系统（oa.crmwinpro.com）
+#
+# 前提：DNS 里 oa.crmwinpro.com 已指向隧道 haiying-oa（仪表盘可见，无需改）。
+# 本文件只规定「哪个域名转发到本机哪个端口」。
+#
+# credentials-file 由 `cloudflared tunnel login`（交互授权）或
+# 仪表盘给出的 `--token` 命令自动写入，不要手填。
+# 若用 token 方式启动（见 cloudflared.service），本文件可不用。
+
+tunnel: haiying-oa
+credentials-file: /etc/cloudflared/haiying-oa.json
+
+ingress:
+  # OA 站点：把 oa.crmwinpro.com 接回本机 gunicorn（127.0.0.1:5002）
+  - hostname: oa.crmwinpro.com
+    service: http://127.0.0.1:5002
+  # 兜底：未匹配的请求直接 404，避免泄漏其他服务
+  - service: http_status:404

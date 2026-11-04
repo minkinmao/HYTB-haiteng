@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}会计科目 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 会计科目{% endblock %}
+{% block content %}
+  <style>
+    /* 科目列表：一行一个科目，编码按级次缩进；编辑区折叠收起，不占版面 */
+    .acc-row{display:flex;align-items:center;gap:10px;padding:10px 2px;flex-wrap:wrap}
+    .acc-code{width:104px;flex:0 0 104px;font-family:Consolas,monospace;font-size:12.5px;color:#8A7F72}
+    .acc-name{flex:1;min-width:120px;font-size:14px}
+    .acc-tag{font-size:11px;padding:2px 7px;border-radius:20px;white-space:nowrap}
+    .acc-act{display:flex;gap:6px;align-items:center}
+    .acc-btn{font-size:12px;background:#fff;border:1px solid #E2D8CA;border-radius:6px;
+             padding:4px 10px;cursor:pointer;color:#5C554D}
+    .acc-btn.warn{color:#b91c1c}
+    .acc-btn.hi{color:#C86432}
+    /* 通用字段块：新增表单与行内编辑区共用一套外观 */
+    .fld{display:flex;flex-direction:column;gap:4px}
+    .fld>span{font-size:11.5px;color:#9C9288}
+    .fld input[type=text],.fld select{padding:8px 10px;border:1px solid #E2D8CA;border-radius:7px;font-size:13.5px}
+    .edit-box{background:#FCFAF7;border:1px solid #EAE2D6;border-radius:10px;padding:14px 16px;
+              margin:0 0 12px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+    .aux-box{display:flex;gap:10px;font-size:12.5px;color:#5C554D;align-items:center;flex-wrap:wrap}
+    .aux-box label{display:flex;align-items:center;gap:4px;cursor:pointer}
+    @media (max-width:900px){.acc-code{width:84px;flex:0 0 84px}}
+  </style>
+
+  <h2 style="font-size:18px;margin:0 0 6px">会计科目 <span style="font-size:13px;font-weight:400;color:#9C9288">Chart of Accounts</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    科目表是财务系统的地基，所有凭证分录、账簿与报表都挂在这里。已按《小企业会计准则》预设一套保险中介常用科目，可直接增删改。
+    <b style="color:#C86432">明细科目</b>才能做分录；挂了明细的科目自动成为<b style="color:#C86432">汇总科目</b>。
+  </div>
+
+  {# ===== 新增科目 ===== #}
+  <div style="background:#fff;border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增科目</div>
+    <form method="post" action="{{ url_for('fin.account_new') }}" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <div class="fld"><span>科目编码 *</span>
+        <input type="text" name="code" placeholder="如 112201" required style="width:130px"></div>
+      <div class="fld"><span>科目名称 *</span>
+        <input type="text" name="name" placeholder="如 应收代理手续费" required style="width:180px"></div>
+      <div class="fld"><span>类别</span>
+        <select name="category">
+          {% for v, n in category_options %}<option value="{{ v }}">{{ n }}</option>{% endfor %}
+        </select></div>
+      <div class="fld"><span>余额方向</span>
+        <select name="direction">
+          {% for v, n in direction_options %}<option value="{{ v }}">{{ n }}</option>{% endfor %}
+        </select></div>
+      <div class="fld"><span>上级科目（可不填）</span>
+        <select name="parent_code" style="max-width:240px">
+          <option value="">— 一级科目 —</option>
+          {% for p in parents %}
+          <option value="{{ p.code }}">{{ p.code }} {{ '　' * (p.level - 1) }}{{ p.name }}</option>
+          {% endfor %}
+        </select></div>
+      <div class="aux-box" style="padding-bottom:9px">
+        <span style="font-size:11.5px;color:#9C9288">辅助核算</span>
+        {% for v, n in aux_options %}
+        <label><input type="checkbox" name="aux" value="{{ v }}">{{ n }}</label>
+        {% endfor %}
+      </div>
+      <div class="fld"><span>备注</span>
+        <input type="text" name="note" placeholder="可选" style="width:150px"></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:10px 22px;border-radius:7px;font-size:13.5px;cursor:pointer">添加科目</button>
+    </form>
+  </div>
+
+  {# ===== 筛选 ===== #}
+  <form method="get" action="{{ url_for('fin.accounts') }}"
+        style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+    <span style="font-size:13px;color:#5C554D">筛选：</span>
+    <select name="cat" style="padding:7px 10px;border:1px solid #E2D8CA;border-radius:7px;font-size:13px">
+      <option value="">全部类别</option>
+      {% for v, n in category_options %}
+      <option value="{{ v }}" {{ 'selected' if cat == v else '' }}>{{ n }}</option>
+      {% endfor %}
+    </select>
+    <select name="state" style="padding:7px 10px;border:1px solid #E2D8CA;border-radius:7px;font-size:13px">
+      <option value="">全部状态</option>
+      <option value="on" {{ 'selected' if state == 'on' else '' }}>仅启用</option>
+      <option value="off" {{ 'selected' if state == 'off' else '' }}>仅停用</option>
+    </select>
+    <button type="submit" style="background:#fff;border:1px solid #E2D8CA;border-radius:7px;padding:7px 18px;font-size:13px;cursor:pointer">查询</button>
+    <span style="font-size:12.5px;color:#9C9288">共 {{ items|length }} 个科目</span>
+  </form>
+
+  {# ===== 科目列表 ===== #}
+  <div style="background:#fff;border-radius:8px;padding:6px 18px 14px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for it in items %}
+    <div style="border-bottom:1px solid #F3EDE3;padding:6px 0">
+      <div class="acc-row">
+        <span class="acc-code" style="padding-left:{{ (it.level - 1) * 14 }}px">{{ it.code }}</span>
+        <span class="acc-name" style="font-weight:{{ '600' if it.level == 1 else '400' }}">{{ it.name }}</span>
+
+        <span class="acc-tag" style="background:#FBEEE2;color:#C86432">{{ it.category_cn }}</span>
+        <span class="acc-tag" style="background:#F1F0EE;color:#5C554D">{{ it.direction_cn }}</span>
+        {% if it.aux %}
+        <span class="acc-tag" style="background:#EDF2FA;color:#4A6BB0">
+          辅助：{% for a in it.aux.split(',') if a %}{{ aux_name.get(a, a) }} {% endfor %}
+        </span>
+        {% endif %}
+        {% if not it.is_leaf %}
+        <span class="acc-tag" style="background:#F8F0DC;color:#9A7A20">汇总科目</span>
+        {% endif %}
+        {% if not it.enabled %}
+        <span class="acc-tag" style="background:#F3E4E4;color:#991b1b">已停用</span>
+        {% endif %}
+
+        <div class="acc-act">
+          {# 编辑按钮：只做一件事——把下面那块的折叠区展开/收起（不写复杂脚本） #}
+          <button type="button" class="acc-btn hi"
+                  onclick="var d=document.getElementById('ed-{{ it.id }}'); d.open=!d.open;">编辑</button>
+          <form method="post" action="{{ url_for('fin.account_toggle', aid=it.id) }}">
+            <button type="submit" class="acc-btn">{{ '停用' if it.enabled else '启用' }}</button>
+          </form>
+          <form method="post" action="{{ url_for('fin.account_delete', aid=it.id) }}"
+                onsubmit="return confirm('确认删除科目「{{ it.code }} {{ it.name }}」？')">
+            <button type="submit" class="acc-btn warn">删除</button>
+          </form>
+        </div>
+      </div>
+
+      {# 行内编辑区：默认收起，点「编辑」展开 #}
+      <details id="ed-{{ it.id }}" style="margin-bottom:8px">
+        <summary style="font-size:12px;color:#C86432;cursor:pointer">编辑「{{ it.code }} {{ it.name }}」</summary>
+        <form method="post" action="{{ url_for('fin.account_edit', aid=it.id) }}" class="edit-box" style="margin-top:10px">
+          <div class="fld"><span>科目名称</span>
+            <input type="text" name="name" value="{{ it.name }}" style="width:180px"></div>
+          <div class="fld"><span>类别</span>
+            <select name="category">
+              {% for v, n in category_options %}
+              <option value="{{ v }}" {{ 'selected' if it.category == v else '' }}>{{ n }}</option>
+              {% endfor %}
+            </select></div>
+          <div class="fld"><span>余额方向</span>
+            <select name="direction">
+              {% for v, n in direction_options %}
+              <option value="{{ v }}" {{ 'selected' if it.direction == v else '' }}>{{ n }}</option>
+              {% endfor %}
+            </select></div>
+          <div class="aux-box" style="padding-bottom:9px">
+            <span style="font-size:11.5px;color:#9C9288">辅助核算</span>
+            {% for v, n in aux_options %}
+            <label><input type="checkbox" name="aux" value="{{ v }}"
+                   {{ 'checked' if v in (it.aux or '').split(',') else '' }}>{{ n }}</label>
+            {% endfor %}
+          </div>
+          <div class="fld"><span>备注</span>
+            <input type="text" name="note" value="{{ it.note or '' }}" style="width:190px"></div>
+          <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer">保存</button>
+          <span style="font-size:11.5px;color:#9C9288;padding-bottom:10px">编码 {{ it.code }} 是数据钥匙，一期不允许修改</span>
+        </form>
+      </details>
+    </div>
+    {% else %}
+    <div style="padding:26px 0;text-align:center;color:#9C9288">没有符合条件的科目</div>
+    {% endfor %}
+  </div>
+{% endblock %}

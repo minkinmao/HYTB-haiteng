@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 商务合同{% endblock %}
+{% block pagename %}行政管理系统 · 商务合同台账{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">商务合同台账
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（房屋租赁 / 物业 / 采购 / 服务外包 / 保险）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记公司对外的全部商务合同，系统按合同到期日自动提醒续签。员工劳动合同请到<span style="color:#C86432">人事管理系统</span>维护。
+</div>
+
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="合同名称 / 对方单位 / 经办人">
+  <label>类型</label>
+  <select name="cat">
+    <option value="">全部</option>
+    {% for c in cats %}<option value="{{ c }}" {{ 'selected' if c == cat else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <label>到期状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    <option value="expired" {{ 'selected' if st == 'expired' else '' }}>已到期</option>
+    <option value="danger" {{ 'selected' if st == 'danger' else '' }}>7 天内到期</option>
+    <option value="warn" {{ 'selected' if st == 'warn' else '' }}>30 天内到期</option>
+    <option value="ok" {{ 'selected' if st == 'ok' else '' }}>正常</option>
+    <option value="none" {{ 'selected' if st == 'none' else '' }}>无固定期限</option>
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.contracts') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.contract_new') }}">＋ 登记合同</a>{% endif %}
+</form>
+
+<div class="adm-stat">
+  <span>合同总数：<b>{{ items|length }}</b> 份</span>
+  <span>合计金额：<b>¥ {{ '{:,.2f}'.format(total) }}</b></span>
+  {% if alert_n %}<span style="color:#8A5A18">即将到期 / 已到期：<b>{{ alert_n }}</b> 份</span>{% endif %}
+</div>
+
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>合同名称</th><th>类型</th><th>对方单位</th>
+        <th>合同期限</th><th>金额（元）</th><th>到期状态</th><th>经办人</th><th>附件</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.r.code }}</td>
+        <td>
+          <div class="adm-nm">{{ it.r.name }}</div>
+          <div class="adm-sub">
+            {{ '履行中' if it.r.status == 'active' else '已终止' }}
+            {% if it.r.dept %}｜承办：{{ it.r.dept }}{% endif %}
+            {% if it.r.pay_mode == 'install' %}｜分期付款{% endif %}
+          </div>
+        </td>
+        <td>{{ it.r.category or '—' }}</td>
+        <td>{{ it.r.party or '—' }}</td>
+        <td class="mono">
+          {{ it.r.start_date or '—' }}<br>
+          <span style="color:#9C9288">至 {{ it.r.end_date or '无固定期限' }}</span>
+        </td>
+        <td class="num">{{ '{:,.2f}'.format(it.r.amount or 0) }}</td>
+        <td>{% include 'adm/_expire_tag.html' %}</td>
+        <td>{{ it.r.handler or '—' }}</td>
+        <td>
+          {% if it.r.file_path %}
+            <a class="adm-a" href="{{ url_for('adm.contract_file', cid=it.r.id) }}">下载</a>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+        <td>
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.contract_edit', cid=it.r.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('adm.contract_delete', cid=it.r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除合同「{{ it.r.name }}」？附件会一并删除。')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无商务合同。{% if can_edit %}点右上角「＋ 登记合同」开始建档。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

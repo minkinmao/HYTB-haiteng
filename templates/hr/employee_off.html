@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}离职人员 / 内部人才库 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">离职人员信息维护 / 内部人才库 <span style="font-size:13px;font-weight:400;color:#9C9288">Talent Pool</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    离职员工档案完整保留，作为公司内部人才储备；如需返聘可在其详情中查看历史任职与合同记录，也可办理复职。
+  </div>
+
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for it in items %}
+    <div style="padding:12px 0;border-bottom:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:15px;font-weight:600">{{ it.name }}
+          <span style="font-size:12px;color:#9C9288;font-weight:400">｜ 工号 {{ it.employee_no }}</span>
+          <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#FBEEE2' if it.staff_type=='internal' else '#FDF3E4' }};color:{{ '#C86432' if it.staff_type=='internal' else '#8A5A18' }}">{{ '内勤' if it.staff_type=='internal' else '外勤' }}</span>
+        </div>
+        <div style="font-size:12px;color:#9C9288;margin-top:4px">
+          职务：{{ it.title or '—' }} ｜ 部门：{{ it.org.name if it.org else '未设' }} ｜
+          离职日期：{{ it.leave_date or '—' }} ｜ 离职原因：{{ it.leave_reason or '—' }}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <a href="{{ url_for('hr.employee_view', eid=it.id) }}"
+           style="font-size:12px;color:#6B5D4F;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">详情</a>
+        {% if can_manage %}
+        <form method="post" action="{{ url_for('hr.employee_off_do', eid=it.id) }}"
+              onsubmit="return confirm('确认将 {{ it.name }}（{{ it.employee_no }}）复职？')">
+          <button type="submit"
+                  style="font-size:12px;color:#166534;background:#fff;border:1px solid #D5E8D9;padding:4px 12px;border-radius:6px;cursor:pointer">复职</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无离职人员，人才库为空</div>
+    {% endfor %}
+  </div>
+{% endblock %}

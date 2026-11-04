@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 销售费用清单{% endblock %}
+{% block pagename %}核心业务管理系统 · 销售费用清单{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .qwrap{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .qbox{flex:1;min-width:300px;background:#fff;border:1px solid #EAE2D6;border-radius:12px;
+        padding:14px 16px;box-shadow:0 2px 10px rgba(42,42,42,.04)}
+  .qbox h3{font-size:14px;margin:0 0 10px;color:#9C4E2C;font-weight:600}
+  .coefline{margin:8px 0;font-size:13px;color:#6B5D4F;display:flex;justify-content:space-between;
+            align-items:center}
+  .coefline .pc{font-variant-numeric:tabular-nums;color:#C86432;font-weight:600}
+  .hint{font-size:12px;color:#9C9288}
+  .sf-tab{white-space:nowrap}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">销售费用清单
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（先扣公司税费 → 再乘团队系数 · 按团队查询）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  费用 = <b>（保司含税结算 − 增值税 − 附加税费）× 对应团队系数</b>。
+  选择<b>团队范围</b>即可查出该范围内各产品缴别的销售费用；一行 = 一个产品缴别。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
+  <a class="crm-tab" href="{{ url_for('crm.manpower') }}">人力数据清单</a>
+  <a class="crm-tab" href="{{ url_for('crm.agencies') }}">合作经代</a>
+  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
+  <a class="crm-tab on" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
+</div>
+
+<form class="crm-tool" method="get" action="{{ url_for('crm.sales_fee') }}">
+  <label>团队类型</label>
+  <select name="team_type" id="selTT" onchange="onTT()">
+    {% for c, n in team_types %}
+    <option value="{{ c }}" {{ 'selected' if sel.team_type == c else '' }}>{{ n }}</option>
+    {% endfor %}
+  </select>
+  <label id="ownLabel" style="{{ '' if sel.team_type == 'channel' else 'display:none' }}">渠道负责人</label>
+  <select name="owner" id="selOwn" style="{{ '' if sel.team_type == 'channel' else 'display:none' }}">
+    <option value="">— 不限 —</option>
+    {% for o in owners %}<option value="{{ o.name }}" {{ 'selected' if sel.owner == o.name else '' }}>{{ o.label }}</option>{% endfor %}
+  </select>
+  <label>适用分区</label>
+  <select name="zone">
+    <option value="">总计（不限）</option>
+    {% for z in zones %}<option value="{{ z }}" {{ 'selected' if sel.zone == z else '' }}>{{ z }}</option>{% endfor %}
+  </select>
+  <label>适用营业部</label>
+  <select name="dept">
+    <option value="">全员（不限）</option>
+    {% for d in depts %}<option value="{{ d }}" {{ 'selected' if sel.dept == d else '' }}>{{ d }}</option>{% endfor %}
+  </select>
+  <button class="crm-btn pri" type="submit">查询</button>
+</form>
+
+<div class="qwrap">
+  <div class="qbox">
+    <h3>当前生效系数</h3>
+    <div class="coefline"><span>kf · FYC 系数</span><span class="pc">{{ '%.2f'|format(coef.kf) }}%</span></div>
+    <div class="coefline"><span>kr · RYC 系数</span><span class="pc">{{ '%.2f'|format(coef.kr) }}%</span></div>
+    <div class="coefline"><span>ka · 加佣方案系数</span><span class="pc">{{ '%.2f'|format(coef.ka) }}%</span></div>
+    <div class="hint" style="margin-top:8px">
+      按「{% for c, n in team_types %}{% if c == sel.team_type %}{{ n }}{% endif %}{% endfor %}{{ ' · ' + sel.owner if sel.owner else '' }} · {{ sel.zone or '总计' }} · {{ sel.dept or '全员' }}」匹配到的系数。
+    </div>
+  </div>
+  <div class="qbox">
+    <h3>税费参数（全局）</h3>
+    <div class="coefline"><span>增值税率</span><span class="pc">{{ '%.2f'|format(tax.vat) }}%</span></div>
+    <div class="coefline"><span>附加税费率</span><span class="pc">{{ '%.2f'|format(tax.sur) }}%</span></div>
+    <div class="hint" style="margin-top:8px">费用统一先扣税再乘系数；调整税率请到「团队系数设置」页。</div>
+  </div>
+</div>
+
+<div class="crm-sec">销售费用明细 <span>共 {{ rows|length }} 行 · 一行 = 一个产品缴别</span></div>
+<div class="crm-card" style="overflow-x:auto">
+  {% if rows %}
+  <table class="crm-table sf-tab">
+    <thead>
+      <tr>
+        <th>保险公司</th>
+        <th>险种名称</th>
+        <th>险种类型</th>
+        <th>备注</th>
+        <th>险种代码</th>
+        <th>缴别</th>
+        <th style="text-align:right">单量数</th>
+        <th style="text-align:right">首年佣金</th>
+        <th style="text-align:right">加佣</th>
+        <th style="text-align:right">首月小计</th>
+        <th>说明</th>
+        <th style="text-align:right">第2年</th>
+        <th style="text-align:right">第3年</th>
+        <th style="text-align:right">第4年</th>
+        <th style="text-align:right">第5年</th>
+        <th>团队类型</th>
+        <th>适用分区</th>
+        <th>适用营业部</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.insurer or '—' }}</td>
+        <td>{{ r.product or '—' }}</td>
+        <td>{{ r.ins_type or '—' }}</td>
+        <td style="max-width:220px">{{ r.note or '—' }}</td>
+        <td>{{ r.code or '—' }}</td>
+        <td>{{ r.period or '—' }}</td>
+        <td style="text-align:right">—</td>
+        <td style="text-align:right" class="mono">{{ ('%.2f'|format(r.fyc) ~ '%') if r.fyc else '—' }}</td>
+        <td style="text-align:right" class="mono">{{ ('%.2f'|format(r.plan) ~ '%') if r.plan else '—' }}</td>
+        <td style="text-align:right" class="mono" style="color:#C86432">{{ ('%.2f'|format(r.subtotal) ~ '%') if r.subtotal else '—' }}</td>
+        <td>{{ r.desc or '—' }}</td>
+        <td style="text-align:right" class="mono">{{ ('%.2f'|format(r.ryc[2]) ~ '%') if r.ryc[2] else '—' }}</td>
+        <td style="text-align:right" class="mono">{{ ('%.2f'|format(r.ryc[3]) ~ '%') if r.ryc[3] else '—' }}</td>
+        <td style="text-align:right" class="mono">{{ ('%.2f'|format(r.ryc[4]) ~ '%') if r.ryc[4] else '—' }}</td>
+        <td style="text-align:right" class="mono">{{ ('%.2f'|format(r.ryc[5]) ~ '%') if r.ryc[5] else '—' }}</td>
+        <td>{% for c, n in team_types %}{% if c == sel.team_type %}{{ n }}{% endif %}{% endfor %}</td>
+        <td>{{ sel.zone or '总计' }}</td>
+        <td>{{ sel.dept or '全员' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无可展示的费用数据（请先录入产品合约费率，并配置团队系数）。</div>
+  {% endif %}
+</div>
+
+<script>
+  function onTT() {
+    var s = document.getElementById('selTT');
+    var l = document.getElementById('ownLabel');
+    var o = document.getElementById('selOwn');
+    var isCh = s && s.value === 'channel';
+    if (l) { l.style.display = isCh ? '' : 'none'; }
+    if (o) { o.style.display = isCh ? '' : 'none'; }
+  }
+</script>
+{% endblock %}

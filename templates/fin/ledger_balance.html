@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% block title %}科目余额表 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 科目余额表{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">科目余额表 <span style="font-size:13px;font-weight:400;color:#9C9288">Balance</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    {{ period }} 期末各科目的余额。「本期发生额」只统计本期已记账凭证；
+    <b style="color:#5C554D">期末余额 = 期初余额 + 本期借方 − 本期贷方</b>，汇总科目由下级明细科目加总得出。
+  </div>
+
+  {# 筛选 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.ledger_balance') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">科目类别</div>
+        <select name="cat" style="padding:7px 10px;width:130px">
+          <option value="">全部</option>
+          {% for k, cn in category_options %}
+          <option value="{{ k }}" {{ 'selected' if k == cat else '' }}>{{ cn }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">科目区间（按编码）</div>
+        <span style="display:flex;align-items:center;gap:6px">
+          <input type="text" name="code_from" value="{{ code_from }}" placeholder="如 1001" style="padding:7px 10px;width:110px">
+          <span style="color:#9C9288">～</span>
+          <input type="text" name="code_to" value="{{ code_to }}" placeholder="如 5603" style="padding:7px 10px;width:110px">
+        </span>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;display:flex;align-items:center;gap:6px;padding-bottom:9px">
+        <input type="checkbox" name="all" value="1" {{ 'checked' if not hide_zero else '' }}>
+        显示全部科目（含无余额、无发生额的）
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">查询</button>
+      <a href="{{ url_for('fin.ledger_balance') }}" style="font-size:13px;color:#9C9288;padding:9px 4px">重置</a>
+    </form>
+  </div>
+
+  {# 合计与平衡 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('期初借方合计', meta.open_d, meta.open_balanced),
+      ('本期借方发生额', meta.debit, meta.flow_balanced),
+      ('本期贷方发生额', meta.credit, meta.flow_balanced),
+      ('期末借方合计', meta.end_d, meta.end_balanced),
+    ] %}
+    {% for nm, val, ok in cards %}
+    <div style="flex:1;min-width:150px;background:{{ '#E8F5EC' if ok else '#FDECEC' }};
+                border:1px solid {{ '#BFE3C9' if ok else '#F3C9C9' }};border-radius:8px;padding:12px 16px">
+      <div style="font-size:12px;color:#9C9288">{{ nm }}</div>
+      <div style="font-size:18px;font-weight:700;color:{{ '#166534' if ok else '#991b1b' }};margin-top:4px">
+        ￥{{ '{:,.2f}'.format(val) }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="background:{{ '#E8F5EC' if (meta.open_balanced and meta.flow_balanced and meta.end_balanced) else '#FDECEC' }};
+              border:1px solid {{ '#BFE3C9' if (meta.open_balanced and meta.flow_balanced and meta.end_balanced) else '#F3C9C9' }};
+              border-radius:8px;padding:12px 18px;margin-bottom:18px;font-size:13px;
+              color:{{ '#166534' if (meta.open_balanced and meta.flow_balanced and meta.end_balanced) else '#991b1b' }}">
+    {% if meta.open_balanced and meta.flow_balanced and meta.end_balanced %}
+      试算平衡通过：期初 借 ￥{{ '{:,.2f}'.format(meta.open_d) }} ＝ 贷 ￥{{ '{:,.2f}'.format(meta.open_c) }}，
+      本期发生 借 ￥{{ '{:,.2f}'.format(meta.debit) }} ＝ 贷 ￥{{ '{:,.2f}'.format(meta.credit) }}，
+      期末 借 ￥{{ '{:,.2f}'.format(meta.end_d) }} ＝ 贷 ￥{{ '{:,.2f}'.format(meta.end_c) }}
+    {% else %}
+      试算不平衡，请检查凭证：
+      期初 差 ￥{{ '{:,.2f}'.format(meta.open_d - meta.open_c) }}、
+      本期 差 ￥{{ '{:,.2f}'.format(meta.debit - meta.credit) }}、
+      期末 差 ￥{{ '{:,.2f}'.format(meta.end_d - meta.end_c) }}
+    {% endif %}
+    <span style="color:#9C9288;margin-left:8px">
+      ｜ 本期已记账凭证 {{ meta.vch_count }} 张 ｜ 命中科目 {{ meta.matched }} 个 ｜ 当前显示 {{ meta.shown }} 个
+    </span>
+  </div>
+
+  {# 余额表 #}
+  <div class="card" style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:940px">
+      <thead>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th rowspan="2" style="text-align:left;padding:8px 12px;border-bottom:1px solid #EAE2D6">科目编码</th>
+          <th rowspan="2" style="text-align:left;padding:8px 8px;border-bottom:1px solid #EAE2D6">科目名称</th>
+          <th colspan="2" style="text-align:center;padding:8px;border-bottom:1px solid #EAE2D6;border-left:1px solid #EAE2D6">期初余额</th>
+          <th colspan="2" style="text-align:center;padding:8px;border-bottom:1px solid #EAE2D6;border-left:1px solid #EAE2D6">本期发生额</th>
+          <th colspan="2" style="text-align:center;padding:8px;border-bottom:1px solid #EAE2D6;border-left:1px solid #EAE2D6">期末余额</th>
+        </tr>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th style="text-align:right;padding:6px 12px;border-left:1px solid #EAE2D6">借方</th>
+          <th style="text-align:right;padding:6px 12px">贷方</th>
+          <th style="text-align:right;padding:6px 12px;border-left:1px solid #EAE2D6">借方</th>
+          <th style="text-align:right;padding:6px 12px">贷方</th>
+          <th style="text-align:right;padding:6px 12px;border-left:1px solid #EAE2D6">借方</th>
+          <th style="text-align:right;padding:6px 12px">贷方</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set top = r.level == 1 %}
+        <tr style="border-top:1px solid #F2EBE1;{{ 'background:#FCFAF7' if top else '' }}">
+          <td style="padding:7px 12px;font-family:monospace;{{ 'font-weight:700' if top else 'color:#6B5D4F' }}">{{ r.code }}</td>
+          <td style="padding:7px 8px;padding-left:{{ 8 + (r.level - 1) * 18 }}px;{{ 'font-weight:700' if top else '' }}">
+            {{ r.name }}
+            {% if not r.is_leaf %}<span style="font-size:11px;color:#B3A897">（汇总）</span>{% endif %}
+          </td>
+          <td style="padding:7px 12px;text-align:right;border-left:1px solid #F6F1E9">{{ amt(r.open_d) }}</td>
+          <td style="padding:7px 12px;text-align:right">{{ amt(r.open_c) }}</td>
+          <td style="padding:7px 12px;text-align:right;border-left:1px solid #F6F1E9;color:{{ '#C86432' if r.debit else '' }}">{{ amt(r.debit) }}</td>
+          <td style="padding:7px 12px;text-align:right;color:{{ '#166534' if r.credit else '' }}">{{ amt(r.credit) }}</td>
+          <td style="padding:7px 12px;text-align:right;border-left:1px solid #F6F1E9;{{ 'font-weight:600' if top else '' }}">{{ amt(r.end_d) }}</td>
+          <td style="padding:7px 12px;text-align:right;{{ 'font-weight:600' if top else '' }}">{{ amt(r.end_c) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="padding:40px 12px;text-align:center;color:#9C9288">
+          {{ period }} 没有符合条件的科目{% if not hide_zero %}数据{% endif %}。
+          {% if hide_zero %}勾选「显示全部科目」可以看全表。{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+      <tfoot>
+        <tr style="border-top:2px solid #EAE2D6;background:#FAF7F2;font-weight:700">
+          <td colspan="2" style="padding:10px 12px">合计（全账口径，只加一级科目）</td>
+          <td style="padding:10px 12px;text-align:right;border-left:1px solid #EAE2D6">{{ '{:,.2f}'.format(meta.open_d) }}</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.open_c) }}</td>
+          <td style="padding:10px 12px;text-align:right;border-left:1px solid #EAE2D6">{{ '{:,.2f}'.format(meta.debit) }}</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.credit) }}</td>
+          <td style="padding:10px 12px;text-align:right;border-left:1px solid #EAE2D6">{{ '{:,.2f}'.format(meta.end_d) }}</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.end_c) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  <div style="margin-top:16px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">怎么读这张表：</b>
+    ① 只有「已记账」的凭证进表，草稿与已作废的不进；
+    ② 汇总科目的数是下级明细科目加出来的，不会重复计算（合计行也只加一级科目）；
+    ③ 余额不写负数——净额在借方就填「借方」列，在贷方就填「贷方」列；
+    ④ 期初余额不是另存的数，是按启用期初逐期滚下来的，所以改了历史凭证，本期期初会跟着变。
+  </div>
+  <div style="margin-top:6px;font-size:12.5px;color:#9C9288">
+    导出 Excel 请到「报表中心」；现在也可以用浏览器打印或另存 PDF。
+  </div>
+{% endblock %}

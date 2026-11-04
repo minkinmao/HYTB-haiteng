@@ -1,0 +1,431 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 保费测算{% endblock %}
+{% block pagename %}核心业务管理系统 · 保费测算{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+.pc-tabs{display:flex;gap:8px;margin:14px 0 6px}
+.pc-tab{padding:9px 18px;border:1px solid #EAE2D6;border-radius:8px 8px 0 0;background:#FAF7F2;color:#6B5D4F;cursor:pointer;font-size:14px}
+.pc-tab.on{background:#C86432;color:#fff;border-color:#C86432;font-weight:600}
+.pc-pane{display:none;border:1px solid #EAE2D6;border-top:none;background:#fff;padding:18px;border-radius:0 0 8px 8px}
+.pc-pane.on{display:block}
+.pc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 22px;max-width:760px}
+.pc-grid .fld{display:flex;flex-direction:column;gap:4px}
+.pc-grid label{font-size:12px;color:#6B5D4F}
+.pc-grid input[type=text],.pc-grid input[type=number],.pc-grid select,.pc-grid input[type=file]{
+  border:1px solid #EAE2D6;border-radius:6px;padding:7px 9px;font-size:13px;background:#fff}
+.pc-required{color:#C86432}
+.pc-btn{background:#C86432;color:#fff;border:none;border-radius:6px;padding:9px 20px;font-size:14px;cursor:pointer;margin-top:14px}
+.pc-btn.ghost{background:#fff;color:#C86432;border:1px solid #C86432}
+.pc-btn:disabled{opacity:.5;cursor:not-allowed}
+.pc-prev{margin-top:16px;border:1px dashed #E0C9A8;background:#FFFDF8;padding:14px;border-radius:8px;display:none}
+.pc-prev h4{margin:0 0 8px;font-size:14px;color:#2A2A2A}
+.pc-prev .meta{font-size:12px;color:#6B5D4F;line-height:1.9}
+.pc-prev table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+.pc-prev th,.pc-prev td{border:1px solid #EAE2D6;padding:4px 6px;text-align:center}
+.pc-prev th{background:#FAF7F2;color:#6B5D4F}
+.pc-warn{color:#C00;font-size:12px}
+.pc-ok{color:#2e7d32;font-size:12px}
+.pc-resp{margin-top:12px;font-size:13px}
+.pc-resp table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.pc-resp th,.pc-resp td{border:1px solid #EAE2D6;padding:5px 7px;text-align:right}
+.pc-resp th:first-child,.pc-resp td:first-child{text-align:center}
+.pc-resp th{background:#FAF7F2;color:#6B5D4F}
+.pc-prod{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;table-layout:auto}
+.pc-prod th,.pc-prod td{border:1px solid #EAE2D6;padding:7px 9px}
+.pc-prod th{background:#FAF7F2;color:#6B5D4F}
+.pc-tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px}
+.pc-tag.ready{background:#E6F4EA;color:#2e7d32}
+.pc-tag.no{background:#FDECEA;color:#C00}
+#cvChart{width:100%;height:280px;margin-top:14px}
+</style>
+
+<div class="sec" style="max-width:1680px">
+  <div class="pc-tabs">
+    <div class="pc-tab on" data-pane="import">① 智能导入（费率表 + 现金价值表）</div>
+    <div class="pc-tab" data-pane="calc">② 标准试算</div>
+    <div class="pc-tab" data-pane="list">③ 已导入产品</div>
+  </div>
+
+  <!-- ============ 导入 ============ -->
+  <div class="pc-pane on" id="pane-import">
+    <p style="font-size:12px;color:#6B5D4F;margin:0 0 10px">
+      <b>智能体自动识别</b>：产品有 EXCEL 版计划书时推荐 <b>方式A</b>——只传一个文件，系统全 sheet 自动抽取费率与现金价值；
+      没有计划书再用 <b>方式B</b> 传费率表+现价表双件。导入前先预览确认。
+    </p>
+    <div class="pc-tabs" style="margin-top:0">
+      <div class="pc-tab on" id="mode-plan">方式A：仅传 EXCEL 版计划书（推荐）</div>
+      <div class="pc-tab" id="mode-dual">方式B：费率表 + 现价表双件</div>
+    </div>
+    <div class="pc-grid">
+      <div class="fld"><label>保司名称<span class="pc-required">*</span></label>
+        <input type="text" id="im-insurer" list="ins-list" placeholder="如 爱心人寿"></div>
+      <div class="fld"><label>产品名称<span class="pc-required">*</span></label>
+        <input type="text" id="im-product" list="prod-list" placeholder="如 映山红（心悦版）终身寿险（分红型）"></div>
+    </div>
+    <div class="pc-grid" id="flds-plan">
+      <div class="fld"><label>EXCEL 版计划书<span class="pc-required">*</span> <span style="color:#999">（.xlsx/.xlsm，全 sheet 自动抽取费率+现价）</span></label>
+        <input type="file" id="im-planfile" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>红利表（可选） <span style="color:#999">（分红型：红利单独成文件时传，如「红利因子档」）</span></label>
+        <input type="file" id="im-div" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>&nbsp;</label>
+        <button class="pc-btn" id="btn-parse">解析预览</button></div>
+    </div>
+    <div class="pc-grid" id="flds-dual" style="display:none">
+      <div class="fld"><label>费率表（基本保额）<span class="pc-required">*</span></label>
+        <input type="file" id="im-rate" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>现金价值表<span class="pc-required">*</span> <span style="color:#999">（若费率表已含现价可留空）</span></label>
+        <input type="file" id="im-cash" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>红利表（可选） <span style="color:#999">（分红型：红利单独成文件时传）</span></label>
+        <input type="file" id="im-div2" accept=".xlsx,.xlsm"></div>
+      <div class="fld"><label>计划书（可选）</label>
+        <input type="file" id="im-plan" accept=".xlsx,.xlsm,.xls,.pdf"></div>
+      <div class="fld"><label>&nbsp;</label>
+        <button class="pc-btn" id="btn-parse2">解析预览</button></div>
+    </div>
+    <datalist id="ins-list"></datalist>
+    <datalist id="prod-list"></datalist>
+
+    <div class="pc-prev" id="prev-box">
+      <h4>解析预览</h4>
+      <div class="meta" id="prev-meta"></div>
+      <div id="prev-tables"></div>
+      <button class="pc-btn" id="btn-save" style="display:none">确认入库</button>
+    </div>
+    <div class="pc-resp" id="import-resp"></div>
+  </div>
+
+  <!-- ============ 试算 ============ -->
+  <div class="pc-pane" id="pane-calc">
+    <div class="pc-grid">
+      <div class="fld"><label>保司<span class="pc-required">*</span></label>
+        <select id="c-insurer"></select></div>
+      <div class="fld"><label>产品<span class="pc-required">*</span></label>
+        <select id="c-product"></select></div>
+      <div class="fld"><label>性别</label>
+        <select id="c-sex"><option value="M">男</option><option value="F">女</option></select></div>
+      <div class="fld"><label>投保年龄</label>
+        <input type="number" id="c-age" value="40" min="0" max="80"></div>
+      <div class="fld"><label>交费方式</label>
+        <select id="c-pay">
+          <option value="0">趸交</option><option value="3">3年交</option>
+          <option value="5">5年交</option><option value="6">6年交</option>
+          <option value="10">10年交</option><option value="4">4年交</option>
+        </select></div>
+      <div class="fld"><label>年交保费（元）</label>
+        <input type="number" id="c-premium" value="10000" min="0" step="100"></div>
+      <div class="fld"><label>红利领取方式 <span style="color:#999">（分红型，条款3.1）</span></label>
+        <select id="c-divmode">
+          <option value="accum">累积生息（年复利）</option>
+          <option value="cash">现金分红（现金领取）</option>
+          <option value="pua">购买交清增额保险</option>
+        </select></div>
+      <div class="fld"><label>累积生息年利率（%）</label>
+        <input type="number" id="c-rate" value="1.75" min="0" max="10" step="0.01"></div>
+      <div class="fld"><label>&nbsp;</label>
+        <button class="pc-btn" id="btn-calc">测算</button></div>
+    </div>
+    <div class="pc-resp" id="calc-resp"></div>
+    <div id="cvChart" style="display:none"></div>
+  </div>
+
+  <!-- ============ 已导入 ============ -->
+  <div class="pc-pane" id="pane-list">
+    <p style="font-size:12px;color:#6B5D4F">已导入的产品因子数据；<b>ready</b> 表示费率+现金价值双件齐全可做试算。</p>
+    <table class="pc-prod" id="prod-table">
+      <thead><tr><th>保司</th><th>产品</th><th>费率行</th><th>现金价值行</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/echarts.min.js') }}"></script>
+<script>
+const PC = {
+  products: {{ products | tojson }},
+  token: '',
+  insurerOpts() {
+    const s = new Set(PC.products.map(p => p.insurer));
+    return [...s];
+  },
+  fillDatalists() {
+    const ins = PC.insurerOpts();
+    document.getElementById('ins-list').innerHTML = ins.map(i => `<option value="${i}">`).join('');
+    document.getElementById('prod-list').innerHTML = PC.products.map(p => `<option value="${p.product}">`).join('');
+    const sel = document.getElementById('c-insurer');
+    sel.innerHTML = ins.map(i => `<option value="${i}">${i}</option>`).join('');
+    PC.fillProducts(sel.value);
+    sel.onchange = () => PC.fillProducts(sel.value);
+  },
+  fillProducts(ins) {
+    const ps = PC.products.filter(p => p.insurer === ins).map(p => p.product);
+    document.getElementById('c-product').innerHTML = ps.map(p => `<option value="${p}">${p}</option>`).join('');
+  },
+  // 文件防呆：只认 Excel（.xlsx/.xlsm）。PDF/扫描件无法按 xlsx 解析，选了立即提示并清空。
+  extOk(f) {
+    if (!f) return true;
+    const e = f.name.split('.').pop().toLowerCase();
+    return e === 'xlsx' || e === 'xlsm';
+  },
+  // 红利表（可选）：分红型产品红利单独成文件时上传（如爱心人寿「红利因子档」），
+  // 入库时按 性别/年龄/交费期间/保单年度 四键合并到已入库的现价行上。
+  appendDiv(fd, id, resp) {
+    const f = document.getElementById(id).files[0];
+    if (!f) return true;
+    if (!PC.extOk(f)) {
+      resp.innerHTML = '<span class="pc-warn">红利表「' + f.name + '」不是 Excel 文件，系统只支持 .xlsx/.xlsm</span>';
+      return false;
+    }
+    fd.append('div_file', f);
+    return true;
+  },
+  guardFile(id) {
+    const inp = document.getElementById(id);
+    inp.addEventListener('change', () => {
+      const f = inp.files[0];
+      if (f && !PC.extOk(f)) {
+        document.getElementById('import-resp').innerHTML =
+          '<span class="pc-warn">⚠「' + f.name + '」不是 Excel 文件，系统只支持 .xlsx/.xlsm；'
+          + '若手上是 PDF，请用 Excel/WPS 打开后「另存为 .xlsx」再选。已清空选择。</span>';
+        inp.value = '';
+      }
+    });
+  },
+  tabSwitch() {
+    document.querySelectorAll('.pc-tab').forEach(t => t.onclick = () => {
+      document.querySelectorAll('.pc-tab').forEach(x => x.classList.remove('on'));
+      document.querySelectorAll('.pc-pane').forEach(x => x.classList.remove('on'));
+      t.classList.add('on');
+      document.getElementById('pane-' + t.dataset.pane).classList.add('on');
+      if (t.dataset.pane === 'list') PC.loadProducts();
+    });
+  },
+  parse() {
+    const ins = document.getElementById('im-insurer').value.trim();
+    const prod = document.getElementById('im-product').value.trim();
+    const resp = document.getElementById('import-resp');
+    resp.innerHTML = '';
+    if (!ins || !prod) { resp.innerHTML = '<span class="pc-warn">请填写保司与产品名称</span>'; return; }
+    const fd = new FormData();
+    fd.append('insurer', ins); fd.append('product', prod);
+    let btn = document.getElementById('btn-parse');
+    if (PC.mode === 'plan') {
+      // 方式A：仅传 EXCEL 版计划书，全 sheet 自动抽取
+      const plan = document.getElementById('im-planfile').files[0];
+      if (!plan) { resp.innerHTML = '<span class="pc-warn">请选择 EXCEL 版计划书（.xlsx/.xlsm）</span>'; return; }
+      if (!PC.extOk(plan)) { resp.innerHTML = '<span class="pc-warn">计划书「' + plan.name + '」不是 Excel 文件，系统只支持 .xlsx/.xlsm（PDF 请先用 Excel/WPS 另存，或改走方式B）</span>'; return; }
+      fd.append('plan_only', '1');
+      fd.append('plan_file', plan);
+      if (!PC.appendDiv(fd, 'im-div', resp)) return;
+    } else {
+      // 方式B：费率表 + 现价表双件
+      const rate = document.getElementById('im-rate').files[0];
+      const cash = document.getElementById('im-cash').files[0];
+      if (!rate) { resp.innerHTML = '<span class="pc-warn">费率表为必备</span>'; return; }
+      if (!PC.extOk(rate)) { resp.innerHTML = '<span class="pc-warn">费率表「' + rate.name + '」不是 Excel 文件，系统只支持 .xlsx/.xlsm（PDF 请先用 Excel/WPS 另存为 .xlsx）</span>'; return; }
+      if (cash && !PC.extOk(cash)) { resp.innerHTML = '<span class="pc-warn">现金价值表「' + cash.name + '」不是 Excel 文件，系统只支持 .xlsx/.xlsm</span>'; return; }
+      fd.append('rate_file', rate); fd.append('cash_file', cash);
+      const plan = document.getElementById('im-plan').files[0];
+      if (plan) fd.append('plan_file', plan);
+      if (!PC.appendDiv(fd, 'im-div2', resp)) return;
+      btn = document.getElementById('btn-parse2');
+    }
+    btn.disabled = true;
+    fetch('{{ url_for("crm.premium_import_preview") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => {
+        btn.disabled = false;
+        if (!d.ok) { resp.innerHTML = '<span class="pc-warn">' + d.msg + '</span>'; return; }
+        PC.token = d.token;
+        PC.showPreview(d);
+      }).catch(e => { btn.disabled = false; resp.innerHTML = '<span class="pc-warn">解析出错</span>'; });
+  },
+  showPreview(d) {
+    const box = document.getElementById('prev-box');
+    box.style.display = 'block';
+    const rateWarn = d.rate_rep.warn && d.rate_rep.warn.length ? '<div class="pc-warn">⚠ ' + d.rate_rep.warn.join('；') + '</div>' : '';
+    const cashWarn = d.cash_rep.warn && d.cash_rep.warn.length ? '<div class="pc-warn">⚠ ' + d.cash_rep.warn.join('；') + '</div>' : '';
+    // 红利表（可选）：解析到就报行数，未解析到提示「该表无红利列」
+    let divInfo = '';
+    if (d.div_total) {
+      divInfo = `<div style="font-size:12px;color:#2E7D32;margin-top:4px">✓ 红利表「${d.div_name}」解析到 <b>${d.div_total}</b> 行红利，入库时按 性别/年龄/交费/保单年度 合并</div>`;
+    } else if (d.div_name) {
+      divInfo = '<div class="pc-warn">⚠ 红利表「' + d.div_name + '」没解析出红利数据——'
+        + '请确认列含「红利 / Div / 分红」且有数值、并能定位「保单年度 / PolYr」列。'
+        + (d.div_rep && d.div_rep.skipped && d.div_rep.skipped.length ? '（已跳过工作表：' + d.div_rep.skipped.join('、') + '）' : '')
+        + '</div>';
+    }
+    // 分红参数（保司因子档「分红信息配置」）：演示利率 / 分红比例 / 累积生息利率
+    let cfgInfo = '';
+    if (d.div_cfg && (d.div_cfg.demo_rate || d.div_cfg.ratio)) {
+      cfgInfo = '<div style="font-size:12px;color:#2E7D32;margin-top:4px">✓ 读到分红参数：'
+        + (d.div_cfg.demo_rate ? '红利演示利率 ' + (d.div_cfg.demo_rate * 100).toFixed(2) + '%' : '')
+        + (d.div_cfg.ratio ? '｜分红比例 ' + (d.div_cfg.ratio * 100).toFixed(0) + '%' : '')
+        + '｜累积生息利率 ' + (d.div_cfg.accum_rate * 100).toFixed(2) + '%（计划书默认按此复利演示）</div>';
+    }
+    if (d.plan_only) {
+      const skipped = (d.rate_rep.skipped && d.rate_rep.skipped.length)
+        ? '<div style="font-size:12px;color:#8A7B6B;margin-top:4px">已跳过非因子表（利益演示等宽表）：' + d.rate_rep.skipped.join('、') + '</div>' : '';
+      document.getElementById('prev-meta').innerHTML =
+        `计划书解析（全 sheet 合并）：<b>${d.rate_total}</b> 行（其中现金价值 ${d.cash_total} 行）｜文件：${d.plan_name}` + rateWarn + skipped + divInfo + cfgInfo;
+      document.getElementById('prev-tables').innerHTML = PC.sampleHtml('计划书数据样本', d.rate_sample);
+    } else {
+      document.getElementById('prev-meta').innerHTML =
+        `布局识别：费率表=<b>${d.rate_rep.layout}</b>（${d.rate_total}行）｜现金价值表=<b>${d.cash_rep.layout}</b>（${d.cash_total}行）`
+        + (d.plan_name ? `｜计划书：${d.plan_name}` : '')
+        + rateWarn + cashWarn + divInfo + cfgInfo;
+      document.getElementById('prev-tables').innerHTML =
+        PC.sampleHtml('费率表（基本保额）样本', d.rate_sample) + PC.sampleHtml('现金价值表样本', d.cash_sample);
+    }
+    document.getElementById('btn-save').style.display = (d.rate_total && d.cash_total) ? 'inline-block' : 'none';
+  },
+  // 导入方式切换：plan=仅传 EXCEL 计划书（方式A） / dual=费率表+现价表双件（方式B）
+  setMode(m) {
+    PC.mode = m;
+    document.getElementById('mode-plan').classList.toggle('on', m === 'plan');
+    document.getElementById('mode-dual').classList.toggle('on', m === 'dual');
+    document.getElementById('flds-plan').style.display = (m === 'plan') ? 'grid' : 'none';
+    document.getElementById('flds-dual').style.display = (m === 'dual') ? 'grid' : 'none';
+  },
+  sampleHtml(title, rows) {
+    if (!rows || !rows.length) return '';
+    // 有红利值才补显示红利列（纯非分红产品不占版面）
+    const hasDiv = rows.some(r => (r.div_d || 0) > 0 || (r.div_g || 0) > 0);
+    const cols = hasDiv ? ['sex','issue_age','pay_term','policy_year','sa','cv','div_d']
+                        : ['sex','issue_age','pay_term','policy_year','sa','cv'];
+    const cn = {sex:'性别',issue_age:'年龄',pay_term:'交费',policy_year:'保单年度',sa:'基本保额',cv:'现金价值',div_d:'当年红利'};
+    const sexCn = v => v === 'M' ? '男' : (v === 'F' ? '女' : (v ? '通' : '—'));
+    let h = '<div style="margin-top:10px;font-size:12px;color:#2A2A2A">' + title + '</div><table><thead><tr>'
+      + cols.map(c => '<th>' + cn[c] + '</th>').join('') + '</tr></thead><tbody>';
+    rows.forEach(r => {
+      h += '<tr>' + cols.map(c => '<td>' + (c === 'sex' ? sexCn(r[c]) : (r[c] || '')) + '</td>').join('') + '</tr>';
+    });
+    return h + '</tbody></table>';
+  },
+  save() {
+    const fd = new FormData();
+    fd.append('token', PC.token);
+    fd.append('insurer', document.getElementById('im-insurer').value.trim());
+    fd.append('product', document.getElementById('im-product').value.trim());
+    document.getElementById('btn-save').disabled = true;
+    fetch('{{ url_for("crm.premium_import_save") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => {
+        document.getElementById('btn-save').disabled = false;
+        document.getElementById('import-resp').innerHTML = d.ok
+          ? '<span class="pc-ok">✓ ' + d.msg + '</span>' : '<span class="pc-warn">' + d.msg + '</span>';
+        if (d.ok) { PC.token = ''; document.getElementById('prev-box').style.display = 'none'; PC.refreshProducts(); }
+      });
+  },
+  calc() {
+    const fd = new FormData();
+    ['insurer','product','sex','age','pay_term','premium'].forEach(k => {
+      const map = {insurer:'c-insurer',product:'c-product',sex:'c-sex',age:'c-age',pay_term:'c-pay',premium:'c-premium'};
+      fd.append(k, document.getElementById(map[k]).value);
+    });
+    // 分红演示口径（条款3.2）：cash 现金领取 / accum 累积生息 + 累积生息年利率
+    fd.append('div_mode', document.getElementById('c-divmode').value);
+    fd.append('accum_rate', document.getElementById('c-rate').value);
+    fetch('{{ url_for("crm.premium_calc_api") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => {
+        const box = document.getElementById('calc-resp');
+        if (!d.ok) { box.innerHTML = '<span class="pc-warn">' + d.msg + '</span>'; document.getElementById('cvChart').style.display='none'; return; }
+        const data = d.data;
+        // 分红型才有红利数据：has_div 为假时不带红利列，避免满屏 0
+        const hasDiv = !!data.has_div && data.rows.some(r => (r.div_d || 0) > 0 || (r.div_g || 0) > 0);
+        // 以后端返回的口径为准（没有增额因子时后端会自动把 pua 回落到 accum）
+        const dm = data.div_mode || 'accum';
+        const MK = {cash: ['cum_cash', 'total_cash', '累计已领红利', '现金领取'],
+                    accum: ['cum_acc', 'total_acc', '累积红利(生息)', '累积生息'],
+                    pua: ['cum_pua', 'total_pua', '增额部分现价', '购买交清增额']}[dm];
+        const cumKey = MK[0], totKey = MK[1], cumName = MK[2];
+        const divCols = ['当年度红利', cumName, '年末总利益'];
+        let h = '<div class="pc-ok">基本保险金额：' + data.base_sa.toLocaleString() + ' 元（交费方式：'
+          + (data.pay_term === 0 ? '趸交' : data.pay_term + '年交') + '）'
+          + (hasDiv ? '｜红利口径：' + MK[3] + (dm === 'accum'
+              ? ' ' + (data.accum_rate * 100).toFixed(2) + '%' : '') : '')
+          + '</div><table><thead><tr>'
+          + ['保单年度','年末年龄','年交保费','累计保费','基本保额','年末现金价值','单利%','IRR%']
+              .concat(hasDiv ? divCols : [])
+              .map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>';
+        data.rows.forEach(r => {
+          h += '<tr>' + [r.year, r.age_end, r.premium, r.cum_prem, r.base_sa, r.cv, r.simple, r.irr]
+            .concat(hasDiv ? [r.div_d, r[cumKey], r[totKey]] : [])
+            .map((v,i) => '<td>' + (typeof v === 'number' ? v.toLocaleString() : v) + '</td>').join('') + '</tr>';
+        });
+        const lastN = data.rows[data.rows.length - 1];
+        const others = [['cash', 'cum_cash', '现金领取'], ['accum', 'cum_acc', '累积生息'],
+                        ['pua', 'cum_pua', '购买交清增额保险']]
+          .filter(m => m[0] !== dm && (m[0] !== 'pua' || data.has_pua))
+          .map(m => m[2] + ' ' + (lastN[m[1]] || 0).toLocaleString());
+        box.innerHTML = h + '</tbody></table>'
+          + (hasDiv ? '<div style="font-size:12px;color:#8A7B6B;margin-top:6px">红利为非保证利益：'
+              + (dm === 'cash'
+                 ? '现金领取——当年度红利每年领走、不再计息，累计已领红利＝各年红利之和；'
+                 : dm === 'pua'
+                 ? '购买交清增额保险——红利作为净保费买增额保额，'
+                   '增额部分现金价值＝累积增额保额/1000×增额现价单价；'
+                 : '累积生息——红利留存本公司按年利率 <b>' + (data.accum_rate * 100).toFixed(2)
+                   + '%</b> 年复利滚存（累积＝上年×（1＋利率）＋当年红利）；')
+              + '年末总利益＝年末现金价值＋' + cumName + '。<br>'
+              + '收益率（IRR＝现金流折现 / 单利＝时间加权，保费年初交、退保金年末收）按「持有到该年度末退保」测算，为当前口径；'
+              + '「仅保证利益」请另看计划书详情页。'
+              + (others.length ? '<br>条款3.1 其他领取方式在第 ' + lastN.year + ' 年末：' + others.join('、') : '')
+              + '</div>' : '');
+        PC.drawCv(data.rows);
+      });
+  },
+  drawCv(rows) {
+    const el = document.getElementById('cvChart');
+    el.style.display = 'block';
+    if (typeof echarts === 'undefined') return;
+    const chart = echarts.init(el);
+    chart.setOption({
+      title: {text: '各保单年度末现金价值', left: 'center', textStyle: {fontSize: 13, color: '#2A2A2A'}},
+      tooltip: {trigger: 'axis'},
+      grid: {left: 60, right: 20, top: 40, bottom: 40},
+      xAxis: {type: 'category', data: rows.map(r => r.year), name: '年度'},
+      yAxis: {type: 'value', name: '现金价值(元)'},
+      series: [{type: 'line', smooth: true, data: rows.map(r => r.cv), itemStyle: {color: '#C86432'}, areaStyle: {color: 'rgba(200,100,50,0.12)'}}]
+    });
+  },
+  loadProducts() {
+    fetch('{{ url_for("crm.premium_products") }}').then(r => r.json()).then(list => {
+      const tb = document.querySelector('#prod-table tbody');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" style="color:#6B5D4F">暂无导入数据</td></tr>'; return; }
+      tb.innerHTML = list.map(p => `<tr>
+        <td>${p.insurer}</td><td>${p.product}</td>
+        <td>${p.rate}</td><td>${p.cash}</td>
+        <td><span class="pc-tag ${p.ready ? 'ready' : 'no'}">${p.ready ? '可试算' : '缺件'}</span></td>
+        <td><button class="pc-btn ghost" onclick="PC.del('${p.insurer}','${p.product}')">删除</button></td>
+      </tr>`).join('');
+    });
+  },
+  refreshProducts() {
+    fetch('{{ url_for("crm.premium_products") }}').then(r => r.json()).then(list => {
+      PC.products = list.map(p => ({insurer: p.insurer, product: p.product}));
+      PC.fillDatalists();
+    });
+  },
+  del(ins, prod) {
+    if (!confirm('确认删除「' + ins + ' - ' + prod + '」全部因子数据？')) return;
+    const fd = new FormData(); fd.append('insurer', ins); fd.append('product', prod);
+    fetch('{{ url_for("crm.premium_product_delete") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => { alert(d.msg); PC.loadProducts(); PC.refreshProducts(); });
+  }
+};
+document.getElementById('btn-parse').onclick = PC.parse;
+document.getElementById('btn-parse2').onclick = PC.parse;
+document.getElementById('btn-save').onclick = PC.save;
+document.getElementById('btn-calc').onclick = PC.calc;
+document.getElementById('mode-plan').onclick = () => PC.setMode('plan');
+document.getElementById('mode-dual').onclick = () => PC.setMode('dual');
+PC.tabSwitch();
+PC.setMode('plan');
+PC.guardFile('im-planfile');
+PC.guardFile('im-rate');
+PC.guardFile('im-cash');
+PC.guardFile('im-div');
+PC.guardFile('im-div2');
+PC.fillDatalists();
+</script>
+{% endblock %}

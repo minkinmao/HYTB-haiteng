@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}ADM · {{ '编辑证照' if row else '登记证照' }}{% endblock %}
+{% block pagename %}行政管理系统 · {{ '编辑证照' if row else '登记证照' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑证照' if row else '登记证照' }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（编号 {{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  证照编号由系统自动生成（ZZ-年月-序号），无需手填。有效期留空表示长期有效。
+</div>
+
+<form class="adm-form" method="post" enctype="multipart/form-data"
+      action="{{ url_for('adm.license_edit', lid=row.id) if row else url_for('adm.license_new') }}">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>证照名称 <b>*</b></label>
+      <input type="text" name="name" required value="{{ (row.name or '') if row else '' }}" placeholder="如：营业执照">
+    </div>
+    <div class="adm-fld">
+      <label>证照类型</label>
+      <select name="category">
+        <option value="">请选择</option>
+        {% for c in cats %}
+        <option value="{{ c }}" {{ 'selected' if row and row.category == c else '' }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>证照号码 / 统一社会信用代码</label>
+      <input type="text" name="no" value="{{ (row.no or '') if row else '' }}" placeholder="如：91440101MA5XXXXX0A">
+    </div>
+    <div class="adm-fld">
+      <label>发证机关</label>
+      <input type="text" name="issuer" value="{{ (row.issuer or '') if row else '' }}" placeholder="如：广州市市场监督管理局">
+    </div>
+    <div class="adm-fld">
+      <label>发证日期</label>
+      <input type="date" name="issue_date" value="{{ (row.issue_date or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>有效期至</label>
+      <input type="date" name="expire_date" value="{{ (row.expire_date or '') if row else '' }}">
+      <span class="hint">留空 = 长期有效</span>
+    </div>
+    <div class="adm-fld">
+      <label>保管人</label>
+      <input type="text" name="keeper" value="{{ (row.keeper or '') if row else '' }}" placeholder="如：行政专员">
+    </div>
+    <div class="adm-fld">
+      <label>存放地点</label>
+      <input type="text" name="place" value="{{ (row.place or '') if row else '' }}" placeholder="如：公司保险柜">
+    </div>
+    <div class="adm-fld full">
+      <label>扫描件 / 照片</label>
+      <input type="file" name="file">
+      <span class="hint">
+        支持 pdf / ofd / 图片 / office 文档 / zip，单个不超过 10MB。
+        {% if row and row.file_path %}当前已上传：{{ row.file_name }}（重新上传会覆盖）{% endif %}
+      </span>
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="年检情况、变更记录等">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if row else '登记入库' }}</button>
+    <a class="adm-btn" href="{{ url_for('adm.licenses') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

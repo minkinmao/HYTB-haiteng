@@ -1,0 +1,5 @@
+# 生产环境依赖
+# 在开发依赖基础上增加 gunicorn（WSGI 服务器，生产必备）
+# 安装：venv/bin/pip install -r deploy/requirements-prod.txt
+-r ../requirements.txt
+gunicorn==23.0.0

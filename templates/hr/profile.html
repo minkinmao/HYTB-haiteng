@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% block title %}个人资料 · 海盈通保{% endblock %}
+{% block pagename %}个人资料{% endblock %}
+{% block content %}
+
+{# ============ 个人资料（只读展示） ============
+   入口：系统总览首页「员工工卡」右上角「个人资料」。
+   结构：左侧头像卡（含「人事卡片」入口） + 中间分组档案信息 + 右侧锚点导航。
+   口径：登录名 == 工号 对应本人档案；HR 管理员带 ?eid= 可看任意员工。 #}
+{% set p = emp %}
+{% set _eid = request.args.get('eid') %}
+{% set card_url = url_for('hr.profile_card', eid=_eid) if _eid else url_for('hr.profile_card') %}
+
+{# 分组字段统一在此登记：下面正文与右侧锚点导航共用，避免两处维护跑偏 #}
+{% set SECTIONS = [
+  ('contact', '联系信息', [
+      ('个人手机', (p.phone or '') if p else ''),
+      ('公司邮箱', (p.email or '') if p else ''),
+      ('现居住址', (p.address or '') if p else ''),
+      ('紧急联系人', (p.emergency_name or '') if p else ''),
+      ('紧急联系电话', (p.emergency_phone or '') if p else ''),
+  ]),
+  ('basic', '基本信息', [
+      ('员工编码', (p.employee_no or '') if p else ''),
+      ('姓名', (p.name or '') if p else ''),
+      ('性别', (p.gender or '') if p else ''),
+      ('出生日期', (p.birth_date or '') if p else ''),
+      ('身份证号码', (p.idcard or '') if p else ''),
+      ('参加工作时间', (p.work_start_date or '') if p else ''),
+      ('入司日期', (p.hire_date or '') if p else ''),
+      ('婚姻状况', (p.marital or '') if p else ''),
+      ('是否有子女', (p.children or '') if p else ''),
+      ('籍贯', (p.hometown or '') if p else ''),
+      ('兴趣爱好', (p.hobby or '') if p else ''),
+      ('最后工作日', (p.last_job or '') if p else ''),
+  ]),
+  ('job', '任职信息', [
+      ('用工类型', ('内勤（劳动合同）' if p and p.staff_type == 'internal' else '外勤（代理合同）') if p else ''),
+      ('部门', ((p.org.name if p.org else '') or '未设') if p else ''),
+      ('职务', (p.title or '') if p else ''),
+      ('职级/代理', ((p.agent_type or '未设') if p and p.staff_type == 'external' else ((p.level.code + ' - ' + p.level.name) if p and p.level else '未设')) if p else ''),
+      ('状态', ('在职' if p and p.status == 'active' else '离职') if p else ''),
+  ]),
+] %}
+
+{# 七大子集板块（教育经历/家庭信息/培训经历/专业技术职务/职业资格/奖励/惩处）
+   数据来自人事卡片二期的 Employee 子表，与人事卡片页同源。 #}
+
+<style>
+  html { scroll-behavior: smooth; }
+  .pf-sect > summary { cursor: pointer; list-style: none; outline: none; }
+  .pf-sect > summary::-webkit-details-marker { display: none; }
+  .pf-sect > summary .cv { display: inline-block; transition: .18s; color: var(--brand); font-size: 11px; }
+  .pf-sect:not([open]) > summary .cv { transform: rotate(-90deg); }
+  .pf-nav a:hover { color: var(--brand-deep); }
+</style>
+
+{% if not emp %}
+  <div class="card" style="padding:16px 18px;margin-bottom:18px;border-left:3px solid var(--brand)">
+    <div style="font-size:13.5px;color:#8A5A18">
+      当前登录账号「{{ username }}」未匹配到员工花名册档案，无法展示个人资料。
+      请确认登录名是否为工号（人事在「员工花名册」按工号建档后即可自动关联）。
+    </div>
+  </div>
+{% endif %}
+
+<div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+
+  <!-- ============ 左：头像卡 + 人事卡片入口 ============ -->
+  <div class="card" style="flex:0 0 236px;padding:24px 18px;text-align:center">
+    <div style="width:110px;height:138px;margin:0 auto;border-radius:10px;overflow:hidden;
+                border:1px solid var(--line);background:linear-gradient(160deg,#FDF3E8,#F3E2CD);
+                display:flex;align-items:center;justify-content:center">
+      {% if p and p.photo %}
+        <img src="{{ url_for('static', filename=p.photo) }}" alt="入职照片"
+             style="width:100%;height:100%;object-fit:cover;display:block">
+      {% else %}
+        <span style="font-family:var(--serif);font-size:42px;color:var(--brand-deep);opacity:.7">
+          {{ ((p.name if p else '') or username)[:1] }}</span>
+      {% endif %}
+    </div>
+
+    <div style="font-family:var(--serif);font-size:19px;font-weight:600;letter-spacing:1.5px;margin-top:14px">
+      {{ (p.name if p else '') or username }}
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:6px">
+      {{ ((p.org.name if p and p.org else '') or '未设部门') }} · {{ (p.title if p else '') or '未设职务' }}
+    </div>
+    <div style="display:inline-block;margin-top:11px;font-size:11.5px;background:var(--brand-soft);
+                color:var(--brand-deep);border:1px solid #F3DCC6;padding:3px 12px;border-radius:20px">
+      员工编号 {{ (p.employee_no if p else '') or username }}
+    </div>
+
+    {# 个人照片上传（仅 HR 管理员 hr.employee.manage 可见）：完善人事档案 #}
+    {% if can_manage and p %}
+    <form method="post" enctype="multipart/form-data"
+          action="{{ url_for('hr.profile_photo') }}{{ ('?eid=' ~ _eid) if _eid else '' }}"
+          style="margin-top:14px;padding-top:13px;border-top:1px dashed var(--line);text-align:left">
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">个人照片（HR 上传）</div>
+      <input type="file" name="photo" accept="image/*"
+             style="width:100%;box-sizing:border-box;font-size:11.5px;color:var(--ink-2);background:#fff;
+                    border:1px solid var(--line);border-radius:6px;padding:5px 6px">
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button type="submit"
+                style="flex:1;background:var(--brand);color:#fff;border:none;padding:7px 0;
+                       border-radius:6px;font-size:12.5px;cursor:pointer">上传 / 更换</button>
+        {% if p.photo %}
+        <button type="submit" name="del_photo" value="1"
+                onclick="return confirm('确认移除 {{ p.name }} 的个人照片？')"
+                style="background:#fff;color:#b91c1c;border:1px solid var(--line);padding:7px 10px;
+                       border-radius:6px;font-size:12.5px;cursor:pointer">删除</button>
+        {% endif %}
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.6">
+        支持 jpg / png / webp / gif，建议竖版证件照（约 3:4）
+      </div>
+    </form>
+    {% endif %}
+
+    <!-- 人事卡片入口（参照 HR 系统：左侧磁贴点击后展示正式版人事卡片） -->
+    <a href="{{ card_url }}"
+       style="display:block;margin-top:20px;padding:14px 10px;border:1px solid var(--line);
+              border-radius:10px;background:#FCFAF7;transition:.16s">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C86432" stroke-width="1.7"
+           style="display:block;margin:0 auto 7px">
+        <rect x="3" y="3" width="7.5" height="7.5" rx="1.4"></rect>
+        <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.4"></rect>
+        <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.4"></rect>
+        <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.4"></rect>
+      </svg>
+      <span style="font-size:13.5px;font-weight:600;color:var(--ink)">人事卡片</span>
+    </a>
+
+    <div style="font-size:10.5px;color:var(--muted);letter-spacing:1.6px;margin-top:18px">
+      海盈通保 · 科技 · 服务 · 价值
+    </div>
+  </div>
+
+  <!-- ============ 中：分组档案信息 ============ -->
+  <div style="flex:1 1 420px;min-width:0">
+
+    {% for sid, title, fields in SECTIONS %}
+    <details open class="pf-sect card" style="padding:16px 18px;margin-bottom:16px" id="{{ sid }}">
+      <summary>
+        <span class="cv">▼</span>
+        <span style="font-size:14px;font-weight:600;margin-left:4px">{{ title }}</span>
+      </summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:13px 18px;
+                  margin-top:14px">
+        {% for k, v in fields %}
+        <div style="min-width:0">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px">{{ k }}</div>
+          <div style="background:#F7F4EF;border-radius:6px;padding:8px 11px;font-size:13.5px;
+                      min-height:20px;overflow-wrap:anywhere">{{ v or '—' }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+
+    <!-- 工作履历：用系统内的异动记录（晋升/降职/调岗）渲染，真实数据说话 -->
+    <details open class="pf-sect card" style="padding:16px 18px;margin-bottom:16px" id="history">
+      <summary>
+        <span class="cv">▼</span>
+        <span style="font-size:14px;font-weight:600;margin-left:4px">工作履历</span>
+        <span style="font-size:11.5px;color:var(--muted);margin-left:8px">（系统内异动记录）</span>
+      </summary>
+      {% if changes %}
+      <div style="margin-top:14px">
+        {% for c in changes %}
+        <div style="padding:11px 0;{{ 'border-bottom:1px solid #F3EDE3' if not loop.last }}">
+          <div style="font-size:13.5px">
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;
+              background:{{ {'晋升':'#dcfce7','降职':'#FBE3DD','调岗':'#E7EDFA'}.get(c.change_type, '#F3EDE3') }};
+              color:{{ {'晋升':'#166534','降职':'#991b1b','调岗':'#4A6BB0'}.get(c.change_type, '#5C554D') }}">{{ c.change_type }}</span>
+            <b style="margin-left:6px">{{ c.from_title or '—' }}</b> → <b>{{ c.to_title or '—' }}</b>
+            <span style="font-size:11.5px;color:var(--muted);margin-left:8px">生效 {{ c.effective_date or '—' }}</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:5px">
+            部门：{{ c.from_org.name if c.from_org else '—' }} → {{ c.to_org.name if c.to_org else '—' }}
+            {% if c.from_level or c.to_level %}｜职级：{{ c.from_level.code if c.from_level else '—' }} → {{ c.to_level.code if c.to_level else '—' }}{% endif %}
+            {% if c.reason %}｜事由：{{ c.reason }}{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="font-size:13px;color:var(--muted);margin-top:14px">暂无履历记录</div>
+      {% endif %}
+    </details>
+
+    {% for key, name, model, fields in sections %}
+    <details open class="pf-sect card" style="padding:16px 18px;margin-bottom:16px" id="{{ key }}">
+      <summary>
+        <span class="cv">▼</span>
+        <span style="font-size:14px;font-weight:600;margin-left:4px">{{ name }}</span>
+        <span style="font-size:11.5px;color:var(--muted);margin-left:8px">（{{ items[key]|length }} 条）</span>
+      </summary>
+      {% if items[key] %}
+      <div style="margin-top:14px;display:grid;gap:10px">
+        {% for it in items[key] %}
+        <div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#FCFAF7">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 14px;font-size:12.5px">
+            {% for fname, label in fields %}
+            <div style="min-width:0"><span style="color:var(--muted)">{{ label }}：</span>{{ it[fname] or '—' }}</div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="font-size:13px;color:var(--muted);margin-top:14px">暂无记录</div>
+      {% endif %}
+    </details>
+    {% endfor %}
+
+  </div>
+
+  <!-- ============ 右：锚点导航（随滚动吸顶） ============ -->
+  <div class="pf-nav" style="flex:0 0 128px;position:sticky;top:16px;font-size:12.5px">
+    {% for sid, title, _ in SECTIONS %}
+      <a href="#{{ sid }}" style="display:block;padding:6px 0;color:var(--ink-2)">• {{ title }}</a>
+    {% endfor %}
+    <a href="#history" style="display:block;padding:6px 0;color:var(--ink-2)">• 工作履历</a>
+    {% for key, name, model, fields in sections %}
+      <a href="#{{ key }}" style="display:block;padding:6px 0;color:var(--ink-2)">• {{ name }}</a>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

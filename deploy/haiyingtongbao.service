@@ -1,0 +1,41 @@
+# systemd 服务文件 —— 海盈通保OA管理系统（Linux 开机自启 + 崩溃自愈）
+#
+# 用法：
+#   1. 把本文件放到 /etc/systemd/system/haiyingtongbao.service
+#   2. 把下面 <...> 占位符换成你的真实值（见 DEPLOY.md）
+#   3. sudo systemctl daemon-reload
+#      sudo systemctl enable --now haiyingtongbao
+#
+# 效果：开机自动启动；进程挂了 systemd 在 5 秒后自动拉起（Restart=always）。
+
+[Unit]
+Description=海盈通保OA管理系统
+After=network.target
+
+[Service]
+Type=simple
+# 运行用户：用专门的非 root 账号（如 www-data / appuser），别用 root
+User=<运行用户，如 appuser>
+Group=<运行用户组，如 appuser>
+
+# 项目根目录（你上传代码的绝对路径）
+WorkingDirectory=/var/www/haiyingtongbao/app
+
+# 虚拟环境（保证用项目自己的依赖）
+Environment="PATH=/var/www/haiyingtongbao/app/venv/bin"
+
+# ===== 企业微信凭证（环境变量，绝不下发前端、绝不写进代码）=====
+Environment="HYTB_WECOM_CORPID=<你的企业微信 CorpID>"
+Environment="HYTB_WECOM_AGENTID=<你的应用 AgentId>"
+Environment="HYTB_WECOM_SECRET=<你的应用 Secret>"
+Environment="HYTB_WECOM_DOMAIN=https://<你的域名>"
+
+# 启动命令：gunicorn 挂 app:app（app.py 里的 Flask 实例）
+ExecStart=/var/www/haiyingtongbao/app/venv/bin/gunicorn -c deploy/gunicorn.conf.py app:app
+
+# 进程异常退出后 5 秒自动重启
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

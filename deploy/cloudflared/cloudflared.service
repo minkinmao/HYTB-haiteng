@@ -1,0 +1,26 @@
+# systemd 服务文件 —— Cloudflare Tunnel 连接器（海盈通保OA / oa.crmwinpro.com）
+#
+# 用法：
+#   1. 在 Cloudflare Zero Trust → Networks → Tunnels → haiying-oa → Install
+#      复制那行 `cloudflared tunnel run --token <一串>` 命令。
+#   2. 把下面 ExecStart 里的 <在这里粘贴 dashboard 给的 token> 替换为那串 token。
+#   3. 放到 /etc/systemd/system/cloudflared.service
+#   4. sudo systemctl daemon-reload && sudo systemctl enable --now cloudflared
+#
+# 效果：开机自启；隧道断开后 5 秒自动重连（Restart=always）。
+# 注意：token 含凭证，文件权限请设为 600 且仅 root 可读。
+
+[Unit]
+Description=Cloudflare Tunnel - 海盈通保OA (oa.crmwinpro.com)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# 用 dashboard 的 token 命令一键拉起（自带凭证，免手动管理 json）
+ExecStart=/usr/bin/cloudflared tunnel run --token <在这里粘贴 dashboard 给的 token>
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

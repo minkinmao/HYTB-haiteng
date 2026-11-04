@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ '编辑' if row else '新增' }}合作经代公司{% endblock %}
+{% block pagename %}核心业务管理系统 · 合作经代公司{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑' if row else '新增' }}合作经代公司
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（登记规则参照保司基础信息 / 保司省分公司）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  <b style="color:#C86432">经代公司名称（全称）必填且全系统唯一</b>；
+  <b>简称</b>用于人力档案下拉与列表展示（不填就显示全称）。
+  许可证号填<b>保险中介业务许可证</b>编号；对接人填<b>对方日常联系人</b>。
+</div>
+
+<form class="crm-form" method="post">
+  <div class="crm-sec">一、工商基础信息 <span>名称必填 · 唯一</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>经代公司名称（全称） <b>*</b></label>
+      <input type="text" name="name" required value="{{ (row.name or '') if row else '' }}"
+             placeholder="如 广东海盈保险代理有限公司（按工商注册全称）">
+    </div>
+    <div class="crm-fld">
+      <label>经代公司简称</label>
+      <input type="text" name="short_name" value="{{ (row.short_name or '') if row else '' }}"
+             placeholder="如 广东海盈">
+    </div>
+    <div class="crm-fld">
+      <label>机构类型</label>
+      <select name="agency_type">
+        {% for c, n in types %}
+        <option value="{{ c }}" {{ 'selected' if (row and row.agency_type == c) or (not row and c == 'agent') else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>合作状态</label>
+      <select name="status">
+        {% for c, n in statuses %}
+        <option value="{{ c }}" {{ 'selected' if (row and row.status == c) or (not row and c == 'coop') else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>统一社会信用代码</label>
+      <input type="text" name="credit_code" value="{{ (row.credit_code or '') if row else '' }}"
+             placeholder="18 位">
+    </div>
+    <div class="crm-fld">
+      <label>保险中介业务许可证号</label>
+      <input type="text" name="license_no" value="{{ (row.license_no or '') if row else '' }}"
+             placeholder="经营保险代理 / 经纪业务许可证编号">
+    </div>
+    <div class="crm-fld">
+      <label>税号</label>
+      <input type="text" name="tax_no" value="{{ (row.tax_no or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>法定代表人</label>
+      <input type="text" name="legal_person" value="{{ (row.legal_person or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>注册资本</label>
+      <input type="text" name="reg_capital" value="{{ (row.reg_capital or '') if row else '' }}"
+             placeholder="如 1000万元">
+    </div>
+    <div class="crm-fld">
+      <label>成立日期</label>
+      <input type="date" name="establish_date" value="{{ (row.establish_date or '') if row else '' }}">
+    </div>
+  </div>
+
+  <div class="crm-sec">二、经营与联系</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>营业地址</label>
+      <input type="text" name="address" value="{{ (row.address or '') if row else '' }}"
+             placeholder="工商注册地址">
+    </div>
+    <div class="crm-fld">
+      <label>联系电话</label>
+      <input type="text" name="phone" value="{{ (row.phone or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>官方网站</label>
+      <input type="text" name="website" value="{{ (row.website or '') if row else '' }}" placeholder="选填">
+    </div>
+    <div class="crm-fld full">
+      <label>经营范围</label>
+      <textarea name="business_scope" placeholder="选填，按许可证登记的经营范围">{{ (row.business_scope or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-sec">三、对接人</div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>对接人姓名</label>
+      <input type="text" name="contact_person" value="{{ (row.contact_person or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>身份与职务</label>
+      <input type="text" name="contact_title" value="{{ (row.contact_title or '') if row else '' }}"
+             placeholder="如 业务总监">
+    </div>
+    <div class="crm-fld">
+      <label>对接人电话</label>
+      <input type="text" name="contact_phone" value="{{ (row.contact_phone or '') if row else '' }}">
+    </div>
+    <div class="crm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="选填">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.agencies') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

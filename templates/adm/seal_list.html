@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 印章使用登记{% endblock %}
+{% block pagename %}行政事务 · 印章使用登记{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">印章使用登记
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（每一次用章留痕：谁用、做什么、盖章几份、是否归还）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  印章本体（刻章备案、保管责任）在「证照资质」里管；本台账记录每一次用章。用章如需审批，请在 OA 申请中心发起后把单号填进来。
+</div>
+
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="编号 / 印章 / 申请人 / 事由 / 文件">
+  <label>状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    {% for k, lb in status_list %}
+    <option value="{{ k }}" {{ 'selected' if st == k else '' }}>{{ lb }}</option>
+    {% endfor %}
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.seals') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.seal_new') }}">＋ 登记用章</a>{% endif %}
+</form>
+
+{% if pending_n %}
+<div style="background:#FDF3E4;border:1px solid #F0D9B8;color:#8A5A18;border-radius:10px;
+            padding:10px 16px;font-size:13px;margin-bottom:14px">
+  提示：当前有 <b>{{ pending_n }}</b> 条用章登记处于「待盖章」，请留意跟进。
+</div>
+{% endif %}
+
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>印章</th><th>用章日期</th><th>申请人</th><th>事由 / 文件</th>
+        <th>份数</th><th>方式</th><th>审批单号</th><th>状态</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.code }}</td>
+        <td><div class="adm-nm">{{ it.seal_name }}</div></td>
+        <td class="mono">{{ it.use_date or '—' }}</td>
+        <td>
+          <div class="adm-nm">{{ it.applicant or '—' }}</div>
+          {% if it.dept %}<div class="adm-sub">{{ it.dept }}</div>{% endif %}
+        </td>
+        <td>
+          <div>{{ it.purpose or '—' }}</div>
+          {% if it.doc_name %}<div class="adm-sub">{{ it.doc_name }}</div>{% endif %}
+        </td>
+        <td class="num">{{ it.copies or 1 }} 份</td>
+        <td>
+          {% if it.use_type == 'borrow' %}<span class="adm-tag t-info">借出使用</span>
+          {% else %}<span class="adm-tag t-gray">现场加盖</span>{% endif %}
+        </td>
+        <td class="mono">{{ it.approval_code or '—' }}</td>
+        <td>
+          {% if it.status == 'pending' %}<span class="adm-tag t-warn">待盖章</span>
+          {% elif it.status == 'returned' %}<span class="adm-tag t-gray">已归还</span>
+          {% else %}<span class="adm-tag t-ok">已盖章</span>{% endif %}
+        </td>
+        <td>
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.seal_edit', vid=it.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('adm.seal_delete', vid=it.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除这条用章登记？')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无用章登记。{% if can_edit %}点右上角「＋ 登记用章」开始记录。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

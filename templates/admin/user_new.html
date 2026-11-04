@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% set page_title = '新建用户' %}
+{% block content %}
+<style>
+  .frm{max-width:760px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px 26px}
+  .frm .row{display:flex;gap:18px;flex-wrap:wrap}
+  .frm .row > div{flex:1 1 240px;min-width:0}
+  .frm label{display:block;font-weight:600;margin:14px 0 7px}
+  .frm label:first-child{margin-top:0}
+  .frm input,.frm select{width:100%;padding:10px 12px}
+  .frm .hint{color:var(--muted);font-size:12.5px;margin:0 0 4px}
+  .tree{border:1px solid var(--line);border-radius:12px;padding:6px 4px;background:#FCFAF7;max-height:360px;overflow:auto}
+  .tree .sys{border-bottom:1px dashed var(--line);padding:8px 10px}
+  .tree .sys:last-child{border-bottom:none}
+  .tree .sys-hd{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:15px;font-weight:600;color:var(--ink);margin-bottom:4px}
+  .tree .sys-hd .cnt{font-family:var(--sans);font-size:11px;color:var(--muted);font-weight:400}
+  .tree .subs{display:flex;flex-wrap:wrap;gap:6px 18px;padding-left:6px}
+  .tree .sub{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
+  .tree .sub input{width:auto;margin:0}
+  .form-actions{margin-top:22px;display:flex;gap:12px;align-items:center}
+  .lnk{color:var(--brand-deep);font-size:13px}
+</style>
+
+<h2>新建用户</h2>
+<p style="color:var(--ink-2);margin:4px 0 18px">
+  登录账号即员工工号（与人事花名册「工号」一致即可自动关联档案）。勾选该账号可访问的二级模块，保存后左侧菜单只展示所选模块。
+</p>
+
+<form class="frm" method="post">
+  <div class="row">
+    <div>
+      <label>登录账号（工号）</label>
+      <input name="username" value="{{ request.form.get('username','') }}" placeholder="如 1001" autocomplete="off">
+    </div>
+    <div>
+      <label>所属职级</label>
+      <select name="level_id">
+        <option value="">（不分配职级）</option>
+        {% for lv in levels %}
+        <option value="{{ lv.id }}" {{ 'selected' if request.form.get('level_id')|string == lv.id|string else '' }}>
+          {{ lv.name }}（{{ lv.code }} 级）</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>登录密码</label>
+      <input type="password" name="password" placeholder="至少 6 位" autocomplete="new-password">
+    </div>
+    <div>
+      <label>确认密码</label>
+      <input type="password" name="password2" placeholder="再次输入密码" autocomplete="new-password">
+    </div>
+  </div>
+
+  <label>开通模块权限（二级菜单）</label>
+  <p class="hint">勾选即开通该账号访问对应模块；不勾则左侧菜单不显示、直链访问会被拦截。</p>
+  <div class="tree">
+    {% for s in full_tree %}
+    <div class="sys">
+      <div class="sys-hd">{{ s.name }}<span class="cnt">（{{ s.subs|length }} 个模块）</span></div>
+      <div class="subs">
+        {% for m in s.subs %}
+        <label class="sub">
+          <input type="checkbox" name="keys" value="{{ m.url }}"
+                 {{ 'checked' if m.url in owned else '' }}>
+          {{ m.name }}
+        </label>
+        {% else %}
+        <span class="cnt">（暂无可用模块）</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="form-actions">
+    <button class="btn" type="submit">创建用户</button>
+    <a class="lnk" href="{{ url_for('admin.users') }}">返回列表</a>
+  </div>
+</form>
+{% endblock %}

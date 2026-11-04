@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}自然月度出勤查询 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">自然月度出勤查询
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（出勤结果数据，由 CSV 导入；点击日历某天可查看当天打卡）</small>
+  </h2>
+
+  {# 查询条件：按月份 + 可选员工 #}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <form method="get" action="{{ url_for('oa.attendance_records') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">月份</div>
+        <input type="month" name="month" value="{{ q_month.strftime('%Y-%m') }}"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">员工（可选）</div>
+        <select name="employee_id" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">全部员工</option>
+          {% for e in employees %}
+          <option value="{{ e.id }}" {{ 'selected' if emp_id and emp_id|int == e.id else '' }}>
+            {{ e.name }}（{{ e.employee_no }}）</option>
+          {% endfor %}
+        </select></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">查询</button>
+    </form>
+
+    {# 当月概览 #}
+    <div style="margin-top:12px;display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px">
+      <span style="color:#9C9288">当月 {{ q_month.strftime('%Y年%m月') }} 出勤概览：</span>
+      <span style="color:#166534">出勤 {{ stats.get('normal', 0) }}</span>
+      <span style="color:#8A5A18">迟到 {{ stats.get('late', 0) }}</span>
+      <span style="color:#8A5A18">早退 {{ stats.get('early', 0) }}</span>
+      <span style="color:#2F7A3F">未打下班卡 {{ stats.get('no_checkout', 0) }}</span>
+      <span style="color:#991b1b">旷工 {{ stats.get('absent', 0) }}</span>
+      <span style="color:#4A6BB0">请假 {{ stats.get('leave', 0) }}</span>
+      {% if emp_id %}<span style="color:#9C9288">（仅显示所选员工）</span>{% endif %}
+    </div>
+  </div>
+
+  {# 上方：自然月日历表（可点击某天过滤下方明细） #}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:15px;font-weight:600;color:#2A2A2A;margin-bottom:12px">
+      {{ q_month.year }} 年 {{ q_month.month }} 月
+      <span style="font-size:12px;color:#9C9288;font-weight:400;margin-left:8px">点击日期查看当天打卡</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px">
+      <thead>
+        <tr>
+          {% for w in ['一','二','三','四','五','六','日'] %}
+          <th style="padding:8px 4px;text-align:center;color:#9C9288;font-weight:400;border-bottom:1px solid #F3EDE3">{{ w }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for week in weeks %}
+        <tr>
+          {% for d in week %}
+          {% if d %}
+            {% set cell = day_map.get(d) %}
+            {% set tag = day_tag(d) %}
+            <td data-date="{{ d.strftime('%Y-%m-%d') }}"
+                class="cal-cell"
+                style="padding:4px;border:1px solid #F3EDE3;vertical-align:top;height:64px;cursor:pointer;background:{{ '#FBF7F1' if tag[1]=='rest' else ('#F4F7FB' if tag[1]=='holiday' else '#fff') }}">
+              <div style="display:flex;flex-direction:column;gap:2px;height:100%">
+                <span style="font-size:12px;color:{{ '#B08A5E' if tag[1]=='rest' else ('#4A6BB0' if tag[1]=='holiday' else '#6B5D4F') }}">{{ d.day }}</span>
+                {% if tag[0] %}
+                <span style="font-size:10px;color:{{ '#B08A5E' if tag[1]=='rest' else ('#4A6BB0' if tag[1]=='holiday' else '#C86432') }}">{{ tag[0] }}</span>
+                {% endif %}
+                {% if cell %}
+                <span class="cell-status" style="font-size:11px;padding:1px 6px;border-radius:10px;text-align:center;
+                      background:{{ '#dcfce7' if cell.display=='normal' else ('#E2F0E3' if cell.display=='no_checkout' else ('#FDF3E4' if cell.display in ('late','early') else ('#FBE3DD' if cell.display=='absent' else '#E7EDFA'))) }};
+                      color:{{ '#166534' if cell.display=='normal' else ('#2F7A3F' if cell.display=='no_checkout' else ('#8A5A18' if cell.display in ('late','early') else ('#991b1b' if cell.display=='absent' else '#4A6BB0'))) }}">
+                  {{ cell.status_cn }}</span>
+                {% endif %}
+              </div>
+            </td>
+          {% else %}
+            <td style="padding:4px;border:1px solid #F3EDE3;background:#FBFAF7"></td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {# 图例 #}
+    <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#6B5D4F">
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#dcfce7;margin-right:4px"></i>出勤</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#FDF3E4;margin-right:4px"></i>迟到/早退</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#FBE3DD;margin-right:4px"></i>旷工</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#E7EDFA;margin-right:4px"></i>请假</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#E2F0E3;margin-right:4px"></i>未打下班卡</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#FBF7F1;border:1px solid #E8DCC8;margin-right:4px"></i>休息日</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#F4F7FB;border:1px solid #D5DFF0;margin-right:4px"></i>法定节假日</span>
+    </div>
+  </div>
+
+  {# 下方：每日出勤打卡数据明细（点击日历后自动过滤到当天） #}
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:15px;font-weight:600;color:#2A2A2A;padding:10px 0 4px">每日出勤打卡数据
+      <span id="filter-tip" style="font-size:12px;color:#E6823C;font-weight:400;margin-left:8px"></span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="text-align:left;color:#9C9288;border-bottom:1px solid #F3EDE3">
+          <th style="padding:10px 8px">日期</th>
+          <th style="padding:10px 8px">工号</th>
+          <th style="padding:10px 8px">姓名</th>
+          <th style="padding:10px 8px">部门</th>
+          <th style="padding:10px 8px">状态</th>
+          <th style="padding:10px 8px">上班打卡</th>
+          <th style="padding:10px 8px">下班打卡</th>
+          <th style="padding:10px 8px">备注</th>
+        </tr>
+      </thead>
+      <tbody id="detail-body">
+        {% for r in records %}
+        <tr data-date="{{ r.work_date.strftime('%Y-%m-%d') }}" style="border-bottom:1px solid #F3EDE3">
+          <td style="padding:10px 8px">{{ r.work_date.strftime('%m-%d') }}</td>
+          <td style="padding:10px 8px">{{ r.employee.employee_no if r.employee else '—' }}</td>
+          <td style="padding:10px 8px;font-weight:600">{{ r.employee.name if r.employee else '—' }}</td>
+          <td style="padding:10px 8px">{{ r.employee.org.name if r.employee and r.employee.org else '—' }}</td>
+          <td style="padding:10px 8px">
+            {% set st = r._display_status %}
+            <span style="font-size:12px;padding:2px 8px;border-radius:10px;
+                  background:{{ '#dcfce7' if st=='normal' else ('#E2F0E3' if st=='no_checkout' else ('#FDF3E4' if st in ('late','early') else ('#FBE3DD' if st=='absent' else '#E7EDFA'))) }};
+                  color:{{ '#166534' if st=='normal' else ('#2F7A3F' if st=='no_checkout' else ('#8A5A18' if st in ('late','early') else ('#991b1b' if st=='absent' else '#4A6BB0'))) }}">
+              {{ r._status_cn }}</span>
+          </td>
+          <td style="padding:10px 8px">{{ r.check_in or '—' }}</td>
+          <td style="padding:10px 8px;{{ 'color:#C86432' if r._display_status=='no_checkout' else '' }}">{{ r.check_out or '（缺卡）' }}</td>
+          <td style="padding:10px 8px">{{ r.note or '' }}</td>
+        </tr>
+        {% else %}
+        <tr id="empty-row"><td colspan="8" style="padding:24px 0;text-align:center;color:#9C9288">该月暂无出勤记录</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+  // 点击日历某天 → 下方明细只显示当天数据，并高亮选中的日期格
+  (function () {
+    var cells = document.querySelectorAll('.cal-cell');
+    var rows = document.querySelectorAll('#detail-body tr[data-date]');
+    var tip = document.getElementById('filter-tip');
+    var empty = document.getElementById('empty-row');
+    var selected = null;
+
+    function selectDate(dateStr) {
+      // 高亮日历格
+      cells.forEach(function (c) {
+        c.style.outline = (c.getAttribute('data-date') === dateStr) ? '2px solid #E6823C' : '';
+        c.style.background = (c.getAttribute('data-date') === dateStr) ? '#FDF0E4' : '';
+      });
+      // 过滤明细
+      var shown = 0;
+      rows.forEach(function (r) {
+        var match = r.getAttribute('data-date') === dateStr;
+        r.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      if (empty) empty.style.display = shown === 0 ? '' : 'none';
+      tip.textContent = dateStr ? '（已筛选：' + dateStr + '）' : '';
+      selected = dateStr;
+    }
+
+    cells.forEach(function (c) {
+      c.addEventListener('click', function () {
+        var d = c.getAttribute('data-date');
+        // 再次点击同一个日期则取消筛选（回到全月）
+        if (selected === d) {
+          selectDate(null);
+        } else {
+          selectDate(d);
+        }
+      });
+    });
+  })();
+  </script>
+{% endblock %}

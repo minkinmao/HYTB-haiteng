@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% block title %}期末结转与结账 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 期末结转与结账{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">期末结转与结账 <span style="font-size:13px;font-weight:400;color:#9C9288">Close</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    结账做两件事：<b style="color:#5C554D">① 结转损益</b>——把损益类科目本期的净发生额转到「本年利润 {{ closing_acct }}」，生成一张系统凭证；
+    <b style="color:#5C554D">② 锁定期间</b>——该期间此后不能再增删改凭证，从机制上防止事后改账。
+    只认「已记账」凭证；必须按期顺序结，不能跳期。
+  </div>
+
+  {# 未建账：账还没有起点，谈不上结账 #}
+  {% if not cfg.opening_done %}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid #E6823C">
+    <div style="font-size:13.5px;color:#8A5A18">
+      <b>还没完成期初建账</b>，不能结账。
+    </div>
+    <a href="{{ url_for('fin.opening') }}" style="font-size:13px;color:#C86432">去「期初建账」录入期初余额并确认建账 →</a>
+  </div>
+  {% endif %}
+
+  {# 期间切换 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.closing') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">切换期间</button>
+      {% if cfg.start_period %}
+      <span style="font-size:12.5px;color:#9C9288;padding-bottom:10px">账套启用期间：{{ cfg.start_period }}</span>
+      {% endif %}
+    </form>
+  </div>
+
+  {# 本期间概览 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('会计期间', period_cn, '#C9902A'),
+      ('期间状态', '已结账' if locked else '未结账', '#991b1b' if locked else '#166534'),
+      ('本期已记账凭证', row.posted_count if row else 0, '#6B5D4F'),
+      ('本期待处理凭证', (row.pending_count if row else 0), '#8A5A18'),
+      ('本期收入类转出', '￥' ~ '{:,.2f}'.format(preview.income_total), '#C86432'),
+      ('本期费用类转出', '￥' ~ '{:,.2f}'.format(preview.expense_total), '#E6823C'),
+      ('本期净利润', '￥' ~ '{:,.2f}'.format(preview.profit), '#166534' if preview.profit >= 0 else '#991b1b'),
+    ] %}
+    {% for name, val, color in cards %}
+    <div style="flex:1;min-width:126px;background:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ name }}</div>
+      <div style="font-size:{{ '18px' if val is string else '20px' }};font-weight:700;color:{{ color }};margin-top:4px">{{ val }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 结账前检查清单 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">结账前检查</div>
+    {% if blockers %}
+      {% for b in blockers %}
+      <div style="background:#FDECEC;border:1px solid #F3C9C9;border-radius:6px;padding:9px 13px;margin-bottom:7px;
+                  font-size:13px;color:#991b1b">
+        <b>✗</b> {{ b }}
+      </div>
+      {% endfor %}
+      <div style="font-size:12.5px;color:#9C9288;margin-top:6px">
+        上面每一条都必须先解决，才能结账。这是为了让每一期的账"结得干净"。
+      </div>
+    {% else %}
+      <div style="background:#E8F5EC;border:1px solid #BFE3C9;border-radius:6px;padding:9px 13px;font-size:13px;color:#166534">
+        <b>✓</b> 检查通过，本期间可以结账。
+      </div>
+    {% endif %}
+    {% for w in warns %}
+    <div style="background:#FFF8E8;border:1px solid #EBD9AE;border-radius:6px;padding:9px 13px;margin-top:7px;
+                font-size:13px;color:#8A5A18"><b>!</b> {{ w }}</div>
+    {% endfor %}
+  </div>
+
+  {# 结转预览 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">
+      结转预览 <span style="font-size:12px;font-weight:400;color:#9C9288">（这张凭证结账时会自动生成并直接记账）</span>
+    </div>
+    {% if preview.plan %}
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#FAF7F2;color:#6B5D4F">
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #EAE2D6">科目编码</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #EAE2D6">科目名称</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #EAE2D6">本期净发生</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #EAE2D6">本科目结转方向</th>
+            <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #EAE2D6">金额</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in preview.plan %}
+          <tr>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;color:#9C9288">{{ p.code }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3">{{ p.name }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:center;
+                       color:{{ '#C86432' if p.net > 0 else '#166534' }}">
+              {{ '借' if p.net > 0 else '贷' }} {{ '{:,.2f}'.format(p.amount) }}
+            </td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:center">
+              {{ '贷（转出）' if p.net > 0 else '借（转出）' }}
+            </td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:right">{{ '{:,.2f}'.format(p.amount) }}</td>
+          </tr>
+          {% endfor %}
+          <tr style="background:#FCFAF7;font-weight:600">
+            <td colspan="2" style="padding:8px 10px">本年利润 {{ closing_acct }}</td>
+            <td colspan="2" style="padding:8px 10px;text-align:center;color:{{ '#166534' if preview.profit >= 0 else '#991b1b' }}">
+              {{ '贷方（盈利）' if preview.profit >= 0 else '借方（亏损）' }}
+            </td>
+            <td style="padding:8px 10px;text-align:right;color:{{ '#166534' if preview.profit >= 0 else '#991b1b' }}">
+              {{ '{:,.2f}'.format(preview.profit|abs) }}
+            </td>
+          </tr>
+          <tr style="background:#FAF7F2;font-weight:600;border-top:2px double #EAE2D6">
+            <td colspan="4" style="padding:9px 10px">凭证借贷合计（共 {{ preview.lines }} 行分录）</td>
+            <td style="padding:9px 10px;text-align:right">借 = 贷 = {{ '{:,.2f}'.format(preview.amount) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:12.5px;color:#9C9288;line-height:1.8">
+      收入段：借 收入科目 / 贷 本年利润；费用段：借 本年利润 / 贷 费用科目。两段各自借贷相等，合起来必然平衡。
+      结转后损益类科目本期余额归零，下期从 0 重新累计；本年利润的贷方净增额就是本期净利润。
+    </div>
+    {% else %}
+    <div style="font-size:13px;color:#9C9288">
+      本期间没有损益发生额（或损益类科目都没发生），结账不会生成结转凭证，只做期间锁定。
+    </div>
+    {% endif %}
+  </div>
+
+  {# 操作区 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:18px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">结账操作</div>
+    {% if not can_manage %}
+    <div style="font-size:13px;color:#9C9288">
+      结账 / 反结账需要「财务-期末结转结账」权限（财务主管层）。你可以查看本期状态与结转预览。
+    </div>
+    {% elif locked %}
+    <div style="font-size:13.5px;color:#991b1b;margin-bottom:10px">
+      本期间<b>已结账</b>（{{ row.closed_by or '—' }} 于 {{ row.closed_at.strftime('%Y-%m-%d %H:%M') if row.closed_at else '—' }} 结账，
+      结转凭证 {{ row.closing_voucher_no or '无' }}）。该期间凭证已全部锁定。
+    </div>
+    <form method="post" action="{{ url_for('fin.closing_reopen') }}"
+          onsubmit="return confirm('反结账会删除本期结转凭证、解除期间锁定，确定继续吗？')">
+      <input type="hidden" name="period" value="{{ period }}">
+      <button type="submit" class="btn"
+              style="padding:9px 20px;background:#fff;color:#991b1b;border:1px solid #F3C9C9">反结账（撤销本期结账）</button>
+    </form>
+    <div style="margin-top:8px;font-size:12.5px;color:#9C9288">
+      反结账只能从最靠后的已结账期间往回退；操作次数会留痕（本期已反结账 {{ row.reopen_count or 0 }} 次）。
+    </div>
+    {% else %}
+    <form method="post" action="{{ url_for('fin.closing_close') }}"
+          onsubmit="return confirm('确定执行「结转损益并结账」吗？结账后本期凭证将全部锁定。')">
+      <input type="hidden" name="period" value="{{ period }}">
+      <button type="submit" class="btn" style="padding:9px 20px"
+              {% if blockers %}disabled title="请先解决检查清单里的问题"{% endif %}>
+        执行结转并结账
+      </button>
+      {% if blockers %}
+      <span style="font-size:12.5px;color:#991b1b;margin-left:10px">检查未通过，暂不能结账</span>
+      {% endif %}
+    </form>
+    <div style="margin-top:8px;font-size:12.5px;color:#9C9288">
+      结账会生成一张「转」字凭证并直接记账（制单记「系统（期末结转）」）。要调整？走反结账。
+    </div>
+    {% endif %}
+  </div>
+
+  {# 期间台账 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">期间台账</div>
+    {% if rows %}
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#FAF7F2;color:#6B5D4F">
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #EAE2D6">会计期间</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #EAE2D6">状态</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #EAE2D6">已记账</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #EAE2D6">待处理</th>
+            <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #EAE2D6">收入</th>
+            <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #EAE2D6">费用</th>
+            <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #EAE2D6">净利润</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #EAE2D6">结转凭证</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #EAE2D6">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr style="{{ 'background:#FCFAF7' if r.period == period else '' }}">
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3">
+              {{ r.period_cn }}<span style="color:#9C9288;font-size:12px">（{{ r.period }}）</span>
+            </td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:center">
+              {% if r.is_closed %}
+              <span style="background:#E8F5EC;color:#166534;border-radius:10px;padding:2px 9px;font-size:12px">已结账</span>
+              {% else %}
+              <span style="background:#FAF2E4;color:#8A5A18;border-radius:10px;padding:2px 9px;font-size:12px">未结账</span>
+              {% endif %}
+              {% if r.reopen_count %}
+              <span style="font-size:11px;color:#9C9288">反结账 {{ r.reopen_count }} 次</span>
+              {% endif %}
+            </td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:center">{{ r.posted_count }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:center;
+                       color:{{ '#991b1b' if r.pending_count else '#9C9288' }}">{{ r.pending_count }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:right">{{ '{:,.2f}'.format(r.income) }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:right">{{ '{:,.2f}'.format(r.expense) }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:right;font-weight:600;
+                       color:{{ '#166534' if r.profit >= 0 else '#991b1b' }}">{{ '{:,.2f}'.format(r.profit) }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3">{{ r.closing_voucher_no or '—' }}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #F2ECE3;text-align:center">
+              <a href="{{ url_for('fin.closing', period=r.period) }}" style="color:#C86432;font-size:12.5px">
+                {{ '查看' if r.period == period else '切到此期' }}
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="font-size:13px;color:#9C9288">还没有可结账的期间（账套启用期间未设置）。</div>
+    {% endif %}
+  </div>
+
+  <div style="font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">口径：</b>
+    ① 只认已记账凭证，草稿 / 已审核 / 已作废都不参与结转；
+    ② 结转金额 = 本期净发生额（本期借 − 本期贷），不含期初——损益类科目在期初建账时本该是平的；
+    ③ 必须按期顺序结账，上一期未结不许结下一期；
+    ④ 结转凭证是系统凭证，不能手工改 / 删 / 作废 / 红冲，要调整只能反结账；
+    ⑤ 结账后该期间凭证全部冻结（新增 / 修改 / 删除 / 审核 / 记账 / 作废 / 红冲一律拒绝）。
+  </div>
+{% endblock %}

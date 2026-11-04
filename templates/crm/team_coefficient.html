@@ -1,0 +1,369 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 业务团队系数设置{% endblock %}
+{% block pagename %}核心业务管理系统 · 业务团队系数设置{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .qwrap{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .qbox{flex:1;min-width:300px;background:#fff;border:1px solid #EAE2D6;border-radius:12px;
+        padding:14px 16px;box-shadow:0 2px 10px rgba(42,42,42,.04)}
+  .qbox h3{font-size:14px;margin:0 0 10px;color:#9C4E2C;font-weight:600}
+  .qstep{background:#FAF7F2;border:1px solid #EAE2D6;border-radius:10px;padding:12px 14px;
+         font-size:13px;color:#6B5D4F;line-height:2}
+  .qstep b{color:#9C4E2C}
+  .coefline{margin:8px 0;padding:2px 0;font-size:13px;color:#6B5D4F;display:flex;justify-content:space-between;align-items:center}
+  .coefline .pc{font-variant-numeric:tabular-nums;color:#C86432;font-weight:600}
+  .hint{font-size:12px;color:#9C9288}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">业务团队系数设置
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（先扣公司税费 → 再乘团队系数 · 对齐「保险佣金查询」小程序）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  按<b>团队类型</b>配置三类系数 <b>kf（FYC）/ kr（RYC）/ ka（加佣方案）</b>。
+  ⭐ 分配前先扣公司承担的税费：<b>保司含税结算 → 扣增值税 → 扣附加税费 → 税后净额 × 系数 = 团队最终费用</b>。
+  基准费率取自已录入的产品合约（FYC + 方案加佣 + RYC）。
+  <b style="color:#C86432">基本法团队一套系数、渠道团队按渠道负责人各挂一套</b>；
+  <b>继续率考核、增员奖不受本系数影响</b>。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
+  <a class="crm-tab" href="{{ url_for('crm.manpower') }}">人力数据清单</a>
+  <a class="crm-tab" href="{{ url_for('crm.agencies') }}">合作经代</a>
+  <a class="crm-tab on" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
+  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
+</div>
+
+<div class="qwrap">
+  <div class="qbox">
+    <h3>分配口径（先扣税 · 再乘系数）</h3>
+    <div class="qstep">
+      <div class="coefline"><span>① 保司结算（签约费率 · <b>含税</b>）</span></div>
+      <div class="coefline"><span>② − 增值税<div class="hint">{{ '%.2f'|format(tax.vat) }}%（开票税率，价内拆分）</div></span></div>
+      <div class="coefline"><span>③ − 附加税费<div class="hint">{{ '%.2f'|format(tax.sur) }}%（按增值税额计）</div></span></div>
+      <div style="border-top:1px dashed #EEE3D6;margin:8px 0;padding-top:8px">
+        <b>= 税后净费率</b> <span class="hint">（公司可分配基数）</span>
+      </div>
+      <div class="coefline"><span>④ × 团队系数 kf / kr / ka</span></div>
+      <div style="border-top:1px dashed #EEE3D6;margin-top:8px;padding-top:8px">
+        <b>= 团队最终费率</b>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:8px">
+      公司毛利 = 税后净额 × (1 − 系数)；系数 100% 时净额全给团队（公司仅余税费）。
+    </div>
+  </div>
+
+  <div class="qbox">
+    <h3>税费参数（全局一套）</h3>
+    {% if can_manage %}
+    <form method="post" action="{{ url_for('crm.team_tax_save') }}" style="margin:0">
+      <label>增值税率（%）</label>
+      <input type="number" step="0.01" name="vat_rate" value="{{ '%.2f'|format(tax.vat) }}">
+      <label>附加税费率（%）</label>
+      <input type="number" step="0.01" name="surcharge_rate" value="{{ '%.2f'|format(tax.sur) }}">
+      <div class="hint">附加税费 = 增值税额 × 附加率（城建 7% + 教育 3% + 地方教育 2% = 12%）。</div>
+      <button class="crm-btn pri" type="submit" style="margin-top:8px">保存税率</button>
+    </form>
+    {% else %}
+    <div class="qstep">
+      增值税率 <b>{{ '%.2f'|format(tax.vat) }}%</b> ｜ 附加税费率 <b>{{ '%.2f'|format(tax.sur) }}%</b>
+    </div>
+    {% endif %}
+    <div class="hint" style="margin-top:8px">
+      调整税率会影响所有团队的最终费用与销售费用清单，请谨慎修改。
+    </div>
+  </div>
+</div>
+
+<div class="qbox" style="margin-bottom:14px">
+  <h3>试算器（含税费扣减明细）</h3>
+  <form class="crm-tool" method="post" style="margin:0;padding:0;border:0;box-shadow:none;background:none">
+    <label>团队类型</label>
+    <select name="trial_team_type" id="selTeamType" onchange="onTeamTypeChange()">
+      {% for c, n in team_types %}
+      <option value="{{ c }}" {{ 'selected' if trial and trial.team_type == c else '' }}>{{ n }}</option>
+      {% endfor %}
+    </select>
+    <label id="ownerLabel" style="{{ '' if (trial and trial.team_type == 'channel') else 'display:none' }}">渠道负责人</label>
+    <select name="trial_owner" id="selOwner" style="{{ '' if (trial and trial.team_type == 'channel') else 'display:none' }}">
+      <option value="">— 请选择渠道负责人 —</option>
+      {% for o in owners %}
+      <option value="{{ o.name }}" {{ 'selected' if trial and trial.owner == o.name else '' }}>{{ o.label }}</option>
+      {% endfor %}
+    </select>
+    <label>产品合约</label>
+    <select name="contract_id" id="selContract" onchange="onContractChange()">
+      <option value="">— 请选择产品合约 —</option>
+      {% for c in contracts %}
+      <option value="{{ c.id }}" {{ 'selected' if picked and picked.id == c.id else '' }}>
+        {{ c.insurer_short or c.insurer_name }} · {{ c.product_name }}</option>
+      {% endfor %}
+    </select>
+    <label>缴别</label>
+    <select name="tier_id" id="selTier">
+      {% for t in tiers %}
+      <option value="{{ t.id }}" {{ 'selected' if picked_tier and picked_tier.id == t.id else '' }}>{{ tier_labels.get(t.id) or t.pay_period or '缴别' }}</option>
+      {% endfor %}
+    </select>
+    <label>保费规模（元）</label>
+    <input type="number" step="0.01" name="premium" value="{{ premium or 100000 }}">
+    <button class="crm-btn pri" type="submit">试算</button>
+  </form>
+  {% if trial %}
+  <div style="margin-top:12px;overflow-x:auto">
+    <table class="crm-table">
+      <thead><tr>
+        <th>项目</th>
+        <th style="text-align:right;white-space:nowrap">含税费率</th>
+        <th style="text-align:right;white-space:nowrap">−增值税</th>
+        <th style="text-align:right;white-space:nowrap">−附加税</th>
+        <th style="text-align:right;white-space:nowrap">税后净费率</th>
+        <th style="text-align:right;white-space:nowrap">×系数</th>
+        <th style="text-align:right;white-space:nowrap">团队最终费率</th>
+        <th style="text-align:right;white-space:nowrap">金额（元）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>FYC（首年佣金）</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc_gross) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc_vat) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc_sur) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc_net) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.coef.kf) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc_eff) }}%</td>
+          <td style="text-align:right" class="mono">{{ '{:,.2f}'.format(trial.fyc_amount) }}</td>
+        </tr>
+        <tr>
+          <td>方案加佣</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.plan_gross) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.plan_vat) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.plan_sur) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.plan_net) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.coef.ka) }}%</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.plan_eff) }}%</td>
+          <td style="text-align:right" class="mono">{{ '{:,.2f}'.format(trial.plan_amount) }}</td>
+        </tr>
+        <tr style="font-weight:600">
+          <td>总合计</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc + trial.plan) }}%</td>
+          <td style="text-align:right" class="mono">—</td>
+          <td style="text-align:right" class="mono">—</td>
+          <td style="text-align:right" class="mono">{{ '%.2f'|format(trial.fyc_net + trial.plan_net) }}%</td>
+          <td style="text-align:right" class="mono">—</td>
+          <td style="text-align:right" class="mono" style="color:#C86432">{{ '%.2f'|format(trial.total_eff) }}%</td>
+          <td style="text-align:right" class="mono" style="color:#C86432">{{ '{:,.2f}'.format(trial.total_amount) }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="hint" style="margin-top:8px">
+      ⭐ 含税费率＝保司按签约费率结算的费率；②③ 为公司承担的增值税/附加税费（{{ '%.2f'|format(trial.tax.vat) }}% / {{ '%.2f'|format(trial.tax.sur) }}%）；
+      ④ 税后净费率＝①−②−③，才是真正可分配的基数；⑤ 团队最终费率＝④ × 系数。<br>
+      RYC（续年度佣金）同样**先扣税再乘 kr**：RYC-2 = {{ '%.2f'|format(trial.ryc[2]) }}% ，
+      RYC-3 = {{ '%.2f'|format(trial.ryc[3]) }}% … RYC-10 = {{ '%.2f'|format(trial.ryc[10]) }}%。
+      继续率考核、增员奖不受本系数影响。
+    </div>
+  </div>
+  {% else %}
+  <div class="crm-empty">选择团队类型与产品合约后点「试算」，即可看到「扣税 → 乘系数」的完整过程。</div>
+  {% endif %}
+</div>
+
+<div class="crm-sec">一、团队系数清单 <span>基本法一套 · 渠道按负责人各一套</span></div>
+<div class="crm-card">
+  {% if rows %}
+  <table class="crm-table">
+    <thead>
+      <tr><th>方案名称</th><th>团队类型</th><th>渠道负责人</th>
+        <th>适用分区</th><th>适用营业部</th>
+        <th style="text-align:right;white-space:nowrap">kf（FYC）</th>
+        <th style="text-align:right;white-space:nowrap">kr（RYC）</th>
+        <th style="text-align:right;white-space:nowrap">ka（加佣）</th>
+        <th>状态</th><th>备注</th>
+        {% if can_manage %}<th style="white-space:nowrap">操作</th>{% endif %}</tr>
+    </thead>
+    <tbody>
+    {% for it in rows %}{% set r = it.row %}
+      <tr>
+        <td>{{ r.name or '—' }}</td>
+        <td>{{ it.type_name }}</td>
+        <td>{{ r.owner_name or '—' }}</td>
+        <td>{{ r.scope_zone or '总计' }}</td>
+        <td>{{ r.scope_dept or '全员' }}</td>
+        <td style="text-align:right" class="mono">{{ '%.2f'|format(r.kf or 0) }}%</td>
+        <td style="text-align:right" class="mono">{{ '%.2f'|format(r.kr or 0) }}%</td>
+        <td style="text-align:right" class="mono">{{ '%.2f'|format(r.ka or 0) }}%</td>
+        <td><span class="crm-tag {{ 't-ok' if r.status == 'on' else 't-gray' }}">{{ '启用' if r.status == 'on' else '停用' }}</span></td>
+        <td>{{ r.note or '—' }}</td>
+        {% if can_manage %}
+        <td>
+          <form method="post" action="{{ url_for('crm.team_coefficient_toggle', cid=r.id) }}" style="display:inline">
+            <button class="crm-a" type="submit" style="border:0;background:none;cursor:pointer">{{ '停用' if r.status == 'on' else '启用' }}</button>
+          </form>
+          <a class="crm-a" style="margin-left:8px" href="#coefForm"
+             onclick="editCoef({{ r.id }}, '{{ r.team_type }}', '{{ r.owner_name or '' }}', {{ r.kf or 0 }}, {{ r.kr or 0 }}, {{ r.ka or 0 }}, '{{ r.name or '' }}', {{ r.sort_no or 0 }}, '{{ r.note or '' }}', '{{ r.scope_zone or '' }}', '{{ r.scope_dept or '' }}')">编辑</a>
+          <form method="post" action="{{ url_for('crm.team_coefficient_delete', cid=r.id) }}" style="display:inline"
+                onsubmit="return confirm('确定删除这条团队系数？')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">尚未配置任何团队系数。{% if can_manage %}在下方新增一套即可对相应团队生效。{% endif %}</div>
+  {% endif %}
+</div>
+
+{% if can_manage %}
+<div class="crm-sec" id="coefForm">二、新增 / 编辑系数 <span>系数为百分比数值，100 表示不放大不缩小</span></div>
+<form class="crm-form" method="post" action="{{ url_for('crm.team_coefficient_save') }}">
+  <input type="hidden" name="cid" id="f_cid" value="">
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>团队类型 <b>*</b></label>
+      <select name="team_type" id="f_team_type" onchange="onFormTeamTypeChange()">
+        {% for c, n in team_types %}<option value="{{ c }}">{{ n }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld" id="wrapOwner" style="display:none">
+      <label>渠道负责人 <b>*</b></label>
+      <select name="owner_name" id="f_owner_name">
+        <option value="">— 请选择渠道负责人 —</option>
+        {% for o in owners %}<option value="{{ o.name }}">{{ o.label }}</option>{% endfor %}
+      </select>
+      <div class="hint">渠道团队按负责人各挂一套；负责人名单取自「人力数据清单」中<b>渠道团队</b>的在职人员。</div>
+    </div>
+    <div class="crm-fld">
+      <label>适用分区</label>
+      <select name="scope_zone" id="f_scope_zone">
+        <option value="">总计（不限分区）</option>
+        {% for z in zones %}<option value="{{ z }}">{{ z }}</option>{% endfor %}
+      </select>
+      <div class="hint">留空 = 全部分区适用；架构向下最低到营业部。</div>
+    </div>
+    <div class="crm-fld">
+      <label>适用营业部</label>
+      <select name="scope_dept" id="f_scope_dept">
+        <option value="">全员（不限营业部）</option>
+        {% for d in depts %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+      </select>
+      <div class="hint">选具体营业部时，该系数只对该营业部生效。</div>
+    </div>
+    <div class="crm-fld">
+      <label>方案名称</label>
+      <input type="text" name="name" id="f_name" placeholder="留空则自动生成">
+    </div>
+    <div class="crm-fld">
+      <label>kf · FYC 系数（%）<b>*</b></label>
+      <input type="number" step="0.01" name="kf" id="f_kf" required placeholder="如 80">
+      <div class="hint">首年佣金（总总FYC + 分分FYC）乘此系数。</div>
+    </div>
+    <div class="crm-fld">
+      <label>kr · RYC 系数（%）<b>*</b></label>
+      <input type="number" step="0.01" name="kr" id="f_kr" required placeholder="如 90">
+      <div class="hint">续年度佣金 RYC-2 ~ RYC-10 乘此系数。</div>
+    </div>
+    <div class="crm-fld">
+      <label>ka · 加佣方案系数（%）<b>*</b></label>
+      <input type="number" step="0.01" name="ka" id="f_ka" required placeholder="如 85">
+      <div class="hint">方案加佣（系数类方案合计）乘此系数。</div>
+    </div>
+    <div class="crm-fld">
+      <label>优先级</label>
+      <input type="number" name="sort_no" id="f_sort" value="0">
+      <div class="hint">同团队类型内数字小者优先。</div>
+    </div>
+    <div class="crm-fld">
+      <label>状态</label>
+      <select name="status" id="f_status"><option value="on">启用</option><option value="off">停用</option></select>
+    </div>
+    <div class="crm-fld full">
+      <label>备注</label>
+      <input type="text" name="note" id="f_note" placeholder="如：开门红期间临时下调 FYC 系数">
+    </div>
+  </div>
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存系数</button>
+    <button class="crm-btn" type="button" onclick="resetCoef()">清空重填</button>
+  </div>
+</form>
+{% endif %}
+
+<script>
+  var CJS = {{ cjs|safe }};
+  var selC = document.getElementById('selContract');
+  var selT = document.getElementById('selTier');
+
+  function onContractChange() {
+    if (!selC || !selT) { return; }
+    var arr = CJS[selC.value] || [];
+    selT.innerHTML = '';
+    for (var i = 0; i < arr.length; i++) {
+      var o = document.createElement('option');
+      o.value = arr[i].id;
+      o.textContent = arr[i].label;
+      selT.appendChild(o);
+    }
+    if (!arr.length) {
+      var e = document.createElement('option');
+      e.value = '';
+      e.textContent = '（该产品暂无缴别）';
+      selT.appendChild(e);
+    }
+  }
+
+  // 试算器：团队类型切换时显示/隐藏渠道负责人
+  function onTeamTypeChange() {
+    var s = document.getElementById('selTeamType');
+    var ol = document.getElementById('ownerLabel');
+    var os = document.getElementById('selOwner');
+    var isCh = s && s.value === 'channel';
+    if (ol) { ol.style.display = isCh ? '' : 'none'; }
+    if (os) { os.style.display = isCh ? '' : 'none'; }
+  }
+
+  // 表单：团队类型切换时显示/隐藏渠道负责人输入
+  function onFormTeamTypeChange() {
+    var s = document.getElementById('f_team_type');
+    var w = document.getElementById('wrapOwner');
+    if (w) { w.style.display = (s && s.value === 'channel') ? '' : 'none'; }
+  }
+
+  function editCoef(cid, tt, owner, kf, kr, ka, name, sort_no, note, zone, dept) {
+    document.getElementById('f_cid').value = cid;
+    document.getElementById('f_team_type').value = tt;
+    document.getElementById('f_name').value = name;
+    document.getElementById('f_kf').value = kf;
+    document.getElementById('f_kr').value = kr;
+    document.getElementById('f_ka').value = ka;
+    document.getElementById('f_sort').value = sort_no;
+    document.getElementById('f_note').value = note;
+    var os = document.getElementById('f_owner_name');
+    if (os) { os.value = owner; }
+    var zs = document.getElementById('f_scope_zone');
+    if (zs) { zs.value = zone; }
+    var ds = document.getElementById('f_scope_dept');
+    if (ds) { ds.value = dept; }
+    document.getElementById('f_status').value = 'on';
+    onFormTeamTypeChange();
+    document.getElementById('f_kf').focus();
+  }
+
+  function resetCoef() {
+    document.getElementById('f_cid').value = '';
+    document.getElementById('f_name').value = '';
+    document.getElementById('f_kf').value = '';
+    document.getElementById('f_kr').value = '';
+    document.getElementById('f_ka').value = '';
+    document.getElementById('f_note').value = '';
+    var zs = document.getElementById('f_scope_zone'); if (zs) { zs.value = ''; }
+    var ds = document.getElementById('f_scope_dept'); if (ds) { ds.value = ''; }
+    onFormTeamTypeChange();
+  }
+  onFormTeamTypeChange();
+</script>
+{% endblock %}

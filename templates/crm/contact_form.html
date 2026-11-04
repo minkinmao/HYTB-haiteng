@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ '编辑岗位人员' if row else '登记岗位人员' }}{% endblock %}
+{% block pagename %}核心业务管理系统 · {{ '编辑岗位人员' if row else '登记岗位人员' }}{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑岗位人员' if row else '登记岗位人员' }}</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  {% if row %}
+    所属保司：{{ row.insurer_name or '—' }} ｜ 当前状态：
+    <span class="crm-tag {{ 't-ok' if (row.status or '') == 'current' else 't-gray' }}">
+      {{ '现任' if (row.status or '') == 'current' else '离任' }}</span>
+  {% else %}
+    所属保司：{{ insurer.name if insurer else '—' }}
+  {% endif %}
+  ｜ 带 <b style="color:#C86432;font-weight:400">*</b> 为必填
+</div>
+
+<form class="crm-form" method="post">
+  <div class="crm-sec">一、岗位与人员 <span>总经理 / 中介分管总 / 中介渠道负责人</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>岗位 <b>*</b></label>
+      <select name="role" required>
+        {% for c, n in roles %}
+        <option value="{{ c }}" {{ 'selected' if row and row.role == c else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>挂靠分公司</label>
+      <select name="branch_id">
+        <option value="">— 总公司 / 不限 —</option>
+        {% for b in branches %}
+        <option value="{{ b.id }}" {{ 'selected' if row and row.branch_id == b.id else '' }}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">若该岗位属某省分公司，可在此指定。</div>
+    </div>
+    <div class="crm-fld">
+      <label>姓名 <b>*</b></label>
+      <input type="text" name="name" value="{{ (row.name or '') if row else '' }}" required>
+    </div>
+    <div class="crm-fld">
+      <label>联系电话 <b>*</b></label>
+      <input type="text" name="phone" value="{{ (row.phone or '') if row else '' }}" required>
+    </div>
+  </div>
+
+  <div class="crm-sec">二、任职信息</div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>上任日期</label>
+      <input type="date" name="start_date"
+             value="{{ (row.start_date or '') if row else today }}">
+    </div>
+    {% if row and row.end_date %}
+    <div class="crm-fld">
+      <label>离任日期</label>
+      <input type="text" value="{{ row.end_date }}" readonly>
+      <div class="hint">已离任记录，如需恢复请删除后重新登记。</div>
+    </div>
+    {% endif %}
+    {% if not row %}
+    <div class="crm-fld full">
+      <label>人员变动方式</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#2A2A2A">
+        <input type="checkbox" name="auto_leave" value="1" checked style="width:auto">
+        顶替该岗位原现任（原记录自动标记离任，保留任职历史）
+      </label>
+      <div class="hint">取消勾选则多人并列（如同岗位设正副职）。</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="crm-sec">三、备注</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="分管范围 / 对接事项等">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.insurer_detail', iid=(row.insurer_id if row else insurer.id)) }}">取消</a>
+  </div>
+</form>
+{% endblock %}

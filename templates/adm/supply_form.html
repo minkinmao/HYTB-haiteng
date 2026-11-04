@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}ADM · {{ '编辑用品' if row else '新增用品' }}{% endblock %}
+{% block pagename %}行政事务 · {{ '编辑办公用品' if row else '新增办公用品' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑办公用品' if row else '新增办公用品' }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（编号 {{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  用品编号由系统自动生成（BYP-年月-序号）。建档后库存通过「出入库」登记变动，本页不直接改库存。
+</div>
+
+<form class="adm-form" method="post"
+      action="{{ url_for('adm.supply_edit', sid=row.id) if row else url_for('adm.supply_new') }}">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>用品名称 <b>*</b></label>
+      <input type="text" name="name" required value="{{ (row.name or '') if row else '' }}"
+             placeholder="如：A4 复印纸">
+    </div>
+    <div class="adm-fld">
+      <label>类别</label>
+      <select name="category">
+        <option value="">请选择</option>
+        {% for c in cats %}
+        <option value="{{ c }}" {{ 'selected' if row and row.category == c else '' }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>规格型号</label>
+      <input type="text" name="spec" value="{{ (row.spec or '') if row else '' }}"
+             placeholder="如：70g / 500 张 / 包">
+    </div>
+    <div class="adm-fld">
+      <label>计量单位</label>
+      <input type="text" name="unit" list="unitList" value="{{ (row.unit or '') if row else '' }}"
+             placeholder="个 / 支 / 包 / 箱">
+      <datalist id="unitList">
+        <option value="个"></option><option value="支"></option><option value="包"></option>
+        <option value="箱"></option><option value="盒"></option><option value="瓶"></option>
+        <option value="套"></option><option value="本"></option>
+      </datalist>
+    </div>
+    {% if row %}
+    <div class="adm-fld">
+      <label>当前库存</label>
+      <input type="text" value="{{ '%g'|format(row.stock or 0) }} {{ row.unit or '' }}" disabled>
+      <span class="hint">如需调整，请到「出入库」登记</span>
+    </div>
+    {% else %}
+    <div class="adm-fld">
+      <label>初始库存</label>
+      <input type="number" step="0.01" min="0" name="stock" value="0">
+      <span class="hint">建档时的现有数量，可留 0</span>
+    </div>
+    {% endif %}
+    <div class="adm-fld">
+      <label>安全库存</label>
+      <input type="number" step="0.01" min="0" name="min_stock"
+             value="{{ ('%g'|format(row.min_stock or 0)) if row else 0 }}">
+      <span class="hint">低于此数量列表标黄提醒，0 = 不预警</span>
+    </div>
+    <div class="adm-fld">
+      <label>存放地点</label>
+      <input type="text" name="place" value="{{ (row.place or '') if row else '' }}"
+             placeholder="如：行政仓库 / 前台柜">
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="供应商、采购周期等">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if row else '建档入库' }}</button>
+    <a class="adm-btn" href="{{ url_for('adm.supplies') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

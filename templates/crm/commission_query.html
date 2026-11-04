@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 佣金查询{% endblock %}
+{% block pagename %}核心业务管理系统 · 佣金查询{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+{# 数值统一按百分比呈现；为 0 / 空 的一律显示 "-"  #}
+{% macro pct(v) %}{% if v %}{{ '%.2f'|format(v) }}%{% else %}-{% endif %}{% endmacro %}
+
+{# 两级表头：一级为费用期别分组（首年度 / 续年期），二级为具体字段 #}
+<style>
+  .crm-table th.grp{text-align:center;color:#B4552A;background:#F6EDE2;font-size:12.5px}
+  .crm-table th.grp:first-child{border-radius:0}
+  .crm-table th.grp:last-child{border-radius:0 8px 8px 0}
+  /* 两组费用期别之间的竖向分隔线（续年期第一列） */
+  .crm-table th.sep,.crm-table td.sep{border-left:2px solid #E6DCCB}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">佣金查询
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（产品合约 · 按产品＋缴别汇总）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  按<b>产品＋缴别</b>汇总已登记的费用政策 —— <b>同一款产品既签总总、又签分分的，合并显示在同一行</b>
+  （总总FYC 与 分分FYC 各占一列，不再分两行）；按两个费用期别分组呈现：
+  <b>首年度销售费用</b>＝佣金总计（总总FYC＋分分FYC＋方案加佣）/ 总总FYC / 分分FYC / 方案加佣；
+  <b>续年期销售费用</b>＝RYC-2～RYC-10 分年续期佣金率。
+  <br>全部数值以<b>百分比</b>呈现，<b>为 0 的统一显示「-」</b>；RYC 属续期佣金率，<b>不并入</b>佣金总计。
+  方案加佣只统计<b>系数类</b>方案（协议内结算 / 系数），现金、购物卡等文字类方案不参与合计。
+  <br>带 <b style="color:#B5532A">＊</b> 的 RYC 表示该年度<b>涉及继续率考核</b>：此处显示的是<b>满档</b>费率
+  （继续率达标到最高档时才能拿到），实际按继续率分档发放，分档明细在合约详情页查看。
+  <br><b>定制类产品</b>（如 达尔文12号＝主险＋附加险）按<b>组件分别录费率</b>，这里按组件各占一行，
+  「所属定制产品」列可看出组件归属于哪个定制产品。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab on" href="{{ url_for('crm.commission_query') }}">佣金查询</a>
+</div>
+
+<form class="crm-tool" method="get">
+  <label>数据月度</label>
+  <select name="month">
+    <option value="">全部月份</option>
+    {% for m in months %}
+    <option value="{{ m }}" {{ 'selected' if month == m else '' }}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <label>保司</label>
+  <select name="insurer_id">
+    <option value="">全部</option>
+    {% for iv in insurers %}
+    <option value="{{ iv.id }}" {{ 'selected' if iid == iv.id|string else '' }}>{{ iv.name }}</option>
+    {% endfor %}
+  </select>
+  <button class="crm-btn pri" type="submit">查询</button>
+  <a class="crm-btn" href="{{ url_for('crm.commission_query') }}">重置</a>
+  <span class="crm-spacer"></span>
+  <span style="font-size:12.5px;color:#9C9288">共 {{ n }} 条记录（按产品＋缴别合并）</span>
+  <a class="crm-btn" href="{{ url_for('crm.commission_export', month=month, insurer_id=iid) }}">导出 Excel</a>
+</form>
+
+<div style="font-size:12.5px;color:#9C9288;margin-bottom:12px">
+  「数据月度」按三类日期筛选，任一命中即列出：<b>方案加佣时间</b>、<b>总总签约时间</b>、<b>分分签约时间</b>；
+  尚未登记日期的记录按<b>当月自然月</b>初始化（只在查当月时出现）。
+</div>
+
+<div class="crm-card">
+  {% if rows %}
+  <div style="overflow-x:auto">
+  <table class="crm-table" style="white-space:nowrap;min-width:1240px">
+    <thead>
+      <tr>
+        <th rowspan="2">保司简称</th>
+        <th rowspan="2" style="min-width:120px">所属定制产品</th>
+        <th rowspan="2" style="min-width:132px">产品名称</th>
+        <th rowspan="2">产品缴别</th>
+        <th colspan="4" class="grp">首年度销售费用</th>
+        <th colspan="9" class="grp">续年期销售费用</th>
+      </tr>
+      <tr>
+        <th style="text-align:right">佣金总计</th>
+        <th style="text-align:right">总总FYC</th>
+        <th style="text-align:right">分分FYC</th>
+        <th style="text-align:right">方案加佣</th>
+        {% for y in range(2, 11) %}<th style="text-align:right" class="{{ 'sep' if y == 2 else '' }}">RYC-{{ y }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.insurer_short or '—' }}</td>
+        <td>{% if r.custom_name %}<span class="crm-tag t-plan" style="font-size:10.5px">{{ r.custom_name }}</span>{% else %}—{% endif %}</td>
+        <td>{{ r.product_name or '—' }}</td>
+        <td>{{ r.pay_period or '—' }}</td>
+        <td style="text-align:right" class="mono"><b>{{ pct(r.total) }}</b></td>
+        <td style="text-align:right" class="mono">{{ pct(r.tt_fyc) }}</td>
+        <td style="text-align:right" class="mono">{{ pct(r.ff_fyc) }}</td>
+        <td style="text-align:right" class="mono">{{ pct(r.plan_comm) }}</td>
+        {% for y in range(2, 11) %}
+        <td style="text-align:right" class="mono{{ ' sep' if y == 2 else '' }}">{{ pct(r.ryc.get(y)) }}{% if y in (r.ryc_step or []) %}<b style="color:#B5532A">＊</b>{% endif %}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+    {# 十六改微调：底部「合计」行已按威哥要求删除（百分比系数求和无业务意义） #}
+  </table>
+  </div>
+  {% else %}
+  <div class="crm-empty">当前筛选条件下没有缴别记录。可把「数据月度」切回「全部月份」，或换一个保司再试。</div>
+  {% endif %}
+</div>
+{% endblock %}

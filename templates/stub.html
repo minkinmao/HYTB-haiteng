@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}{{ name }} · 规划中{% endblock %}
+{% block pagename %}{{ name }}{% endblock %}
+{% block content %}
+  <div class="card" style="padding:54px 24px;text-align:center">
+    <div style="width:60px;height:60px;margin:0 auto 16px;border-radius:16px;background:var(--brand-soft);
+                display:flex;align-items:center;justify-content:center">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="#E6823C" stroke-width="1.8"/>
+        <path d="M12 7.5V12l3 2" stroke="#C86432" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div style="font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:1px">{{ name }}</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:9px;line-height:1.8">
+      该功能正在规划中，将在后续增量开发中完善。
+    </div>
+  </div>
+{% endblock %}

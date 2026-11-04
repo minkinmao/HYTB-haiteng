@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% block title %}现金银行日记账 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 现金银行日记账{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">现金 / 银行日记账 <span style="font-size:13px;font-weight:400;color:#9C9288">Cash &amp; Bank Journal</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    出纳口径的流水账：<b style="color:#5C554D">收入（借方）/ 支出（贷方）/ 余额</b>三栏。
+    取 1001 库存现金 与 1002 银行存款 下的明细科目，只统计「已记账」凭证。
+    一期不单设出纳岗、由财务员工兼管；二期拆岗时这套账直接沿用。
+  </div>
+
+  {# 筛选 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.ledger_journal') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">查询范围</div>
+        <select name="scope" style="padding:7px 10px;width:190px">
+          {% for k, cn in scopes %}
+          <option value="{{ k }}" {{ 'selected' if k == scope else '' }}>{{ cn }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">起始期间</div>
+        <input type="month" name="p_from" value="{{ p_from }}" style="padding:7px 10px;width:150px">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">截止期间</div>
+        <input type="month" name="p_to" value="{{ p_to }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">查询</button>
+      <a href="{{ url_for('fin.ledger_journal', scope=scope) }}" style="font-size:13px;color:#9C9288;padding:9px 4px">重置</a>
+    </form>
+  </div>
+
+  {% if not meta.has_account %}
+  <div class="card" style="padding:40px 18px;text-align:center;color:#9C9288">
+    科目表里还没有 1001 库存现金 / 1002 银行存款 及其下级明细科目，无法出日记账。<br>
+    请先到「会计科目」建好现金与银行科目。
+  </div>
+  {% else %}
+
+  {# 概览 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('期初余额', opening, '#C9902A'),
+      ('本期收入合计', meta.income, '#C86432'),
+      ('本期支出合计', meta.outlay, '#166534'),
+      ('期末余额', meta.closing, '#E6823C'),
+    ] %}
+    {% for nm, val, color in cards %}
+    <div style="flex:1;min-width:150px;background:#fff;border-radius:8px;padding:14px 16px;
+                box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ nm }}</div>
+      <div style="font-size:20px;font-weight:700;color:{{ color }};margin-top:4px">￥{{ '{:,.2f}'.format(val) }}</div>
+    </div>
+    {% endfor %}
+    <div style="flex:1;min-width:120px;background:#fff;border-radius:8px;padding:14px 16px;
+                box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid #6B5D4F">
+      <div style="font-size:12px;color:#9C9288">流水笔数</div>
+      <div style="font-size:20px;font-weight:700;color:#6B5D4F;margin-top:4px">{{ meta.count }}</div>
+    </div>
+  </div>
+
+  <div style="background:#FCFAF7;border:1px solid #EAE2D6;border-radius:8px;padding:12px 18px;
+              margin-bottom:18px;font-size:13px;color:#5C554D">
+    当前范围：<b>{{ label }}</b>
+    <span style="color:#9C9288">
+      ｜ 科目：{% for c in codes %}<span style="font-family:monospace">{{ c }}</span>{% if not loop.last %}、{% endif %}{% endfor %}
+      ｜ 期间 {{ p_from }} ～ {{ p_to }}
+      ｜ 余额是<b>该范围合计</b>的滚动数（选「货币资金」时即现金 + 银行的合计余额）
+    </span>
+  </div>
+
+  {# 日记账 #}
+  <div class="card" style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:900px">
+      <thead>
+        <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+          <th style="text-align:left;padding:10px 12px">日期</th>
+          <th style="text-align:left;padding:10px 8px">凭证号</th>
+          <th style="text-align:left;padding:10px 8px">摘要</th>
+          <th style="text-align:left;padding:10px 8px">科目</th>
+          <th style="text-align:right;padding:10px 12px">收入（借）</th>
+          <th style="text-align:right;padding:10px 12px">支出（贷）</th>
+          <th style="text-align:right;padding:10px 12px">余额</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-top:1px solid #F2EBE1;background:#FCFAF7">
+          <td colspan="2" style="padding:9px 12px;color:#9C9288;font-size:12.5px">{{ p_from }} 期初</td>
+          <td style="padding:9px 8px;color:#9C9288;font-size:12.5px">上期结转</td>
+          <td style="padding:9px 8px;color:#9C9288;font-size:12.5px">{{ label }}</td>
+          <td colspan="2" style="padding:9px 12px"></td>
+          <td style="padding:9px 12px;text-align:right;font-weight:700">{{ amt(opening) }}</td>
+        </tr>
+        {% for r in lines %}
+        <tr style="border-top:1px solid #F2EBE1">
+          <td style="padding:9px 12px;color:#5C554D;white-space:nowrap">{{ r.date.strftime('%Y-%m-%d') if r.date else '—' }}</td>
+          <td style="padding:9px 8px;white-space:nowrap">
+            <a href="{{ url_for('fin.voucher_detail', vid=r.voucher_id) }}"
+               style="font-family:monospace;color:#C86432">{{ r.voucher_no }}</a>
+            {% if r.is_red %}<span style="font-size:11px;color:#991b1b">红</span>{% endif %}
+          </td>
+          <td style="padding:9px 8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ r.summary }}">{{ r.summary }}</td>
+          <td style="padding:9px 8px;font-size:12px;color:#6B5D4F;white-space:nowrap">{{ r.code }} {{ r.name }}</td>
+          <td style="padding:9px 12px;text-align:right;color:{{ '#C86432' if r.debit else '' }}">{{ amt(r.debit) }}</td>
+          <td style="padding:9px 12px;text-align:right;color:{{ '#166534' if r.credit else '' }}">{{ amt(r.credit) }}</td>
+          <td style="padding:9px 12px;text-align:right;font-weight:600;color:{{ '#991b1b' if r.balance < 0 else '#2A2A2A' }}">
+            {{ amt(r.balance) }}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="padding:36px 12px;text-align:center;color:#9C9288">
+          {{ label }} 在 {{ p_from }} ～ {{ p_to }} 期间没有已记账的收支。
+        </td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid #EAE2D6;background:#FAF7F2;font-weight:700">
+          <td colspan="4" style="padding:10px 12px">本期合计</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.income) }}</td>
+          <td style="padding:10px 12px;text-align:right">{{ '{:,.2f}'.format(meta.outlay) }}</td>
+          <td style="padding:10px 12px;text-align:right">期末 {{ '{:,.2f}'.format(meta.closing) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div style="margin-top:16px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">与明细账的区别：</b>
+    明细账是"按科目"看一笔钱怎么来的（一个科目一本账）；日记账是"按时间"看钱怎么进出（出纳每天记的账）。
+    两者的数据源是同一份凭证，所以数字必然一致。
+  </div>
+  <div style="margin-top:6px;font-size:12.5px;color:#9C9288">
+    银行流水自动导入、银企直连属二期；现在银行收支靠人工录凭证。
+  </div>
+  {% endif %}
+{% endblock %}

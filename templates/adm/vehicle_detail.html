@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 车辆详情{% endblock %}
+{% block pagename %}车辆管理 · {{ row.plate_no or '车辆详情' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<style>
+  /* 车辆详情专用：档案信息卡 + 动态汇总 + 类型页签 */
+  .veh-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+  .veh-plate-lg{font-size:22px;font-weight:700;color:#2A2A2A;letter-spacing:1px}
+  .veh-sub{font-size:13px;color:#9C9288}
+  .veh-dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 18px;
+          margin-top:14px;border-top:1px dashed #F0E9DE;padding-top:14px}
+  .veh-dl .it{min-width:0}
+  .veh-dl .k{font-size:12px;color:#9C9288;display:block;margin-bottom:2px}
+  .veh-dl .v{font-size:13.5px;color:#2A2A2A;word-break:break-all}
+  .vr-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
+  .vr-kpi{background:#fff;border:1px solid #EAE2D6;border-radius:12px;padding:12px 16px;min-width:0;
+          box-shadow:0 2px 12px rgba(42,42,42,.05)}
+  .vr-kpi .k{font-size:12.5px;color:#9C9288}
+  .vr-kpi .v{font-size:18px;font-weight:700;margin-top:3px;color:#C86432;
+             font-variant-numeric:tabular-nums;white-space:nowrap}
+  .vr-kpi .v.r{color:#991b1b}
+  .vr-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .vr-tab{font-size:12.5px;padding:6px 14px;border:1px solid #E2D8CA;border-radius:20px;
+          color:#6B5D4F;text-decoration:none;background:#fff}
+  .vr-tab.on{background:#E6823C;border-color:#E6823C;color:#fff;font-weight:600}
+  .vr-sec{font-size:14px;font-weight:600;color:#2A2A2A;margin:18px 0 12px;
+          display:flex;align-items:center;gap:10px}
+  .vr-sec::before{content:"";width:4px;height:14px;border-radius:2px;background:#E6823C;flex:none}
+</style>
+
+{# ---------- ① 车辆档案信息卡 ---------- #}
+<div class="adm-card" style="padding:18px 20px">
+  <div class="veh-head">
+    <div class="veh-plate-lg">{{ row.plate_no or '未填车牌' }}</div>
+    {% set sm = {'in_use': ('t-ok', '在用'), 'idle': ('t-gray', '闲置'),
+                 'repair': ('t-warn', '维修中'), 'disposed': ('t-danger', '已处置')} %}
+    {% set s = sm.get(row.status, ('t-gray', row.status)) %}
+    <span class="adm-tag {{ s[0] }}">{{ s[1] }}</span>
+    {% if ins[0] in ('expired', 'danger') %}
+      <span class="adm-tag t-danger">保险{% if ins[0] == 'expired' %}已过期 {{ -ins[1] }} 天{% else %} {{ ins[1] }} 天后到期{% endif %}</span>
+    {% elif ins[0] == 'warn' %}
+      <span class="adm-tag t-warn">保险 {{ ins[1] }} 天后到期</span>
+    {% endif %}
+    {% if insp[0] in ('expired', 'danger') %}
+      <span class="adm-tag t-danger">年检{% if insp[0] == 'expired' %}已过期 {{ -insp[1] }} 天{% else %} {{ insp[1] }} 天后到期{% endif %}</span>
+    {% elif insp[0] == 'warn' %}
+      <span class="adm-tag t-warn">年检 {{ insp[1] }} 天后到期</span>
+    {% endif %}
+    <span class="veh-sub">{{ row.name or '' }}{% if row.brand %}｜{{ row.brand }}{% endif %}</span>
+  </div>
+  <div class="veh-dl">
+    <div class="it"><span class="k">车辆编号</span><span class="v">{{ row.code }}</span></div>
+    <div class="it"><span class="k">车辆类型</span><span class="v">{{ row.kind or '—' }}</span></div>
+    <div class="it"><span class="k">车架号 / VIN</span><span class="v">{{ row.vin or '—' }}</span></div>
+    <div class="it"><span class="k">发动机号</span><span class="v">{{ row.engine_no or '—' }}</span></div>
+    <div class="it"><span class="k">颜色 / 载客</span><span class="v">{{ row.color or '—' }} / {{ row.seats or '—' }} 人</span></div>
+    <div class="it"><span class="k">登记所有人</span><span class="v">{{ row.owner or '—' }}</span></div>
+    <div class="it"><span class="k">购置日期 / 价格</span><span class="v">{{ row.buy_date or '—' }} / ¥ {{ '{:,.2f}'.format(row.price or 0) }}</span></div>
+    <div class="it"><span class="k">当前里程</span><span class="v">{{ '{:,.0f}'.format(row.mileage or 0) }} 公里</span></div>
+    <div class="it"><span class="k">责任人 / 部门</span><span class="v">{{ row.keeper or '—' }}{% if row.dept %}｜{{ row.dept }}{% endif %}</span></div>
+    <div class="it"><span class="k">常停放地点</span><span class="v">{{ row.place or '—' }}</span></div>
+    <div class="it"><span class="k">保险公司 / 保单号</span><span class="v">{{ row.insurer or '—' }}{% if row.insurance_no %}（{{ row.insurance_no }}）{% endif %}</span></div>
+    <div class="it"><span class="k">保险到期日</span><span class="v">{{ row.insurance_expire or '未登记' }}</span></div>
+    <div class="it"><span class="k">年检到期日</span><span class="v">{{ row.inspect_expire or '未登记' }}</span></div>
+    <div class="it"><span class="k">备注</span><span class="v">{{ row.note or '—' }}</span></div>
+    {% if row.file_path %}
+    <div class="it"><span class="k">行驶证 / 登记证</span>
+      <span class="v"><a class="adm-a" href="{{ url_for('adm.vehicle_file', vid=row.id) }}">下载 {{ row.file_name or '附件' }}</a></span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------- ② 动态汇总 ---------- #}
+<div class="vr-kpis">
+  <div class="vr-kpi"><div class="k">保养累计支出</div><div class="v">¥ {{ '{:,.2f}'.format(sums.get('maintain', 0)) }}</div></div>
+  <div class="vr-kpi"><div class="k">维修累计支出</div><div class="v">¥ {{ '{:,.2f}'.format(sums.get('repair', 0)) }}</div></div>
+  <div class="vr-kpi"><div class="k">违章罚款累计</div><div class="v">¥ {{ '{:,.2f}'.format(sums.get('fine', 0)) }}</div></div>
+  <div class="vr-kpi"><div class="k">违章未处理</div><div class="v {{ 'r' if fine_pending else '' }}">{{ fine_pending }} 条</div></div>
+</div>
+
+{# ---------- ③ 登记 / 编辑动态 ---------- #}
+<div class="vr-sec">{{ '编辑动态记录' if edit else '登记车辆动态' }}</div>
+{% if can_edit %}
+<form class="adm-form" method="post" enctype="multipart/form-data"
+      action="{{ url_for('adm.vehicle_detail', vid=row.id) }}">
+  <input type="hidden" name="rid" value="{{ (edit.id or '') if edit else '' }}">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>动态类型 <b>*</b></label>
+      <select name="kind" id="kindSel" onchange="kindChanged()">
+        {% for kk, lb in kinds %}
+        <option value="{{ kk }}" {{ 'selected' if (edit and edit.kind == kk) or (not edit and kk == 'use') else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>发生日期</label>
+      <input type="date" name="rec_date" value="{{ edit.rec_date if edit else today }}">
+    </div>
+    <div class="adm-fld" id="fldMileage">
+      <label id="mileageLabel">里程（公里）</label>
+      <input type="number" step="1" min="0" name="mileage"
+             value="{{ '%g'|format(edit.mileage or 0) if edit else 0 }}">
+      <span class="hint">填了比车辆当前里程更大的值，会自动上浮车辆里程</span>
+    </div>
+    <div class="adm-fld" id="fldCost">
+      <label id="costLabel">费用（元）</label>
+      <input type="number" step="0.01" min="0" name="cost"
+             value="{{ '%g'|format(edit.cost or 0) if edit else 0 }}">
+      <span class="hint">产生的支出；无费用可留 0</span>
+    </div>
+    <div class="adm-fld" id="fldDriver">
+      <label>驾驶人</label>
+      <input type="text" name="driver" value="{{ (edit.driver or '') if edit else '' }}">
+    </div>
+    <div class="adm-fld" id="fldPlace">
+      <label id="placeLabel">地点 / 单位</label>
+      <input type="text" name="place" value="{{ (edit.place or '') if edit else '' }}">
+    </div>
+    <div class="adm-fld" id="fldPoint">
+      <label>违章扣分</label>
+      <input type="number" step="1" min="0" name="fine_point"
+             value="{{ edit.fine_point or 0 if edit else 0 }}">
+      <span class="hint">仅违章填写，无扣分留 0</span>
+    </div>
+    <div class="adm-fld" id="fldFineSt">
+      <label>违章处理状态</label>
+      <select name="fine_status">
+        {% for v, lb in fine_status %}
+        <option value="{{ v }}" {{ 'selected' if (edit and edit.fine_status == v) or (not edit and v == 'pending') else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld" id="fldNext">
+      <label>下次保养日期</label>
+      <input type="date" name="next_date" value="{{ (edit.next_date or '') if edit else '' }}">
+      <span class="hint">列表会在 30 天内提醒下次保养</span>
+    </div>
+    <div class="adm-fld full" id="fldDetail">
+      <label id="detailLabel">事项说明</label>
+      <input type="text" name="detail" value="{{ (edit.detail or '') if edit else '' }}"
+             placeholder="保养项目 / 维修内容 / 违章行为 / 用车事由">
+    </div>
+    <div class="adm-fld">
+      <label>单据 / 发票附件</label>
+      <input type="file" name="attach">
+      {% if edit and edit.file_name %}
+      <span class="hint">当前：{{ edit.file_name }}（重新上传会替换旧文件）</span>
+      {% else %}
+      <span class="hint">支持 pdf / 图片 / Office / zip，单个不超过 10MB</span>
+      {% endif %}
+    </div>
+    <div class="adm-fld">
+      <label>备注</label>
+      <input type="text" name="note" value="{{ (edit.note or '') if edit else '' }}">
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if edit else '提交登记' }}</button>
+    {% if edit %}<a class="adm-btn" href="{{ url_for('adm.vehicle_detail', vid=row.id) }}">取消编辑</a>{% endif %}
+  </div>
+</form>
+{% else %}
+<div class="sv-tip" style="background:#FAF7F2;border:1px solid #EAE2D6;border-radius:12px;
+            padding:12px 16px;font-size:12.5px;color:#6B5D4F">
+  你的账号为只读查看，如需登记车辆动态请联系行政管理员。
+</div>
+{% endif %}
+
+{# ---------- ④ 动态流水 ---------- #}
+<div class="vr-sec">动态流水
+  <span class="adm-sub" style="font-weight:400">共 {{ items|length }} 条{% if k %}（已按类型筛选）{% endif %}</span>
+</div>
+<div class="vr-tabs">
+  <a class="vr-tab {{ 'on' if not k else '' }}" href="{{ url_for('adm.vehicle_detail', vid=row.id) }}">全部</a>
+  {% for kk, lb in kinds %}
+  <a class="vr-tab {{ 'on' if k == kk else '' }}"
+     href="{{ url_for('adm.vehicle_detail', vid=row.id, k=kk) }}">{{ lb }}</a>
+  {% endfor %}
+</div>
+
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>日期</th><th>类型</th><th>事项 / 地点</th><th>驾驶人</th><th>里程（km）</th>
+        <th>费用（元）</th><th>状态 / 提醒</th><th>附件</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.r.rec_date or '—' }}</td>
+        <td>
+          {% set km = {'maintain': ('t-info', '保养'), 'repair': ('t-warn', '维修'),
+                       'fine': ('t-danger', '违章'), 'use': ('t-ok', '用车')} %}
+          {% set ks = km.get(it.r.kind, ('t-gray', it.r.kind)) %}
+          <span class="adm-tag {{ ks[0] }}">{{ ks[1] }}</span>
+        </td>
+        <td>
+          <div>{{ it.r.detail or '—' }}</div>
+          {% if it.r.place %}<div class="adm-sub">{{ it.r.place }}</div>{% endif %}
+        </td>
+        <td>{{ it.r.driver or '—' }}</td>
+        <td class="num">{{ '{:,.0f}'.format(it.r.mileage or 0) if it.r.mileage else '—' }}</td>
+        <td class="num">{{ '{:,.2f}'.format(it.r.cost or 0) if it.r.cost else '—' }}</td>
+        <td>
+          {% if it.r.kind == 'fine' %}
+            {% if it.r.fine_status == 'done' %}
+              <span class="adm-tag t-ok">已处理</span>
+            {% else %}
+              <span class="adm-tag t-danger">未处理</span>
+            {% endif %}
+            {% if it.r.fine_point %}<div class="adm-sub">扣 {{ it.r.fine_point }} 分</div>{% endif %}
+          {% elif it.next %}
+            {% if it.next[0] == 'expired' %}<span class="adm-tag t-danger">保养已过期 {{ -it.next[1] }} 天</span>
+            {% elif it.next[0] == 'danger' %}<span class="adm-tag t-danger">{{ it.next[1] }} 天后保养</span>
+            {% elif it.next[0] == 'warn' %}<span class="adm-tag t-warn">{{ it.next[1] }} 天后保养</span>
+            {% else %}<span class="adm-tag t-ok">下次 {{ it.r.next_date }}</span>{% endif %}
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+        <td>
+          {% if it.r.file_path %}
+            <a class="adm-a" href="{{ url_for('adm.veh_record_file', rid=it.r.id) }}">下载</a>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+        <td class="mono" style="white-space:nowrap">
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.vehicle_detail', vid=row.id, rid=it.r.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('adm.veh_record_delete', rid=it.r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除这条车辆动态？附件会一并删除。')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无{% if k %}该类型的{% endif %}车辆动态。{% if can_edit %}在上方表单登记第一条。{% endif %}</div>
+  {% endif %}
+</div>
+
+<script>
+  // 类型联动：不同动态类型用到的字段不同，标签文字也随类型变化
+  var LABELS = {
+    maintain: {mileage: '当时里程（公里）', cost: '保养费用（元）', place: '保养单位',
+               detail: '保养项目', show: {mileage: 1, cost: 1, driver: 0, place: 1, point: 0, fineSt: 0, next: 1, detail: 1}},
+    repair:   {mileage: '当时里程（公里）', cost: '维修费用（元）', place: '维修单位',
+               detail: '维修内容', show: {mileage: 1, cost: 1, driver: 0, place: 1, point: 0, fineSt: 0, next: 0, detail: 1}},
+    fine:     {mileage: '',              cost: '违章罚款（元）', place: '违章地点',
+               detail: '违章行为', show: {mileage: 0, cost: 1, driver: 1, place: 1, point: 1, fineSt: 1, next: 0, detail: 1}},
+    use:      {mileage: '返回里程（公里）', cost: '费用（元）',   place: '起止地点',
+               detail: '用车事由', show: {mileage: 1, cost: 0, driver: 1, place: 1, point: 0, fineSt: 0, next: 0, detail: 1}}
+  };
+  function kindChanged() {
+    var kind = document.getElementById('kindSel').value;
+    var cfg = LABELS[kind] || LABELS.use;
+    document.getElementById('mileageLabel').textContent = cfg.mileage || '里程（公里）';
+    document.getElementById('costLabel').textContent = cfg.cost;
+    document.getElementById('placeLabel').textContent = cfg.place;
+    document.getElementById('detailLabel').textContent = cfg.detail;
+    document.getElementById('fldMileage').style.display = cfg.show.mileage ? '' : 'none';
+    document.getElementById('fldCost').style.display = cfg.show.cost ? '' : 'none';
+    document.getElementById('fldDriver').style.display = cfg.show.driver ? '' : 'none';
+    document.getElementById('fldPoint').style.display = cfg.show.point ? '' : 'none';
+    document.getElementById('fldFineSt').style.display = cfg.show.fineSt ? '' : 'none';
+    document.getElementById('fldNext').style.display = cfg.show.next ? '' : 'none';
+  }
+  kindChanged();
+</script>
+{% endblock %}

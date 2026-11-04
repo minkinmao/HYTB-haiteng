@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}编辑员工 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">
+    编辑员工：{{ emp.name }}
+  </h2>
+
+  <div style="background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <form method="post" action="{{ url_for('hr.employee_update', eid=emp.id) }}"
+          enctype="multipart/form-data"
+          style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">姓名 *</div>
+        <input name="name" required value="{{ emp.name }}"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">工号 *</div>
+        <input name="employee_no" required value="{{ emp.employee_no }}"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">用工类型 *</div>
+        <select name="staff_type" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="internal" {{ 'selected' if emp.staff_type!='external' }}>内勤（劳动合同）</option>
+          <option value="external" {{ 'selected' if emp.staff_type=='external' }}>外勤（代理合同）</option>
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">职级（内勤）</div>
+        <select name="level_id" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">未设</option>
+          {% for lv in levels %}<option value="{{ lv.id }}" {{ 'selected' if lv.id==emp.level_id }}>{{ lv.code }} - {{ lv.name }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">代理类型（外勤）</div>
+        <select name="agent_type" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">未设</option>
+          <option value="渠道总" {{ 'selected' if emp.agent_type=='渠道总' }}>渠道总</option>
+          <option value="主管" {{ 'selected' if emp.agent_type=='主管' }}>主管</option>
+          <option value="代理人" {{ 'selected' if emp.agent_type=='代理人' }}>代理人</option>
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">部门</div>
+        <select name="org_id" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">未设</option>
+          {% for o in orgs %}<option value="{{ o.id }}" {{ 'selected' if o.id==emp.org_id }}>{{ o.name }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">职务</div>
+        <input name="title" value="{{ emp.title or '' }}"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">手机</div>
+        <input name="phone" value="{{ emp.phone or '' }}"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">公司邮箱</div>
+        <input name="email" value="{{ emp.email or '' }}" placeholder="如 mao.wei@hywinpro.cn"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:240px">
+        <div style="font-size:11px;color:#B6AC9E;margin-top:3px">公司邮箱统一后缀 @hywinpro.cn（只填本地名会自动补全）</div></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">身份证号码</div>
+        <input name="idcard" value="{{ emp.idcard or '' }}" maxlength="18" placeholder="如 440101199001011234"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:200px">
+        <div style="font-size:11px;color:#B6AC9E;margin-top:3px">用于人事卡片展示（入册时自动从入职登记带入）</div></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">入职日期</div>
+        <input type="date" name="hire_date" value="{{ emp.hire_date or '' }}"
+               style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      {# 入职照片：上传后在系统总览首页「员工工卡」展示；没有照片时首页用工卡占位字显示 #}
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">入职照片</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          {% if emp.photo %}
+            <img src="{{ url_for('static', filename=emp.photo) }}" alt="入职照片"
+                 style="width:38px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #E2D8CA">
+          {% endif %}
+          <input type="file" name="photo" accept="image/*"
+                 style="padding:6px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+          {% if emp.photo %}
+            <label style="font-size:12px;color:#9C9288;white-space:nowrap">
+              <input type="checkbox" name="del_photo" value="1" style="width:auto;vertical-align:middle"> 清除</label>
+          {% endif %}
+        </div></div>
+      <button type="submit"
+              style="background:#E6823C;color:#fff;border:none;padding:9px 24px;border-radius:6px;font-size:14px;cursor:pointer">保存</button>
+    </form>
+  </div>
+{% endblock %}

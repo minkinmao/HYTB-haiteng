@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}组织架构管理 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">组织架构管理
+    <span style="font-size:13px;font-weight:400;color:#9C9288">部门架构 · 编制 · 人员归属</span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px;line-height:1.8;overflow-wrap:anywhere">
+    在此搭建公司/部门层级树、为各部门设置<b>编制人数</b>，并在最下方把员工<b>手工划归</b>到对应部门。
+    编制填 0 表示未设编制（不参与超编判断）；实际人数超出编制会标红提示。
+  </div>
+
+  {# 新增部门 #}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增部门</div>
+    <form method="post" action="{{ url_for('hr.organization_new') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">部门名称 *</div>
+        <input name="name" required placeholder="如 客服部" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">上级</div>
+        <select name="parent_id" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">无（作为一级）</option>
+          {% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">类型</div>
+        <select name="type" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="company">公司</option>
+          <option value="team" selected>团队/部门</option>
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">编制人数</div>
+        <input name="headcount" type="number" min="0" step="1" placeholder="0=未设"
+               style="width:110px;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">添加</button>
+    </form>
+  </div>
+
+  {# 部门树 #}
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;padding:8px 0">部门列表</div>
+    {% for o in orgs %}
+    {% set n_mem = o.employees|length %}
+    <div style="padding:10px 0;border-top:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center">
+      <div style="padding-left:{{ depth(o) * 22 }}px">
+        <span style="font-size:15px;font-weight:600">{{ o.name }}</span>
+        <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#FBEEE2' if o.type=='company' else '#F3EDE3' }};color:{{ '#C86432' if o.type=='company' else '#5C554D' }};margin-left:8px">{{ '公司' if o.type=='company' else '部门' }}</span>
+        <span style="font-size:12px;color:#9C9288;margin-left:10px">成员 {{ n_mem }} 人</span>
+        {% if o.headcount %}
+          <span style="font-size:12px;color:#9C9288">／ 编制 {{ o.headcount }} 人</span>
+          {% if n_mem > o.headcount %}
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#FBE3DD;color:#991b1b;margin-left:8px">超编 {{ n_mem - o.headcount }}</span>
+          {% elif n_mem < o.headcount %}
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#FDF3E4;color:#8A5A18;margin-left:8px">缺 {{ o.headcount - n_mem }}</span>
+          {% else %}
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;background:#dcfce7;color:#166534;margin-left:8px">已满编</span>
+          {% endif %}
+        {% else %}
+          <span style="font-size:12px;color:#B3A895">／ 编制未设</span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:6px">
+        <form method="post" action="{{ url_for('hr.organization_update', oid=o.id) }}" style="display:flex;gap:6px;align-items:center">
+          <input name="name" value="{{ o.name }}" style="width:90px;padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+          <select name="type" style="padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+            <option value="company" {{ 'selected' if o.type=='company' }}>公司</option>
+            <option value="team" {{ 'selected' if o.type=='team' }}>团队/部门</option>
+          </select>
+          <select name="parent_id" style="padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+            <option value="">无上级</option>
+            {% for p in orgs %}{% if p.id != o.id %}<option value="{{ p.id }}" {{ 'selected' if p.id==o.parent_id }}>{{ p.name }}</option>{% endif %}{% endfor %}
+          </select>
+          <input name="headcount" type="number" min="0" step="1" value="{{ o.headcount or 0 }}" title="编制人数（0=未设）"
+                 style="width:70px;padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+          <button type="submit" style="font-size:12px;color:#E6823C;background:#fff;border:1px solid #E2D8CA;padding:4px 10px;border-radius:6px;cursor:pointer">保存</button>
+        </form>
+        <form method="post" action="{{ url_for('hr.organization_delete', oid=o.id) }}" onsubmit="return confirm('确认删除「{{ o.name }}」？其下级将上提一级，成员置为未设部门。')">
+          <button type="submit" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:4px 10px;border-radius:6px;cursor:pointer">删除</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无部门</div>
+    {% endfor %}
+  </div>
+
+  {# 人员部门归属设置（手工分配） #}
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;padding:8px 0">人员部门归属设置</div>
+    <div style="font-size:12px;color:#9C9288;padding-bottom:8px">把员工手工划归到某个部门；也可为「外勤」员工设归属，便于按部门统计。</div>
+    {% for e in employees %}
+    <div style="padding:10px 0;border-top:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px">{{ e.name }}
+        <span style="font-size:12px;color:#9C9288;margin-left:8px">工号 {{ e.employee_no }}</span>
+      </div>
+      <form method="post" action="{{ url_for('hr.employee_set_org', eid=e.id) }}" style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:12px;color:#9C9288">当前：{{ e.org.name if e.org else '未设' }}</span>
+        <select name="org_id" style="padding:5px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+          <option value="">未设</option>
+          {% for o in orgs %}<option value="{{ o.id }}" {{ 'selected' if o.id==e.org_id }}>{{ o.name }}</option>{% endfor %}
+        </select>
+        <button type="submit" style="font-size:12px;color:#E6823C;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">设置</button>
+      </form>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无员工档案</div>
+    {% endfor %}
+  </div>
+{% endblock %}

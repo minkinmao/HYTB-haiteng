@@ -1,0 +1,277 @@
+{% extends 'base.html' %}
+{% block title %}休假申请 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">休假申请</h2>
+  <div style="font-size:12px;color:#9C9288;margin-bottom:16px;line-height:1.7">
+    先选<b>开始 / 结束日期</b>，系统按<b>工作日</b>自动算时长（自动扣周末与法定节假日、计入调休补班日）；
+    超出本人该假期剩余额度的会<b>即时提醒并拦截</b>。年假按「累计工作年限」分级，事假以<b>小时</b>为单位（不足 1 小时按 1 小时）。
+  </div>
+
+  <div class="card" style="padding:16px;margin-bottom:18px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">提交休假申请</div>
+    <form method="post" action="{{ url_for('hr.leave_apply') }}" enctype="multipart/form-data"
+          id="leaveForm" style="display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-start">
+      <div style="min-width:200px;flex:0 1 240px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">假期类型 *</div>
+        <select name="leave_type_id" id="ltSel" style="width:100%;padding:9px 10px">
+          <option value="">请选择</option>
+          {% for lt in leave_types %}
+            {% set q = quotas.get(lt.name) or {} %}
+            <option value="{{ lt.id }}"
+                    data-unit="{{ lt.unit or 'day' }}"
+                    data-quota="{{ q.quota if (q and q.quota is not none) else '' }}"
+                    data-remain="{{ q.remain if (q and q.remain is not none) else '' }}"
+                    data-used="{{ q.used or 0 }}"
+                    data-pending="{{ q.pending or 0 }}"
+                    data-note="{{ q.note or '' }}"
+                    data-attach="{{ lt.need_attach or '0' }}"
+                    data-hint="{{ lt.attach_hint or '' }}">
+              {{ lt.name }}（{% if q and q.quota is none %}不限{% elif q %}剩 {{ '%g'|format(q.remain or 0) }} {{ '小时' if (lt.unit == 'hour') else '天' }}{% else %}—{% endif %}）
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="min-width:150px;flex:0 1 170px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">开始日期 *</div>
+        <input name="start_date" id="dStart" type="date" style="width:100%;padding:9px 10px">
+      </div>
+      <div style="min-width:150px;flex:0 1 170px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">结束日期 *</div>
+        <input name="end_date" id="dEnd" type="date" style="width:100%;padding:9px 10px">
+      </div>
+      <div style="min-width:120px;flex:0 1 150px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">
+          时长 * <span id="unitLbl" style="color:#C86432">天</span>
+          <span style="color:#9C9288">（自动算，可改）</span>
+        </div>
+        <input name="qty" id="qtyIn" type="number" step="0.5" min="0.5" value=""
+               style="width:100%;padding:9px 10px">
+      </div>
+      <div style="flex:1 1 100%;min-width:240px">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">请假事由 *</div>
+        <input name="reason" placeholder="如 家中老人住院需陪护 / 回家探亲（父母）"
+               style="width:100%;padding:9px 10px">
+      </div>
+
+      {# —— 附件（仅「须证明」的假期类型显示：病假→病例、婚假→结婚证、产假→生育证明）—— #}
+      <div id="attachBox" style="flex:1 1 100%;display:none">
+        <div style="font-size:12px;color:#9C9288;margin-bottom:5px">
+          证明附件 * <span id="attachHint" style="color:#C86432"></span>
+        </div>
+        <input type="file" name="attach" id="attachIn" multiple
+               accept=".pdf,.ofd,.xml,.jpg,.jpeg,.png,.gif,.bmp,.webp,.doc,.docx,.xls,.xlsx,.zip"
+               style="font-size:13px">
+        <div style="font-size:11.5px;color:#9C9288;margin-top:6px">
+          支持 PDF / OFD / 图片 / Office / zip，单个文件 ≤ 10MB；附件走登录鉴权下载，不会公开在静态目录。
+        </div>
+      </div>
+
+      {# —— 超额提醒条（默认隐藏，超出剩余额度时弹出）—— #}
+      <div id="warnBox" style="display:none;flex:1 1 100%;background:#FBE3DD;border:1px solid #F3C4B8;
+           border-radius:10px;padding:10px 14px;font-size:13px;color:#991b1b;line-height:1.7">
+        <b>⚠ 超出本人该假期剩余额度</b>：<span id="warnText"></span>
+      </div>
+      <div id="okBox" style="display:none;flex:1 1 100%;background:#EEF7EE;border:1px solid #CDE4CD;
+           border-radius:10px;padding:9px 14px;font-size:13px;color:#166534">
+        <span id="okText"></span>
+      </div>
+
+      <div style="flex:1 1 100%;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button type="submit" class="btn">提交申请</button>
+        <span id="ltHint" style="font-size:12px;color:#9C9288"></span>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" style="padding:8px 16px;margin-bottom:18px">
+    <div style="font-size:14px;font-weight:600;padding:10px 0">
+      我的假期额度（{{ year }} 年度）
+      {% if emp %}<span style="font-size:12px;color:#9C9288;font-weight:400">
+        ｜ {{ emp.name }}{% if seniority is not none %}｜ 累计工作年限 {{ seniority }} 年{% endif %}
+        {% if emp.work_start_date %}｜ 参加工作 {{ emp.work_start_date }}{% elif emp.hire_date %}｜ 入职 {{ emp.hire_date }}{% endif %}
+      </span>{% else %}<span style="font-size:12px;color:#9C9288;font-weight:400">｜ 当前登录账号未对应员工档案，额度按最低档兜底</span>{% endif %}
+    </div>
+    {% for lt in leave_types %}
+    {% set q = quotas.get(lt.name) or {} %}
+    {% set u = '小时' if (lt.unit == 'hour') else '天' %}
+    <div style="padding:11px 0;border-top:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:14px;font-weight:600;min-width:70px">
+        {{ lt.name }}
+        {% if lt.unit == 'hour' %}<span style="font-size:11px;color:#9C9288;font-weight:400">· 按小时</span>{% endif %}
+        {% if lt.need_attach == '1' %}<span style="font-size:11px;color:#C86432;font-weight:400">· 需{{ lt.attach_hint or '证明' }}</span>{% endif %}
+      </span>
+      {% if q.quota is none %}
+        <span style="font-size:13px;color:#5C554D">
+          {% if lt.unit == 'hour' %}年度已休 <b style="color:#C86432">{{ '%g'|format(q.used or 0) }}</b> 小时{% else %}不限额度{% endif %}
+          {% if q.pending %}｜ 审批中 <b>{{ '%g'|format(q.pending) }}</b> {{ u }}{% endif %}
+        </span>
+      {% else %}
+        <span style="font-size:13px;color:#5C554D">
+          本人应享 <b style="color:#C86432">{{ '%g'|format(q.quota) }}</b> {{ u }}
+          ｜ 已用 {{ '%g'|format(q.used or 0) }} {{ u }}
+          {% if q.pending %}｜ 审批中 {{ '%g'|format(q.pending) }} {{ u }}{% endif %}
+          ｜ 剩余 <b style="color:#166534">{{ '%g'|format(q.remain or 0) }}</b> {{ u }}
+        </span>
+      {% endif %}
+      <span style="font-size:11.5px;color:#9C9288;flex:1 1 100%;min-width:0">
+        {{ q.note or '' }}{% if lt.description %}｜{{ lt.description }}{% endif %}
+      </span>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">人事尚未配置假期类型</div>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="padding:8px 16px">
+    <div style="font-size:14px;font-weight:600;padding:10px 0">我的请假记录</div>
+    {% for a in my_leaves %}
+    {% set alist = attach_list.get(a.id) or [] %}
+    <div style="padding:11px 0;border-top:1px solid #F3EDE3;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="min-width:0">
+        <div style="font-size:14px;font-weight:600">
+          {% if a.code %}<span style="font-size:12px;color:#E6823C;margin-right:8px">{{ a.code }}</span>{% endif %}{{ a.title }}
+        </div>
+        <div style="font-size:12px;color:#5C554D;margin-top:3px;white-space:pre-line">{{ a.content }}</div>
+        {% if alist %}
+        <div style="font-size:12px;color:#5C554D;margin-top:6px">
+          附件：
+          {% for it in alist %}
+            <span style="display:inline-flex;align-items:center;gap:6px;background:#FBF7F1;border:1px solid #EFE5D8;
+                         border-radius:8px;padding:2px 8px;margin:2px 6px 2px 0">
+              <a href="{{ url_for('hr.leave_attach', aid=a.id, idx=loop.index0) }}"
+                 style="color:#C86432;text-decoration:none">{{ it.name }}</a>
+              <span style="color:#9C9288">{{ (it.size / 1024)|round(0)|int }} KB</span>
+              {% if a.status == 'pending' and a.applicant_id == session.get('user_id') %}
+              <form method="post" action="{{ url_for('hr.leave_attach_delete', aid=a.id, idx=loop.index0) }}"
+                    style="display:inline;margin:0" onsubmit="return confirm('确认删除该附件？')">
+                <button type="submit" style="border:none;background:none;color:#b91c1c;cursor:pointer;font-size:14px;padding:0">×</button>
+              </form>
+              {% endif %}
+            </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <span style="font-size:12px;padding:2px 8px;border-radius:10px;flex:none;
+            background:{{ '#FDF3E4' if a.status=='pending' else ('#dcfce7' if a.status=='approved' else '#FBE3DD') }};
+            color:{{ '#8A5A18' if a.status=='pending' else ('#166534' if a.status=='approved' else '#991b1b') }}">
+        {{ '待审批' if a.status=='pending' else ('已通过' if a.status=='approved' else '已驳回') }}
+      </span>
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无请假记录</div>
+    {% endfor %}
+  </div>
+
+  {# —— 前端：选日期 → 自动算时长（工作日）→ 校验额度即时提醒 —— #}
+  <script>
+  (function () {
+    var WORKDAYS = "{{ workdays }}";
+    var HOLI = {{ holidays|tojson }};
+    var DAILY_HOURS = {{ daily_hours }};
+    var sel = document.getElementById('ltSel'), hint = document.getElementById('ltHint');
+    var dS = document.getElementById('dStart'), dE = document.getElementById('dEnd');
+    var qtyIn = document.getElementById('qtyIn'), unitLbl = document.getElementById('unitLbl');
+    var attachBox = document.getElementById('attachBox'), attachIn = document.getElementById('attachIn');
+    var attachHint = document.getElementById('attachHint');
+    var warnBox = document.getElementById('warnBox'), warnText = document.getElementById('warnText');
+    var okBox = document.getElementById('okBox'), okText = document.getElementById('okText');
+    var form = document.getElementById('leaveForm');
+
+    function opt() { return sel.options[sel.selectedIndex]; }
+    function isHour() { var o = opt(); return o && o.getAttribute('data-unit') === 'hour'; }
+    function ymd(d) {
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+    // 工作日数（含首尾；扣法定休、加调休补班）—— 与后端 hr._work_days 同口径
+    function workDays(a, b) {
+      if (!a || !b || b < a) return 0;
+      var cur = new Date(a + 'T00:00:00'), end = new Date(b + 'T00:00:00'), n = 0, guard = 0;
+      while (cur <= end && guard++ < 2000) {
+        var ds = ymd(cur), dt = HOLI[ds], wd = (cur.getDay() + 6) % 7;
+        if (dt === 'work') { n++; }
+        else if (dt === 'rest') { /* 法定放假 */ }
+        else if (WORKDAYS.charAt(wd) !== '0') { n++; }
+        cur.setDate(cur.getDate() + 1);
+      }
+      return n;
+    }
+    function autoQty() {
+      var wd = workDays(dS.value, dE.value);
+      if (!wd) { return 0; }
+      return isHour() ? Math.ceil(wd * DAILY_HOURS) : wd;
+    }
+    function refresh(manual) {
+      var o = opt();
+      if (!o || !o.value) {
+        hint.textContent = ''; warnBox.style.display = 'none'; okBox.style.display = 'none';
+        attachBox.style.display = 'none'; return;
+      }
+      var unit = o.getAttribute('data-unit');
+      var isH = unit === 'hour';
+      unitLbl.textContent = isH ? '小时' : '天';
+      qtyIn.step = isH ? '1' : '0.5';
+      qtyIn.min = isH ? '1' : '0.5';
+      // 附件区（须证明的假期）
+      var needA = o.getAttribute('data-attach') === '1';
+      attachBox.style.display = needA ? 'block' : 'none';
+      attachIn.required = needA;
+      attachHint.textContent = needA ? ('（' + (o.getAttribute('data-hint') || '证明附件') + '）') : '';
+      // 时长自动算（用户手动改过的值不覆盖）
+      if (!manual) {
+        var q = autoQty();
+        qtyIn.value = q > 0 ? q : '';
+        var wd = workDays(dS.value, dE.value);
+        if (wd > 0) {
+          okBox.style.display = 'block';
+          okText.textContent = '本区间共 ' + wd + ' 个工作日' + (isH ? (' → ' + q + ' 小时') : '') + '。';
+        } else { okBox.style.display = 'none'; }
+      }
+      // 额度提示 + 超额即时提醒
+      var quota = o.getAttribute('data-quota');
+      var remain = o.getAttribute('data-remain');
+      hint.textContent = (quota === '' ? ('该假期不限额度，年度已休 ' + (o.getAttribute('data-used') || 0) + (isH ? ' 小时' : ' 天'))
+                                       : ('本人本年度应享 ' + quota + (isH ? ' 小时' : ' 天') + '，剩余 ' + remain + (isH ? ' 小时' : ' 天')))
+                       + (o.getAttribute('data-note') ? '（' + o.getAttribute('data-note') + '）' : '');
+      checkQuota();
+    }
+    function checkQuota() {
+      var o = opt();
+      warnBox.style.display = 'none';
+      if (!o || !o.value) return true;
+      var quota = o.getAttribute('data-quota');
+      if (quota === '') return true;              // 不限额度
+      var remain = parseFloat(o.getAttribute('data-remain') || '0');
+      var used = parseFloat(o.getAttribute('data-used') || '0');
+      var pend = parseFloat(o.getAttribute('data-pending') || '0');
+      var qty = parseFloat(qtyIn.value || '0');
+      if (qty > remain + 1e-9) {
+        var u = isHour() ? '小时' : '天';
+        warnBox.style.display = 'block';
+        warnText.textContent = '本次 ' + qty + ' ' + u + '，但本人本年度『' + o.text.split('（')[0] + '』剩余仅 '
+          + remain + ' ' + u + '（应享 ' + quota + '，已用 ' + used + (pend ? '，审批中 ' + pend : '') + '）。请调整日期或改请其他假期。';
+        return false;
+      }
+      return true;
+    }
+    if (sel) {
+      sel.addEventListener('change', function () { refresh(false); });
+      dS.addEventListener('change', function () { refresh(false); });
+      dE.addEventListener('change', function () { refresh(false); });
+      qtyIn.addEventListener('input', function () { refresh(true); });
+      form.addEventListener('submit', function (e) {
+        if (!sel.value) { alert('请选择假期类型'); e.preventDefault(); return; }
+        if (!dS.value || !dE.value) { alert('请选择开始日期和结束日期'); e.preventDefault(); return; }
+        if (!(parseFloat(qtyIn.value) > 0)) { alert('时长必须大于 0，请检查起止日期'); e.preventDefault(); return; }
+        if (!checkQuota()) { alert('本次申请已超出本人该假期剩余额度，请调整后再提交。'); e.preventDefault(); return; }
+        var o = opt();
+        if (o.getAttribute('data-attach') === '1' && (!attachIn.files || !attachIn.files.length)) {
+          alert('「' + o.text.split('（')[0] + '」必须上传' + (o.getAttribute('data-hint') || '证明附件') + '后才能提交。');
+          e.preventDefault(); return;
+        }
+      });
+      refresh(false);
+    }
+  })();
+  </script>
+{% endblock %}

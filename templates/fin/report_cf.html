@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}现金流量表 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 现金流量表{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">现金流量表（简版）
+    <span style="font-size:13px;font-weight:400;color:#9C9288">Cash Flow · 简版</span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    把「涉及现金 / 银行存款的已记账凭证」按<b style="color:#5C554D">对方科目</b>自动归类：
+    所有者权益类(3xx) → 筹资；固定资产 / 无形资产(16xx / 17xx) → 投资；其余 → 经营。
+    <b style="color:#5C554D">三类合计必然等于「期末货币资金 − 期初货币资金」</b>，这个等式不依赖任何人工标注。
+  </div>
+
+  {# 概览 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    {% set cards = [
+      ('经营活动净额', meta.oper, '#C86432'),
+      ('投资活动净额', meta.inv, '#C9902A'),
+      ('筹资活动净额', meta.fin, '#E6823C'),
+      ('现金净增加额', meta.net, '#166534'),
+    ] %}
+    {% for nm, val, color in cards %}
+    <div style="flex:1;min-width:136px;background:#fff;border-radius:8px;padding:14px 16px;
+                box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ nm }}</div>
+      <div style="font-size:19px;font-weight:700;margin-top:4px;
+                  color:{{ '#CC2B2B' if val >= 0 else '#1E8E4E' }}">￥{{ '{:,.2f}'.format(val) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 期间范围 + 导出 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.report_cf') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">起始期间</div>
+        <input type="month" name="p_from" value="{{ p_from }}" style="padding:7px 10px;width:150px">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">结束期间</div>
+        <input type="month" name="p_to" value="{{ p_to }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">查询</button>
+      <a href="{{ url_for('fin.report_export', kind='cf', period=p_to) }}"
+         style="font-size:13px;color:#C86432;border:1px solid #E9D9C6;border-radius:8px;
+                padding:8px 16px;text-decoration:none;background:#FCFAF7">导出 Excel</a>
+      <span style="font-size:12.5px;color:#9C9288;padding-bottom:10px">
+        涉及货币资金的已记账凭证 {{ meta.vch_count }} 张
+      </span>
+    </form>
+  </div>
+
+  {# 报表主体 #}
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead>
+        <tr style="background:#F7F3EC;color:#6B5D4F">
+          <th style="padding:10px 12px;font-size:12.5px;text-align:left;border-bottom:1px solid #EAE2D6">项目</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:right;width:180px;border-bottom:1px solid #EAE2D6">金额</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr style="{{ 'border-top:1.5px solid #C86432;font-weight:700;background:#FFFDFA' if r.total else '' }}">
+          <td style="padding:9px 12px;{{ 'padding-left:26px;color:#6B5D4F' if not r.total else '' }}">{{ r.label }}</td>
+          <td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums;
+                     color:{{ '#CC2B2B' if r.value >= 0 else '#1E8E4E' }}">
+            {{ '{:,.2f}'.format(r.value) }}
+          </td>
+        </tr>
+        {% endfor %}
+        <tr style="border-top:1px dashed #EAE2D6">
+          <td style="padding:9px 12px;padding-left:26px;color:#6B5D4F">加：期初现金及现金等价物余额</td>
+          <td style="padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums">
+            {{ '{:,.2f}'.format(meta.opening) }}
+          </td>
+        </tr>
+        <tr style="border-top:1px dashed #EAE2D6">
+          <td style="padding:9px 12px;padding-left:26px;color:#6B5D4F">期末现金及现金等价物余额</td>
+          <td style="padding:9px 12px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;
+                     color:#C86432">
+            {{ '{:,.2f}'.format(meta.closing) }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {# 自检 #}
+  {% set ok = meta.balanced %}
+  <div class="card" style="padding:12px 18px;margin-bottom:16px;
+              background:{{ '#F2FAF5' if ok else '#FDF4F4' }};
+              border-left:3px solid {{ '#1E8E4E' if ok else '#CC2B2B' }}">
+    <div style="font-size:13px;color:{{ '#166534' if ok else '#991b1b' }}">
+      <b>{{ '✓ 自检通过' if ok else '✗ 自检未通过' }}</b>：
+      三分类合计 ￥{{ '{:,.2f}'.format(meta.net) }}
+      ＝ 期末货币资金 ￥{{ '{:,.2f}'.format(meta.closing) }} − 期初货币资金 ￥{{ '{:,.2f}'.format(meta.opening) }}
+    </div>
+  </div>
+
+  {# 分类明细（默认折叠） #}
+  {% set groups = [('oper', '经营活动', meta.oper), ('inv', '投资活动', meta.inv), ('fin', '筹资活动', meta.fin)] %}
+  {% for key, nm, total in groups %}
+  <div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">
+    <details>
+      <summary style="padding:12px 18px;cursor:pointer;font-size:13.5px;font-weight:600;color:#5C554D;
+                      background:#FCFAF7;list-style:none">
+        {{ nm }}明细
+        <span style="font-weight:400;color:#9C9288;font-size:12.5px">
+          （{{ meta.detail[key]|length }} 笔，合计 ￥{{ '{:,.2f}'.format(total) }}）
+        </span>
+      </summary>
+      {% if meta.detail[key] %}
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead>
+          <tr style="background:#F7F3EC;color:#6B5D4F">
+            <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #EAE2D6">日期</th>
+            <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #EAE2D6">凭证号</th>
+            <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #EAE2D6">摘要</th>
+            <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #EAE2D6">归类依据（对方科目）</th>
+            <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #EAE2D6">现金流入 / 流出</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in meta.detail[key] %}
+          <tr>
+            <td style="padding:7px 12px">{{ d.date or '' }}</td>
+            <td style="padding:7px 12px">
+              <a href="{{ url_for('fin.voucher_detail', vid=d.voucher_id) }}"
+                 style="color:#C86432;text-decoration:none">
+                {{ d.voucher_no }}{% if d.is_red %} <span style="color:#991b1b;font-size:11px">红</span>{% endif %}
+              </a>
+            </td>
+            <td style="padding:7px 12px;color:#6B5D4F">{{ d.summary }}</td>
+            <td style="padding:7px 12px;color:#9C9288">{{ d.why }}</td>
+            <td style="padding:7px 12px;text-align:right;font-variant-numeric:tabular-nums;
+                       color:{{ '#CC2B2B' if d.amount >= 0 else '#1E8E4E' }}">
+              {{ '{:,.2f}'.format(d.amount) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="padding:16px 18px;font-size:12.5px;color:#C0B6A8">该期间没有这类现金流动。</div>
+      {% endif %}
+    </details>
+  </div>
+  {% endfor %}
+
+  <div style="font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">为什么是"简版"：</b>
+    分类依据是「对方科目」的科目类型，不是人工指定的现金流量项目，所以
+    <b>总额一定准、分类是近似</b>（比如用银行存款支付购建固定资产的税费，会归到投资；付供应商货款归到经营）。
+    <br>要进行精确归集，需要在凭证分录上标注「现金流量项目」——该字段已在数据库预留（<code>fin_voucher_entry.cashflow_item</code>），
+    二期在凭证录入页开放标注后，本表即升级为精确版，不用改表结构。
+    <br>本表<b>已剔除「期末结转」系统凭证</b>——结转是账内转账、不动现金，但它会凭空产生"本年利润"这个对方科目，
+    混进来会被误判成筹资活动。
+  </div>
+{% endblock %}

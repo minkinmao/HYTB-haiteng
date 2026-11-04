@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}对账工作台 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 银企对账 · 对账（{{ ba.name }}）{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">对账工作台 <span style="font-size:13px;font-weight:400;color:#9C9288">{{ ba.name }}</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    左栏是<b style="color:#5C554D">待对账的银行流水</b>，右栏是<b style="color:#5C554D">账上未勾对的 1002 分录</b>。
+    可点「自动对账」（金额相等 + 日期±7天 + 方向对应），也可在左栏手动选一笔分录勾对。
+  </div>
+
+  <div style="margin-bottom:16px">
+    <form method="post" action="{{ url_for('fin.bank_reconcile_auto', baid=ba.id) }}" style="display:inline">
+      <button type="submit" class="btn" style="padding:8px 18px">⚡ 自动对账</button>
+    </form>
+    <a href="{{ url_for('fin.bank_adjust', baid=ba.id) }}" style="text-decoration:none;margin-left:8px;padding:8px 18px;border:1px solid #EAE2D6;border-radius:9px;color:#5C554D;font-size:13px">查看余额调节表</a>
+  </div>
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    {# 左：待对账流水 #}
+    <div style="flex:1;min-width:340px">
+      <div style="font-size:14px;font-weight:700;color:#2A2A2A;margin-bottom:8px">待对账银行流水（{{ stmts|length }} 笔）</div>
+      {% if not stmts %}
+      <div class="card" style="padding:24px;text-align:center;color:#9C9288;font-size:13px">没有待对账流水了。</div>
+      {% else %}
+      <div style="display:flex;flex-direction:column;gap:10px">
+        {% for s in stmts %}
+        <div class="card" style="padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#6B5D4F">
+            <span>{{ s.trans_date }} ｜ {{ s.summary or '—' }}</span>
+            <span>
+              {% if s.credit %}<b style="color:#166534">收 {{ amt(s.credit) }}</b>
+              {% elif s.debit %}<b style="color:#991b1b">付 {{ amt(s.debit) }}</b>{% endif %}
+            </span>
+          </div>
+          <div style="font-size:12px;color:#9C9288;margin:4px 0 8px">对方：{{ s.counterparty or '—' }}</div>
+          <form method="post" action="{{ url_for('fin.bank_reconcile_match', baid=ba.id) }}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="hidden" name="statement_id" value="{{ s.id }}">
+            <select name="entry_id" style="padding:6px 8px;flex:1;min-width:200px;font-size:12.5px">
+              <option value="">— 选择账上分录勾对 —</option>
+              {% for e in entries %}
+              <option value="{{ e.entry.id }}">
+                {{ e.date }} ｜ {{ e.summary[:14] }}
+                {% if e.debit %}[借 {{ '%.2f' % e.debit }}]{% else %}[贷 {{ '%.2f' % e.credit }}]{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn" style="padding:6px 16px;font-size:12.5px">勾对</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    {# 右：未达账凭证分录 #}
+    <div style="flex:1;min-width:340px">
+      <div style="font-size:14px;font-weight:700;color:#2A2A2A;margin-bottom:8px">账上未勾对的 1002 分录（{{ entries|length }} 笔）</div>
+      {% if not entries %}
+      <div class="card" style="padding:24px;text-align:center;color:#9C9288;font-size:13px">账上 1002 分录都已对账。</div>
+      {% else %}
+      <div class="card" style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead>
+            <tr style="background:#FAF7F2;color:#5C554D">
+              <th style="text-align:left;padding:7px 10px;border-bottom:1px solid #EAE2D6">日期</th>
+              <th style="text-align:left;padding:7px 10px;border-bottom:1px solid #EAE2D6">摘要</th>
+              <th style="text-align:right;padding:7px 10px;border-bottom:1px solid #EAE2D6">借</th>
+              <th style="text-align:right;padding:7px 10px;border-bottom:1px solid #EAE2D6">贷</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+            <tr style="border-top:1px solid #F2EBE1">
+              <td style="padding:6px 10px;font-family:monospace">{{ e.date }}</td>
+              <td style="padding:6px 10px;color:#6B5D4F">{{ e.summary or '—' }}</td>
+              <td style="padding:6px 10px;text-align:right;color:#C86432">{{ amt(e.debit) }}</td>
+              <td style="padding:6px 10px;text-align:right;color:#166534">{{ amt(e.credit) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# 已对账（可取消勾对） #}
+  {% if reconciled %}
+  <div style="margin-top:18px">
+    <div style="font-size:14px;font-weight:700;color:#2A2A2A;margin-bottom:8px">已对账（{{ reconciled|length }} 笔，如需更正可取消勾对）</div>
+    <div class="card" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead>
+          <tr style="background:#FAF7F2;color:#5C554D">
+            <th style="text-align:left;padding:7px 10px;border-bottom:1px solid #EAE2D6">交易日期</th>
+            <th style="text-align:left;padding:7px 10px;border-bottom:1px solid #EAE2D6">摘要</th>
+            <th style="text-align:right;padding:7px 10px;border-bottom:1px solid #EAE2D6">金额</th>
+            <th style="text-align:center;padding:7px 10px;border-bottom:1px solid #EAE2D6">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in reconciled %}
+          <tr style="border-top:1px solid #F2EBE1">
+            <td style="padding:6px 10px;font-family:monospace">{{ s.trans_date }}</td>
+            <td style="padding:6px 10px;color:#6B5D4F">{{ s.summary or '—' }}</td>
+            <td style="padding:6px 10px;text-align:right">
+              {% if s.credit %}<span style="color:#166534">{{ amt(s.credit) }}</span>{% else %}<span style="color:#991b1b">{{ amt(s.debit) }}</span>{% endif %}
+            </td>
+            <td style="padding:6px 10px;text-align:center">
+              <form method="post" action="{{ url_for('fin.bank_reconcile_unmatch', baid=ba.id) }}" style="display:inline">
+                <input type="hidden" name="statement_id" value="{{ s.id }}">
+                <button type="submit" style="padding:5px 12px;font-size:12px;border:1px solid #EAE2D6;background:#FAF7F2;color:#5C554D;border-radius:8px;cursor:pointer">取消勾对</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}

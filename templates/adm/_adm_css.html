@@ -1,0 +1,58 @@
+{# 行政管理模块共用样式（各页面 {% include 'adm/_adm_css.html' %} 引入，避免重复） #}
+<style>
+  .adm-tool{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:14px 18px;
+            box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:16px;
+            display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .adm-tool label{font-size:13px;color:#6B5D4F}
+  .adm-tool input,.adm-tool select{padding:8px 10px;border:1px solid #E2D8CA;border-radius:8px;
+            font-size:13px;background:#fff;color:#2A2A2A}
+  .adm-tool input{min-width:190px}
+  .adm-btn{padding:8px 18px;border-radius:8px;font-size:13px;border:1px solid #E2D8CA;
+           background:#fff;color:#6B5D4F;cursor:pointer;text-decoration:none;display:inline-block}
+  .adm-btn:hover{border-color:#E5B58C;color:#C86432}
+  .adm-btn.pri{background:#E6823C;color:#fff;border-color:#E6823C;font-weight:600}
+  .adm-btn.pri:hover{background:#C86432;color:#fff}
+  .adm-btn.dark{background:#2A2A2A;color:#fff;border-color:#2A2A2A;font-weight:600}
+  .adm-btn.dark:hover{background:#3B3B3B;color:#fff}
+  .adm-spacer{flex:1}
+  .adm-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:6px 18px 14px;
+            box-shadow:0 2px 12px rgba(42,42,42,.05)}
+  .adm-table{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;table-layout:auto}
+  .adm-table th{text-align:left;font-weight:600;color:#6B5D4F;background:#FAF7F2;font-size:12.5px;
+                padding:10px;border-bottom:1px solid #EAE2D6;white-space:nowrap}
+  .adm-table th:first-child{border-radius:8px 0 0 8px}
+  .adm-table th:last-child{border-radius:0 8px 8px 0}
+  .adm-table td{padding:10px;border-bottom:1px solid #F5F0E8;vertical-align:middle}
+  .adm-table tbody tr:hover{background:#FFFCF8}
+  .adm-table td.mono{font-variant-numeric:tabular-nums;color:#6B5D4F;white-space:nowrap}
+  .adm-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .adm-nm{font-size:13.5px;font-weight:600;color:#2A2A2A}
+  .adm-sub{font-size:12px;color:#9C9288;margin-top:2px}
+  .adm-tag{font-size:11px;padding:2px 9px;border-radius:9px;white-space:nowrap;display:inline-block}
+  .t-ok{background:#dcfce7;color:#166534}
+  .t-warn{background:#FDF3E4;color:#8A5A18}
+  .t-danger{background:#FBE3DD;color:#991b1b}
+  .t-gray{background:#EEE9E1;color:#6B5D4F}
+  .t-info{background:#E7EDFA;color:#4A6BB0}
+  .adm-a{color:#C86432;text-decoration:none}
+  .adm-a:hover{text-decoration:underline}
+  .adm-del{background:none;border:none;color:#991b1b;font-size:12.5px;cursor:pointer;padding:0}
+  .adm-empty{padding:40px 0;text-align:center;color:#9C9288;font-size:13.5px}
+  .adm-form{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:22px 24px;
+            box-shadow:0 2px 12px rgba(42,42,42,.05);max-width:920px}
+  .adm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 18px}
+  .adm-fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .adm-fld.full{grid-column:1/-1}
+  .adm-fld label{font-size:12.5px;color:#6B5D4F}
+  .adm-fld label b{color:#C86432;font-weight:400}
+  .adm-fld input,.adm-fld select,.adm-fld textarea{padding:9px 11px;border:1px solid #E2D8CA;
+            border-radius:8px;font-size:13.5px;background:#fff;color:#2A2A2A;width:100%;
+            box-sizing:border-box;font-family:inherit}
+  .adm-fld textarea{resize:vertical;min-height:68px}
+  .adm-fld input:focus,.adm-fld select:focus,.adm-fld textarea:focus{outline:none;border-color:#E5B58C;
+            box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .adm-fld .hint{font-size:11.5px;color:#9C9288}
+  .adm-acts{display:flex;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid #F0E9DE}
+  .adm-stat{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:#6B5D4F;margin:0 0 14px}
+  .adm-stat b{color:#C86432;font-weight:600}
+</style>

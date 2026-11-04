@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}账套设置 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 账套设置{% endblock %}
+{% block content %}
+  <style>
+    /* 表单行统一写法：左标签 右控件，窄屏自动换行 */
+    .cfg-row{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid #F3EDE3}
+    .cfg-row .lb{width:170px;flex:0 0 170px;font-size:13px;color:#5C554D}
+    .cfg-row .lb b{color:#2A2A2A;font-weight:600}
+    .cfg-row .ctl{flex:1;min-width:0}
+    .cfg-row input[type=text],.cfg-row select,.cfg-row textarea{
+      width:100%;max-width:420px;padding:8px 10px;border:1px solid #E2D8CA;border-radius:8px;font-size:14px}
+    .cfg-row .hint{font-size:11.5px;color:#9C9288;margin-top:4px}
+    @media (max-width:760px){.cfg-row{flex-direction:column;align-items:flex-start;gap:6px}
+      .cfg-row .lb{width:auto;flex:none}}
+  </style>
+
+  <h2 style="font-size:18px;margin:0 0 6px">账套设置 <span style="font-size:13px;font-weight:400;color:#9C9288">Ledger Config</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    一期只服务 1 个核算主体（单账套）。这里的口径会决定科目表结构、凭证编号规则和报表格式，建议一次定准。
+  </div>
+
+  <div style="background:#FDF3E4;color:#8A5A18;border:1px solid #F4DFBE;padding:11px 15px;border-radius:10px;margin-bottom:18px;font-size:13px">
+    改动提示：启用期间一旦开始建期初并录过凭证，就不宜再改（会让已录数据的所属期间错位）。
+  </div>
+
+  <form method="post" action="{{ url_for('fin.config') }}"
+        style="background:#fff;border-radius:8px;padding:8px 20px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+
+    <div class="cfg-row">
+      <div class="lb"><b>核算主体名称</b></div>
+      <div class="ctl">
+        <input type="text" name="company_name" value="{{ cfg.company_name or '' }}" required>
+        <div class="hint">出现在报表抬头与费用结算确认函出具方</div>
+      </div>
+    </div>
+
+    <div class="cfg-row">
+      <div class="lb"><b>会计制度</b></div>
+      <div class="ctl">
+        <select name="standard">
+          <option value="small" {{ 'selected' if cfg.standard == 'small' else '' }}>小企业会计准则（会小企 01/02 表）</option>
+          <option value="general" {{ 'selected' if cfg.standard == 'general' else '' }}>企业会计准则</option>
+        </select>
+        <div class="hint">决定报表格式与科目表；一期按小企业会计准则预设科目</div>
+      </div>
+    </div>
+
+    <div class="cfg-row">
+      <div class="lb"><b>纳税人身份</b></div>
+      <div class="ctl">
+        <select name="taxpayer">
+          <option value="general" {{ 'selected' if cfg.taxpayer == 'general' else '' }}>一般纳税人</option>
+          <option value="small_scale" {{ 'selected' if cfg.taxpayer == 'small_scale' else '' }}>小规模纳税人</option>
+        </select>
+        <div class="hint">决定增值税算法与发票模块复杂度；一般纳税人需管认证、抵扣与期末留抵</div>
+      </div>
+    </div>
+
+    <div class="cfg-row">
+      <div class="lb"><b>启用期间</b></div>
+      <div class="ctl">
+        <input type="text" name="start_period" value="{{ cfg.start_period or '' }}" placeholder="如 2026-01" style="max-width:180px">
+        <div class="hint">格式 YYYY-MM，期初建账的起点；此前期间的账不进本系统</div>
+      </div>
+    </div>
+
+    <div class="cfg-row">
+      <div class="lb"><b>本位币</b></div>
+      <div class="ctl">
+        <input type="text" name="currency" value="{{ cfg.currency or 'CNY' }}" style="max-width:180px">
+        <div class="hint">一期只做单币种，多币种放二期</div>
+      </div>
+    </div>
+
+    <div class="cfg-row">
+      <div class="lb"><b>凭证字别</b></div>
+      <div class="ctl">
+        <input type="text" name="voucher_types" value="{{ cfg.voucher_types or '收,付,转' }}">
+        <div class="hint">逗号分隔，各类字别各自独立连续编号，如 收-202609-001 / 付-202609-001 / 转-202609-001</div>
+      </div>
+    </div>
+
+    <div class="cfg-row">
+      <div class="lb">委托代发佣金的第三方</div>
+      <div class="ctl">
+        <input type="text" name="agent_company" value="{{ cfg.agent_company or '' }}" placeholder="如 海腾保险代理有限公司">
+        <div class="hint">公司不直接向代理人发佣金，由该第三方代发；用于凭证摘要与费用结算确认函</div>
+      </div>
+    </div>
+
+    <div class="cfg-row" style="border-bottom:none">
+      <div class="lb">备注</div>
+      <div class="ctl"><textarea name="note" rows="2">{{ cfg.note or '' }}</textarea></div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;align-items:center;gap:14px">
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:10px 26px;border-radius:8px;font-size:14px;cursor:pointer">保存账套设置</button>
+      <span style="font-size:12px;color:#9C9288">最后修改：{{ cfg.updated_at.strftime('%Y-%m-%d %H:%M') if cfg.updated_at else '—' }}</span>
+    </div>
+  </form>
+{% endblock %}

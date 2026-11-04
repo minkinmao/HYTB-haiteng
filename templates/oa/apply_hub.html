@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% block title %}OA · 申请中心{% endblock %}
+{% block content %}
+<style>
+  /* —— 工具条 —— */
+  .ap-tool{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:14px 18px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:16px;
+           display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .ap-tool label{font-size:13px;color:#6B5D4F}
+  .ap-tool select{padding:8px 10px;border:1px solid #E2D8CA;border-radius:8px;font-size:13px;
+                  background:#fff;color:#2A2A2A;min-width:140px}
+  .ap-sbtn{padding:8px 18px;border-radius:8px;font-size:13px;border:1px solid #E2D8CA;
+           background:#fff;color:#6B5D4F;cursor:pointer}
+  .ap-sbtn:hover{border-color:#E5B58C;color:#C86432}
+  .ap-sbtn.primary{background:#2A2A2A;color:#fff;border-color:#2A2A2A;font-weight:600}
+  .ap-sbtn.primary:hover{background:#3B3B3B;color:#fff}
+  .ap-spacer{flex:1}
+  .ap-new{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:9px;
+          font-size:13.5px;font-weight:600;background:#E6823C;color:#fff;border:none;cursor:pointer}
+  .ap-new:hover{background:#C86432}
+
+  /* —— 区块标题 —— */
+  .ap-sec{display:flex;align-items:baseline;gap:9px;margin:24px 0 12px}
+  .ap-sec .t{font-size:16px;font-weight:600}
+  .ap-sec .s{font-size:11px;color:#BDB2A5;letter-spacing:1.2px}
+  .ap-sec .line{flex:1;height:1px;background:#EFE7DB}
+
+  /* —— 列表 —— */
+  .ap-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:6px 18px 14px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05)}
+  .ap-table{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;table-layout:auto}
+  .ap-table th{text-align:left;font-weight:600;color:#6B5D4F;background:#FAF7F2;font-size:12.5px;
+               padding:10px;border-bottom:1px solid #EAE2D6;white-space:nowrap}
+  .ap-table th:first-child{border-radius:8px 0 0 8px}
+  .ap-table th:last-child{border-radius:0 8px 8px 0}
+  .ap-table td{padding:10px;border-bottom:1px solid #F5F0E8;vertical-align:middle}
+  .ap-table tbody tr:hover{background:#FFFCF8}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .money{color:#C86432;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mono{font-variant-numeric:tabular-nums;color:#6B5D4F;white-space:nowrap}
+  .smy{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3B3B3B}
+  .tag{font-size:11px;padding:2px 9px;border-radius:9px;white-space:nowrap;display:inline-block}
+  .t-wait{background:#FDF3E4;color:#8A5A18}
+  .t-ok{background:#dcfce7;color:#166534}
+  .t-no{background:#FBE3DD;color:#991b1b}
+  .t-info{background:#E7EDFA;color:#4A6BB0}
+  .t-gray{background:#EEE9E1;color:#6B5D4F}
+  .t-rel{background:#E4F1FF;color:#1D4E89}
+  .ap-a{color:#C86432;text-decoration:none}
+  .ap-a:hover{text-decoration:underline}
+  .ap-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+           padding:12px 2px 2px;font-size:12.5px;color:#9C9288}
+  .ap-pg{display:flex;gap:4px;align-items:center}
+  .ap-pg button{min-width:30px;height:30px;border:1px solid #EAE2D6;background:#fff;border-radius:7px;
+                font-size:12.5px;color:#6B5D4F;cursor:pointer;padding:0 8px}
+  .ap-pg button.on{background:#E6823C;border-color:#E6823C;color:#fff;font-weight:600}
+  .ap-pg button:disabled{opacity:.45;cursor:default}
+  .ap-empty{padding:36px 0;text-align:center;color:#9C9288;font-size:13.5px}
+
+  /* —— 新建申请对话框 —— */
+  .ap-mask{display:none;position:fixed;inset:0;background:rgba(42,42,42,.42);z-index:90;
+           align-items:flex-start;justify-content:center;padding:64px 16px 24px;overflow:auto}
+  .ap-dlg{background:#fff;border-radius:12px;width:100%;max-width:560px;
+          box-shadow:0 18px 50px rgba(0,0,0,.22);overflow:hidden;animation:apIn .16s ease-out}
+  @keyframes apIn{from{transform:translateY(-10px);opacity:.6}to{transform:none;opacity:1}}
+  .ap-dlg-hd{display:flex;align-items:center;justify-content:space-between;
+             padding:15px 20px;border-bottom:1px solid #EAE2D6;font-size:15px;font-weight:600}
+  .ap-dlg-x{border:none;background:none;font-size:20px;line-height:1;color:#9C9288;cursor:pointer;
+            padding:0 2px}
+  .ap-dlg-x:hover{color:#C86432}
+  .ap-sr{display:flex;gap:8px;padding:16px 20px 12px}
+  .ap-sr input{flex:1;padding:9px 12px;border:1px solid #E2D8CA;border-radius:8px;font-size:13px;
+               background:#fff}
+  .ap-sr input:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .ap-sr button{padding:9px 18px;border:none;border-radius:8px;background:#E6823C;color:#fff;
+                font-size:13px;font-weight:600;cursor:pointer}
+  .ap-sr button:hover{background:#C86432}
+  .ap-dlg-bd{padding:0 20px 8px;max-height:52vh;overflow:auto}
+  .ap-grp-hd{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:#2A2A2A;
+             padding:10px 0 6px;border-bottom:1px dashed #F0E9DE;margin-bottom:4px}
+  .ap-grp-hd::before{content:"";width:4px;height:13px;border-radius:2px;background:#E6823C;flex:none}
+  .ap-item{display:block;padding:9px 12px 9px 22px;border-radius:9px;text-decoration:none;
+           color:#2A2A2A;border:1px solid transparent}
+  .ap-item:hover{background:#FFFCF8;border-color:#F2E3D5}
+  .ap-item-nm{font-size:13.5px;font-weight:500}
+  .ap-item:hover .ap-item-nm{color:#C86432}
+  .ap-item-tag{font-size:10.5px;padding:1px 7px;border-radius:8px;background:#EEE9E1;color:#6B5D4F;
+               margin-left:8px;vertical-align:middle}
+  .ap-item-tag.on{background:#FDF3E4;color:#8A5A18}
+  .ap-item-ds{display:block;font-size:12px;color:#9C9288;margin-top:3px}
+  .ap-dlg-ft{padding:12px 20px;border-top:1px solid #EAE2D6;background:#FCFAF7;
+             font-size:12.5px;color:#9C9288}
+  .ap-dlg-empty{padding:26px 0;text-align:center;color:#9C9288;font-size:13px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">申请中心
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（人事 / 财务 / 行政 / 通用 各类申请，统一发起、统一查询）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+  点右上角「＋ 新建申请」→ 在弹窗里选择申请类型（含<b style="color:#C86432">报销申请</b>、
+  <b style="color:#C86432">费用申请单</b>等 13 类）；提交后统一进入审批流程，审批人可在「审批 / 待办」中处理。
+</div>
+
+{# ================= 我的申请（全部业务类型） ================= #}
+<div class="ap-sec">
+  <span class="t">我的申请</span><span class="s">MY APPLICATIONS</span><span class="line"></span>
+</div>
+
+{# ---------- 筛选工具条 ---------- #}
+<div class="ap-tool">
+  <label>业务类型</label>
+  <select id="fKind">
+    <option value="">全部</option>
+    {% for k in kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+  </select>
+  <label>流程状态</label>
+  <select id="fStatus">
+    <option value="">全部</option>
+    <option value="pending">审批中</option>
+    <option value="approved">审批通过</option>
+    <option value="paid">已付款</option>
+    <option value="closed">已核销</option>
+    <option value="returned">退回修改</option>
+    <option value="rejected">已驳回</option>
+  </select>
+  <button class="ap-sbtn primary" onclick="applyFilter()">查询</button>
+  <button class="ap-sbtn" onclick="resetFilter()">重置</button>
+  <span class="ap-spacer"></span>
+  <button class="ap-new" onclick="openDlg()">＋ 新建申请</button>
+</div>
+
+{# ---------- 申请列表 ---------- #}
+<div class="ap-card">
+  <table class="ap-table">
+    <thead>
+      <tr>
+        <th style="width:52px">序号</th>
+        <th style="width:150px">单据编号</th>
+        <th style="width:170px">业务类型</th>
+        <th style="width:130px">申请时间</th>
+        <th>内容摘要</th>
+        <th style="width:100px;text-align:right">金额(元)</th>
+        <th style="width:96px">流程状态</th>
+        <th style="width:64px">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="ap-row" data-kind="{{ r.kind }}" data-status="{{ r.status }}">
+        <td class="idx" style="color:#9C9288"></td>
+        <td class="mono">{{ r.code }}</td>
+        <td>{{ r.kind }}</td>
+        <td class="mono">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}</td>
+        <td><div class="smy" title="{{ r.summary }}">{{ r.summary or '—' }}</div></td>
+        <td class="num money">{{ '%.2f'|format(r.amount or 0) }}</td>
+        <td><span class="tag t-{{ r.cls }}">{{ r.status_cn }}</span></td>
+        <td><a class="ap-a" href="{{ r.url }}">查看</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="ap-empty" id="apEmpty" style="display:none">没有符合条件的申请。</div>
+  <div class="ap-foot">
+    <div>共 <b id="apTotal" style="color:#C86432">0</b> 条 · 每页 {{ 10 }} 条</div>
+    <div class="ap-pg" id="apPager"></div>
+  </div>
+</div>
+
+{# ---------- 新建申请对话框 ---------- #}
+<div class="ap-mask" id="dlgMask">
+  <div class="ap-dlg">
+    <div class="ap-dlg-hd">
+      <span>新建申请</span>
+      <button class="ap-dlg-x" onclick="closeDlg()" title="关闭">×</button>
+    </div>    <div class="ap-sr">
+      <input id="dlgKw" type="text" placeholder="请输入申请关键字查询，如：报销 / 盖章 / 借支"
+             oninput="renderDlgList()" onkeydown="if(event.key==='Enter'){event.preventDefault();}">
+      <button onclick="document.getElementById('dlgKw').focus()">搜索</button>
+    </div>
+    <div class="ap-dlg-bd" id="dlgList">
+      {% for g in catalog %}
+      <div class="ap-grp">
+        <div class="ap-grp-hd">{{ g['name'] }}</div>
+        {# 注意：目录分组用 dict，'items' 与 dict.items 方法同名，模板必须用下标访问 #}
+        {% for it in g['items'] %}
+        <a class="ap-item" href="{{ it['url'] }}" data-name="{{ it['name'] }}"
+           data-ds="{{ it['desc'] }}" data-grp="{{ g['name'] }}">
+          <span class="ap-item-nm">{{ it['name'] }}</span>
+          {% if it['is_on'] %}<span class="ap-item-tag on">已开通</span>
+          {% else %}<span class="ap-item-tag">通用表单</span>{% endif %}
+          <span class="ap-item-ds">{{ it['desc'] }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+      <div class="ap-dlg-empty" id="dlgEmpty" style="display:none">没有匹配的申请类型，换个关键字试试。</div>
+    </div>
+    <div class="ap-dlg-ft">共 <b id="dlgCount" style="color:#C86432">0</b> 种申请单可选 · 点名称即可发起</div>
+  </div>
+</div>
+
+<script>
+  /* ========== 列表：筛选 + 前端分页 ========== */
+  var PAGE_SIZE = 10, curPage = 1, visRows = [];
+
+  function applyFilter(resetPage) {
+    var k = document.getElementById('fKind').value;
+    var s = document.getElementById('fStatus').value;
+    visRows = [];
+    document.querySelectorAll('.ap-row').forEach(function (tr) {
+      var ok = (k === '' || tr.dataset.kind === k) && (s === '' || tr.dataset.status === s);
+      if (ok) visRows.push(tr);
+    });
+    if (resetPage !== false) curPage = 1;
+    renderPage();
+  }
+
+  function renderPage() {
+    var total = visRows.length;
+    var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (curPage > pages) curPage = pages;
+    document.querySelectorAll('.ap-row').forEach(function (tr) { tr.style.display = 'none'; });
+    visRows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE).forEach(function (tr, i) {
+      tr.style.display = '';
+      tr.querySelector('.idx').textContent = (curPage - 1) * PAGE_SIZE + i + 1;
+    });
+    document.getElementById('apTotal').textContent = total;
+    document.getElementById('apEmpty').style.display = total ? 'none' : '';
+    var box = document.getElementById('apPager');
+    box.innerHTML = '';
+    if (pages > 1) {
+      box.appendChild(pgBtn('上一页', curPage - 1, curPage <= 1));
+      for (var p = 1; p <= pages; p++) {
+        var b = pgBtn(String(p), p, false);
+        if (p === curPage) b.classList.add('on');
+        box.appendChild(b);
+      }
+      box.appendChild(pgBtn('下一页', curPage + 1, curPage >= pages));
+    }
+  }
+
+  function pgBtn(text, page, disabled) {
+    var b = document.createElement('button');
+    b.textContent = text;
+    b.disabled = !!disabled;
+    b.onclick = function () { curPage = page; renderPage(); };
+    return b;
+  }
+
+  function resetFilter() {
+    document.getElementById('fKind').value = '';
+    document.getElementById('fStatus').value = '';
+    applyFilter();
+  }
+
+  /* ========== 新建申请对话框 ========== */
+  function openDlg() {
+    document.getElementById('dlgMask').style.display = 'flex';
+    document.getElementById('dlgKw').value = '';
+    renderDlgList();
+    document.getElementById('dlgKw').focus();
+  }
+  function closeDlg() {
+    document.getElementById('dlgMask').style.display = 'none';
+  }
+  function renderDlgList() {
+    var kw = document.getElementById('dlgKw').value.trim().toLowerCase();
+    var shown = 0;
+    document.querySelectorAll('.ap-grp').forEach(function (g) {
+      var n = 0;
+      g.querySelectorAll('.ap-item').forEach(function (a) {
+        var hit = !kw
+          || a.dataset.name.toLowerCase().indexOf(kw) >= 0
+          || a.dataset.ds.toLowerCase().indexOf(kw) >= 0
+          || a.dataset.grp.toLowerCase().indexOf(kw) >= 0;
+        a.style.display = hit ? '' : 'none';
+        if (hit) n++;
+      });
+      g.style.display = n ? '' : 'none';
+      shown += n;
+    });
+    document.getElementById('dlgCount').textContent = shown;
+    document.getElementById('dlgEmpty').style.display = shown ? 'none' : '';
+  }
+
+  /* 点遮罩空白处 / 按 Esc 关闭 */
+  document.getElementById('dlgMask').addEventListener('click', function (e) {
+    if (e.target === this) closeDlg();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDlg();
+  });
+
+  /* 首次进入：无筛选、从头分页 */
+  applyFilter();
+</script>
+{% endblock %}

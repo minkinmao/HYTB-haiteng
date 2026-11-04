@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 保司数据源配置{% endblock %}
+{% block pagename %}核心业务管理系统 · 保司档案数据源{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .src-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:1100px){.src-grid{grid-template-columns:1fr}}
+  .src-card{border:1px solid #EAE2D6;border-radius:10px;background:#fff;padding:16px 18px}
+  .src-card.ok{border-color:#BFD9C0;background:#F7FBF6}
+  .src-card h4{margin:0 0 4px;font-size:15px;color:#2A2A2A;display:flex;align-items:center;gap:8px}
+  .src-card .sub{font-size:12.5px;color:#9C9288;margin-bottom:12px}
+  .src-card .fl{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13.5px}
+  .src-card input[type=text]{flex:1;min-width:0}
+  .src-note{font-size:12.5px;color:#6B5D4F;line-height:1.85;background:#FBF7F1;
+    border-left:3px solid #E8B489;padding:10px 12px;border-radius:0 6px 6px 0;margin-top:12px}
+  .src-note b{color:#B5532A}
+  .gl{list-style:none;margin:6px 0 0;padding:0;font-size:13px;line-height:1.95}
+  .gl li:before{content:'·';color:#E6823C;font-weight:700;margin-right:6px}
+  .bad{color:#B5532A;font-weight:600}
+  .good{color:#4C7A4E;font-weight:600}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">保司档案 · 数据源配置
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（四十一改：一键抓取用哪几个源）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  填好保司全称后，系统按下面开启的源自动抓取其余字段。
+  <b>只补空字段</b>，已有的人工核准数据不会被覆盖（除非抓取时勾选「覆盖已有值」）。
+</div>
+
+<form method="post">
+<div class="src-grid">
+
+  <!-- ① 金融监管总局许可证库 -->
+  <div class="src-card {{ 'ok' if row.nfra_enabled == 'on' else '' }}">
+    <h4>① 金融监管总局 · 金融许可证库
+      <span class="crm-tag {{ 't-ok' if row.nfra_enabled == 'on' else 't-gray' }}">
+        {{ '已启用' if row.nfra_enabled == 'on' else '未启用' }}</span>
+    </h4>
+    <div class="sub">xkz.nfra.gov.cn —— 官方公开查询系统，<b>免费、无需凭据</b></div>
+    <label class="fl">
+      <input type="checkbox" name="nfra_enabled" value="1" {{ 'checked' if row.nfra_enabled == 'on' else '' }}>
+      启用监管总局许可证库抓取
+    </label>
+    <div class="src-note">
+      能抓到：<b>保险许可证号</b>、<b>批准设立日期</b>（监管口径，单独存「许可证批准日期」列）、
+      <b>规范全称</b>（用来核对档案名是否与监管登记一致）。<br>
+      抓不到：信用代码、法人、注册资本、地址、经营范围 —— 这个库里没有，只能靠下面第②项。<br>
+      <span class="bad">限流提醒：</span>连续请求十几次会返回「您的操作过于频繁，请五分钟后再试」，
+      系统会识别并自动停下来，别急着连点。
+    </div>
+  </div>
+
+  <!-- ② 天眼查开放平台 -->
+  <div class="src-card {{ 'ok' if (row.tyc_enabled == 'on' and row.tyc_token) else '' }}">
+    <h4>② 天眼查开放平台 API
+      <span class="crm-tag {{ 't-ok' if (row.tyc_enabled == 'on' and row.tyc_token) else 't-gray' }}">
+        {{ '已配置' if (row.tyc_enabled == 'on' and row.tyc_token) else '未配置' }}</span>
+    </h4>
+    <div class="sub">open.tianyancha.com —— 按次计费，需自行申请 token</div>
+    <label class="fl">
+      <input type="checkbox" name="tyc_enabled" value="1" {{ 'checked' if row.tyc_enabled == 'on' else '' }}>
+      启用天眼查抓取
+    </label>
+    <div class="fl">
+      <label style="white-space:nowrap">Token</label>
+      <input type="text" name="tyc_token" value="{{ row.tyc_token or '' }}"
+             placeholder="粘贴天眼查开放平台的 token（留空＝不启用）" autocomplete="off">
+    </div>
+    <div class="src-note">
+      能抓到：<b>统一社会信用代码、法定代表人、注册资本、成立日期、工商营业地址、经营范围、电话、官网</b>。<br>
+      <span class="bad">为什么必须买 API：</span>天眼查 / 企查查 / 爱企查 / 启信宝的网页版匿名访问
+      一律 302 跳登录或返回加密反爬页，程序抓不到；信用中国 412、国家企业信用信息公示系统 521（滑块）。
+      系统不会去绕验证码或登录，只能用官方 API。<br>
+      <span class="good">不买也能用：</span>页面上的「去天眼查查这家」按钮直接跳到这家公司页，
+      手工抄几个字段回来粘贴即可（详见下面第三节）。要买 token 的话入口在
+      <a class="crm-a" href="{{ tyc_open_home() }}" target="_blank" rel="noopener">open.tianyancha.com</a>。
+    </div>
+  </div>
+</div>
+
+<div class="crm-tool" style="margin-top:16px">
+  <button class="crm-btn pri" type="submit">保存配置</button>
+  <a class="crm-btn" href="{{ url_for('crm.insurers') }}">不保存，返回</a>
+</div>
+</form>
+
+<!-- 连通性自测 -->
+<form method="post" action="{{ url_for('crm.insurer_source_test') }}" class="crm-tool"
+      style="margin-top:10px;border-top:1px dashed #EAE2D6;padding-top:12px">
+  <label>连通性自测</label>
+  <input type="text" name="test_name" value="复星联合健康保险股份有限公司"
+         placeholder="拿一个保司全称试打接口" style="width:340px">
+  <button class="crm-btn" type="submit">测试连接</button>
+  <span style="font-size:12.5px;color:#9C9288">
+    （用保存后的配置实时调用一次，结果以弹窗提示）
+  </span>
+</form>
+
+<div class="crm-info" style="margin-top:18px">
+  <div class="crm-sec">三、抓取口径说明（必读）</div>
+  <ul class="gl">
+    <li><b>只补空</b>：字段已有值就跳过。想强制刷新，在保司详情页抓取时勾选「覆盖已有值」。</li>
+    <li><b>不发散猜</b>：监管站查回来一堆分公司时，只认「名称完全相同」或「许可编码 6 位（法人机构）」那条；
+      对不上就提示「未匹配到」，绝不会把某省分公司当成总公司写进档案。</li>
+    <li><b>名称核对</b>：监管站登记全称与档案名称不一致时会提示，方便顺手改对（名称错会导致后续查不到）。</li>
+    <li><b>批量抓取</b>：保司档案列表页有「批量抓取缺项」按钮，只跑当前缺字段的保司，
+      每条之间间隔 3 秒（监管站限流很严，连续请求十几次就会返回「操作过于频繁，请五分钟后再试」）。</li>
+    <li><b>抓不全怎么办</b>：监管站每页固定只回 10 条，分支机构上千家的大保司（国寿、人保等）
+      首页找不到总公司那条 —— 这类就走免费手工通道：点「去天眼查查这家」直达这家公司页，
+      抄下信用代码 / 法人 / 注册资本 / 成立日期 / 地址，回来点「编辑档案」粘贴，一次几十秒。
+      其余中小保司基本都能自动抓到。</li>
+    <li><b>免费手工通道入口在哪</b>：保司档案列表每行右侧「天眼查」、保司详情页顶部
+      「去天眼查查这家」、以及详情页缺项提示条里的橙色按钮，三处都是直达链接，不用自己搜公司名。</li>
+    <li><b>留痕</b>：抓取成功会把数据来源标记为「自动抓取」并写入最后更新日期。</li>
+    <li>上次保存：{{ row.updated_at.strftime('%Y-%m-%d %H:%M') if row.updated_at else '—' }}</li>
+  </ul>
+</div>
+{% endblock %}

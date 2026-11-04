@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 费用台账{% endblock %}
+{% block pagename %}行政管理系统 · 费用台账{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<style>
+  /* 费用台账专用：KPI 汇总卡 + 按月格子（页内样式，不影响其他台账） */
+  .ex-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+  .ex-kpi{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:14px 18px;
+          box-shadow:0 2px 12px rgba(42,42,42,.05);min-width:0}
+  .ex-kpi .k{font-size:12.5px;color:#9C9288}
+  .ex-kpi .v{font-size:20px;font-weight:700;margin-top:4px;color:#C86432;
+             font-variant-numeric:tabular-nums;letter-spacing:-.3px;white-space:nowrap}
+  .ex-kpi .v.g{color:#166534}
+  .ex-kpi .v.r{color:#991b1b}
+  .ex-months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px}
+  .ex-mon{border:1px solid #F0E9DE;border-radius:9px;padding:8px 6px;text-align:center;min-width:0}
+  .ex-mon.on{background:#FFFCF8;border-color:#F2E3D5}
+  .ex-mon .m{font-size:11.5px;color:#9C9288}
+  .ex-mon .a{font-size:12.5px;font-weight:600;color:#2A2A2A;font-variant-numeric:tabular-nums;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .ex-mon .p{font-size:11px;color:#166534;margin-top:1px}
+  .ex-sec{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#2A2A2A;
+          margin:18px 0 12px}
+  .ex-sec::before{content:"";width:4px;height:14px;border-radius:2px;background:#E6823C;flex:none}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">费用台账
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（水电 / 物业 / 房租 / 宽带通讯 等周期性行政支出）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  按月登记行政支出，系统按<b>缴费截止日</b>自动提醒（临期 / 逾期）。本台账只做登记与提醒——
+  需要付款时点「发起报销」到 OA 申请中心，回来把单号填在「关联 OA 单号」即可闭环。
+</div>
+
+{# ---------- 年度汇总卡（该年度全量，不受下方筛选影响） ---------- #}
+<div class="ex-kpis">
+  <div class="ex-kpi">
+    <div class="k">{{ year }} 年度应缴</div>
+    <div class="v">¥ {{ '{:,.2f}'.format(due_sum) }}</div>
+  </div>
+  <div class="ex-kpi">
+    <div class="k">已缴</div>
+    <div class="v g">¥ {{ '{:,.2f}'.format(paid_sum) }}</div>
+  </div>
+  <div class="ex-kpi">
+    <div class="k">未缴</div>
+    <div class="v {{ 'r' if unpaid_sum > 0 else '' }}">¥ {{ '{:,.2f}'.format(unpaid_sum) }}</div>
+  </div>
+  <div class="ex-kpi">
+    <div class="k">逾期笔数</div>
+    <div class="v {{ 'r' if overdue_n else '' }}">{{ overdue_n }} 笔</div>
+  </div>
+</div>
+
+{# ---------- 筛选条 ---------- #}
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="编号 / 类型 / 缴费对象 / 发票号">
+  <label>费用类型</label>
+  <select name="cat">
+    <option value="">全部</option>
+    {% for c in cats %}<option value="{{ c }}" {{ 'selected' if c == cat else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <label>年度</label>
+  <select name="year">
+    {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year else '' }}>{{ y }} 年</option>{% endfor %}
+  </select>
+  <label>缴费状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    <option value="unpaid" {{ 'selected' if st == 'unpaid' else '' }}>待缴</option>
+    <option value="paid" {{ 'selected' if st == 'paid' else '' }}>已缴</option>
+    <option value="alert" {{ 'selected' if st == 'alert' else '' }}>需缴费（临期 / 逾期）</option>
+    <option value="overdue" {{ 'selected' if st == 'overdue' else '' }}>已逾期</option>
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.expenses') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.expense_new') }}">＋ 登记费用</a>{% endif %}
+</form>
+
+{% if alert_n %}
+<div style="background:#FDF3E4;border:1px solid #F0D9B8;color:#8A5A18;border-radius:10px;
+            padding:10px 16px;font-size:13px;margin-bottom:14px">
+  缴费提醒：{{ year }} 年度有 <b>{{ alert_n }}</b> 笔费用已逾期或 7 天内到期，请及时处理。
+</div>
+{% endif %}
+
+{# ---------- 明细列表 ---------- #}
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>费用项目</th><th>缴费对象</th><th>金额（元）</th>
+        <th>缴费截止</th><th>状态</th><th>关联单号</th><th>附件</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.r.code }}</td>
+        <td>
+          <div class="adm-nm">{{ it.r.category or '未分类' }}</div>
+          <div class="adm-sub">
+            账期 {{ it.r.period or '—' }}
+            {% if it.r.invoice_no %}｜发票 {{ it.r.invoice_no }}{% endif %}
+          </div>
+        </td>
+        <td>
+          <div>{{ it.r.payee or '—' }}</div>
+          {% if it.r.dept or it.r.handler %}
+          <div class="adm-sub">{{ it.r.dept or '' }}{% if it.r.dept and it.r.handler %}｜{% endif %}{{ it.r.handler or '' }}</div>
+          {% endif %}
+        </td>
+        <td class="num"><b style="color:#C86432">{{ '{:,.2f}'.format(it.r.amount or 0) }}</b></td>
+        <td class="mono">{{ it.r.due_date or '—' }}</td>
+        <td>
+          {% if it.state == 'paid' %}
+            <span class="adm-tag t-ok">已缴</span>
+            {% if it.r.pay_date %}<div class="adm-sub">{{ it.r.pay_date }}</div>{% endif %}
+          {% elif it.state == 'overdue' %}
+            <span class="adm-tag t-danger">已逾期 {{ -it.days }} 天</span>
+          {% elif it.state == 'danger' %}
+            <span class="adm-tag t-danger">{{ it.days }} 天后截止</span>
+          {% elif it.state == 'warn' %}
+            <span class="adm-tag t-warn">{{ it.days }} 天后截止</span>
+          {% else %}
+            <span class="adm-tag t-gray">待缴</span>
+          {% endif %}
+          {% if can_edit and it.state != 'paid' %}
+          <form method="post" action="{{ url_for('adm.expense_pay', eid=it.r.id) }}"
+                style="display:inline;margin-left:6px">
+            <button class="adm-del" type="submit" style="color:#166534">标记已缴</button>
+          </form>
+          {% endif %}
+        </td>
+        <td>
+          {% if it.r.approval_code %}
+          <div class="mono">{{ it.r.approval_code }}</div>
+          {% endif %}
+          {% if it.r.contract_id and contracts.get(it.r.contract_id) %}
+          <div class="adm-sub">合同：{{ contracts[it.r.contract_id] }}</div>
+          {% elif it.r.asset_id and assets.get(it.r.asset_id) %}
+          <div class="adm-sub">资产：{{ assets[it.r.asset_id] }}</div>
+          {% elif not it.r.approval_code %}
+          <span style="color:#C9C0B4">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if it.r.file_path %}
+            <a class="adm-a" href="{{ url_for('adm.expense_file', eid=it.r.id) }}">下载</a>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+        <td class="mono" style="white-space:nowrap">
+          <a class="adm-a" href="{{ url_for('oa.expense_reimburse_new') }}" target="_blank">发起报销</a>
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.expense_edit', eid=it.r.id) }}" style="margin-left:8px">编辑</a>
+          <form method="post" action="{{ url_for('adm.expense_delete', eid=it.r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除「{{ it.r.category }} / {{ it.r.period }}」这笔费用登记？附件会一并删除。')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">该条件下暂无费用登记。{% if can_edit %}点右上角「＋ 登记费用」开始记账。{% endif %}</div>
+  {% endif %}
+</div>
+
+{# ---------- 年度汇总：按月 / 按类型 ---------- #}
+<div class="ex-sec">{{ year }} 年度汇总</div>
+
+<div class="adm-card" style="padding-bottom:16px">
+  <div style="font-size:12.5px;color:#9C9288;margin:10px 0 10px">
+    按月应缴金额（绿色为其中已缴部分）
+  </div>
+  <div class="ex-months">
+    {% for m in by_month %}
+    <div class="ex-mon {{ 'on' if m.due else '' }}">
+      <div class="m">{{ m.m }} 月</div>
+      <div class="a">{{ '{:,.0f}'.format(m.due) if m.due else '—' }}</div>
+      {% if m.paid %}<div class="p">已缴 {{ '{:,.0f}'.format(m.paid) }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if by_cat %}
+<div class="adm-card" style="margin-top:16px">
+  <table class="adm-table">
+    <thead>
+      <tr><th>费用类型</th><th>笔数</th><th>应缴合计（元）</th><th>已缴（元）</th><th>未缴（元）</th></tr>
+    </thead>
+    <tbody>
+    {% for g in by_cat %}
+      <tr>
+        <td><b>{{ g.cat }}</b></td>
+        <td class="num">{{ g.n }}</td>
+        <td class="num">{{ '{:,.2f}'.format(g.amount) }}</td>
+        <td class="num" style="color:#166534">{{ '{:,.2f}'.format(g.paid) }}</td>
+        <td class="num" style="color:{{ '#991b1b' if g.amount - g.paid > 0 else '#6B5D4F' }}">
+          {{ '{:,.2f}'.format(g.amount - g.paid) }}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

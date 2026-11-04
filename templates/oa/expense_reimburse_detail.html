@@ -1,0 +1,226 @@
+{% extends 'base.html' %}
+{% block title %}OA · 费用报销单详情{% endblock %}
+{% block content %}
+<style>
+  .ex-card{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px 20px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);margin-bottom:18px}
+  .ex-card h3{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .ex-card h3::before{content:"";width:4px;height:14px;border-radius:2px;background:#E6823C;flex:none}
+  .kv{display:grid;grid-template-columns:96px 1fr;gap:8px 14px;font-size:13.5px}
+  .kv .k{color:#9C9288;font-size:12.5px}
+  .ex-table{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;table-layout:auto}
+  .ex-table th{text-align:left;font-weight:600;color:#6B5D4F;background:#FAF7F2;font-size:12.5px;
+               padding:9px 10px;border-bottom:1px solid #EAE2D6;white-space:nowrap}
+  .ex-table td{padding:9px 10px;border-bottom:1px solid #F5F0E8}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .money{color:#C86432;font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
+  .tag{font-size:11px;padding:2px 9px;border-radius:9px;white-space:nowrap;display:inline-block}
+  .t-wait{background:#FDF3E4;color:#8A5A18}
+  .t-ok{background:#dcfce7;color:#166534}
+  .t-no{background:#FBE3DD;color:#991b1b}
+  .t-gray{background:#EEE9E1;color:#6B5D4F}
+  .t-rel{background:#E4F1FF;color:#1D4E89}
+  .rel{background:#F3FBF5;border:1px solid #BEE3C9;border-radius:10px;padding:11px 14px;font-size:12.5px;
+       color:#166534;margin-bottom:14px}
+  .warn{background:#FFF9EE;border:1px solid #F1D3A8;border-radius:10px;padding:11px 14px;font-size:12.5px;
+        color:#8A5A18;margin-bottom:14px}
+  .btn-main{padding:8px 18px;border-radius:9px;border:none;cursor:pointer;font:inherit;font-size:13px;
+            font-weight:600;background:#16a34a;color:#fff}
+  .btn-no{padding:8px 18px;border-radius:9px;border:none;cursor:pointer;font:inherit;font-size:13px;
+          font-weight:600;background:#dc2626;color:#fff}
+  .btn-ghost{padding:8px 18px;border-radius:9px;border:1px solid #EAE2D6;background:#fff;color:#6B5D4F;
+             font:inherit;font-size:13px;cursor:pointer}
+  .btn-link{display:inline-block;padding:9px 16px;border-radius:9px;border:1px solid #EAE2D6;background:#fff;
+            color:#6B5D4F;font-size:13px;text-decoration:none}
+  .opinion{width:100%;max-width:320px;padding:8px 11px;font-family:inherit;font-size:13px;
+           background:#FCFAF7;border:1px solid #E2D8CA;border-radius:9px;margin:10px 0}
+</style>
+
+<div class="ex-card">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+    <div style="min-width:0">
+      <div style="font-size:16px;font-weight:700">
+        {{ r.code }} · 费用报销单
+        {% if r.mode == 'apply' %}<span class="tag t-rel">关联 {{ r.claim_code }}</span>
+        {% else %}<span class="tag t-gray">直接报销</span>{% endif %}
+      </div>
+      <div style="font-size:12.5px;color:#9C9288;margin-top:4px">
+        报销人 {{ r.applicant_name }}{% if r.employee_no %}（{{ r.employee_no }}）{% endif %}
+        ｜ {{ r.org_name or '—' }}
+        ｜ 提交 {{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="money">￥{{ '%.2f'|format(r.amount or 0) }}</div>
+      <div style="margin-top:4px">
+        {% if r.status == 'pending' %}<span class="tag t-wait">审批中</span>
+        {% elif r.status == 'approved' %}<span class="tag t-ok">已通过</span>
+        {% elif r.status == 'paid' %}<span class="tag t-gray">已付款</span>
+        {% elif r.status == 'rejected' %}<span class="tag t-no">已驳回</span>
+        {% else %}<span class="tag t-gray">退回修改</span>{% endif %}
+      </div>
+      <div style="margin-top:9px">
+        <a class="btn-link" href="{{ url_for('oa.expense_print', rid=r.id) }}">打印单据</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if r.mode == 'apply' and claim %}
+  {% if (r.amount or 0) <= claim.remain_amount + 0.005 %}
+  <div class="rel">
+    ✓ 闭环校验通过：本单 ￥{{ '%.2f'|format(r.amount or 0) }}
+    未超出申请单 {{ claim.code }} 批准额 ￥{{ '%.2f'|format(claim.amount or 0) }}
+    （已核销 ￥{{ '%.2f'|format(claim.used_amount or 0) }}，可用 ￥{{ '%.2f'|format(claim.remain_amount) }}）。
+  </div>
+  {% else %}
+  <div class="warn">
+    ⚠ 本单 ￥{{ '%.2f'|format(r.amount or 0) }} 超出申请单 {{ claim.code }} 可用余额
+    ￥{{ '%.2f'|format(claim.remain_amount) }}{% if r.over_reason %}，超额原因：{{ r.over_reason }}{% endif %}。
+  </div>
+  {% endif %}
+{% endif %}
+
+<div class="ex-card">
+  <h3>单据信息</h3>
+  <div class="kv">
+    <div class="k">报销方式</div><div>{{ r.mode_cn }}</div>
+    {% if claim %}
+    <div class="k">关联申请</div>
+    <div>{{ claim.code }} · {{ claim.category }} · 批准 ￥{{ '%.2f'|format(claim.amount or 0) }}
+      <span style="color:#9C9288">（大写：{{ claim_cn }}）</span></div>
+    {% endif %}
+    <div class="k">费用大类</div><div>{{ r.category }}</div>
+    <div class="k">合计金额</div><div>￥{{ '%.2f'|format(r.amount or 0) }}
+      <span style="color:#9C9288;font-size:12.5px">（大写：{{ amount_cn }}）</span></div>
+    <div class="k">其中进项税</div><div>￥{{ '%.2f'|format(r.tax_amount or 0) }}</div>
+    <div class="k">事由说明</div><div>{{ r.purpose or '—' }}</div>
+    <div class="k">收款信息</div><div>{{ r.pay_method or '—' }} ·
+      {{ r.bank_name or '—' }} · {{ r.payee_name or '—' }} · {{ r.bank_account or '—' }}</div>
+    {% if r.approver_name %}
+    <div class="k">审批人</div><div>{{ r.approver_name }}
+      {% if r.decided_at %} · {{ r.decided_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
+    {% endif %}
+    {% if r.remark %}<div class="k">审批意见</div><div>{{ r.remark }}</div>{% endif %}
+  </div>
+</div>
+
+<div class="ex-card">
+  <h3>费用明细 <span class="tag t-gray">{{ r.items|length }} 项</span></h3>
+  <table class="ex-table">
+    <thead>
+      <tr><th>发生日期</th><th>类别</th><th>说明</th><th class="num">金额</th>
+          <th class="num">税额</th><th>发票类型</th><th>发票号码</th></tr>
+    </thead>
+    <tbody>
+      {% for it in r.items %}
+      <tr>
+        <td>{{ it.occur_date or '—' }}</td>
+        <td>{{ it.category or '—' }}</td>
+        <td>{{ it.detail or '—' }}</td>
+        <td class="num">{{ '%.2f'|format(it.amount or 0) }}</td>
+        <td class="num">{{ '%.2f'|format(it.tax or 0) }}</td>
+        <td>{{ it.invoice_type or '—' }}</td>
+        <td>{{ it.invoice_no or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="text-align:right;margin-top:10px;font-size:13.5px">
+    合计：<b style="font-size:18px;color:#C86432">￥{{ '%.2f'|format(r.amount or 0) }}</b>
+    <span style="font-size:12.5px;color:#9C9288;margin-left:10px">可抵扣进项 ￥{{ '%.2f'|format(r.tax_amount or 0) }}</span>
+  </div>
+</div>
+
+{# ============ 电子发票 / 票据附件：列表 + 上传 + 删除（走鉴权下载） ============ #}
+<div class="ex-card">
+  <h3>电子发票 / 票据附件 <span class="tag t-gray">{{ inv_files|length }} 个</span></h3>
+  {% if inv_files %}
+  <table class="ex-table">
+    <thead><tr><th style="width:52px">序号</th><th>文件名</th><th style="width:100px">大小</th><th style="width:150px">操作</th></tr></thead>
+    <tbody>
+      {% for f in inv_files %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>📎 {{ f.name }}</td>
+        <td>{{ '%.1f KB'|format((f.size or 0) / 1024.0) if (f.size or 0) < 1048576 else ('%.2f MB'|format((f.size or 0) / 1048576.0)) }}</td>
+        <td>
+          <a href="{{ url_for('oa.reimburse_invoice_file', rid=r.id, idx=loop.index0) }}"
+             style="font-size:12.5px;color:#E6823C;text-decoration:none">下载</a>
+          {% if r.status != 'paid' %}
+          <form method="post" action="{{ url_for('oa.reimburse_invoice_delete', rid=r.id, idx=loop.index0) }}"
+                style="display:inline;margin-left:10px"
+                onsubmit="return confirm('确认删除该附件？')">
+            <button type="submit" style="font-size:12.5px;color:#b91c1c;background:none;border:none;cursor:pointer;padding:0">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="font-size:13px;color:#9C9288;padding:6px 0 12px">尚未上传电子发票，可在下方选择文件上传。</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('oa.reimburse_invoice_upload', rid=r.id) }}"
+        enctype="multipart/form-data" style="margin-top:12px;padding-top:12px;border-top:1px dashed #E8DFD2">
+    <div style="font-size:12px;color:#9C9288;margin-bottom:6px">
+      补传电子发票（可多选，单个 ≤ 10MB；支持 PDF / OFD / XML / 图片 / Excel / zip）
+      {% if r.status == 'paid' %}<b>已付款单据仍可补传留档，但不能删除</b>{% endif %}
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <input type="file" name="invoices" multiple
+             accept=".pdf,.ofd,.xml,.jpg,.jpeg,.png,.bmp,.xls,.xlsx,.zip">
+      <button class="btn-main" type="submit">上传</button>
+    </div>
+  </form>
+</div>
+
+{% if can_approve and r.status == 'pending' %}
+<div class="ex-card">
+  <h3>审批操作</h3>
+  <form method="post" action="{{ url_for('oa.expense_reimburse_decide', rid=r.id) }}">
+    <input class="opinion" name="opinion" placeholder="审批意见（可选）">
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn-main" type="submit" name="action" value="approve">同意</button>
+      <button class="btn-no" type="submit" name="action" value="reject">驳回</button>
+      <button class="btn-ghost" type="submit" name="action" value="return">退回修改</button>
+    </div>
+    <div style="font-size:12px;color:#9C9288;margin-top:8px">
+      同意 → 记录记账期间并核销申请余额（满额则关闭申请单）；驳回 → 整单结束；退回修改 → 由报销人重填。
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if can_pay and r.status == 'approved' %}
+<div class="ex-card">
+  <h3>付款确认</h3>
+  <form method="post" action="{{ url_for('oa.expense_reimburse_pay', rid=r.id) }}">
+    <div style="font-size:13px;color:#5C554D;margin-bottom:10px">
+      财务打款后点此确认，单据状态置为「已付款」。
+    </div>
+    <button class="btn-main" type="submit">确认已付款</button>
+  </form>
+</div>
+{% endif %}
+
+{% if r.status in ('approved', 'paid') %}
+<div class="ex-card">
+  <h3>财务衔接</h3>
+  <div style="font-size:12.5px;color:#6B5D4F;line-height:1.9">
+    {% if r.voucher_id %}
+      已生成记账凭证（凭证 id {{ r.voucher_id }}），可在财务系统「记账凭证」中查看与审核。
+    {% else %}
+      本单已通过 {% if r.period %}（记账期间 {{ r.period }}）{% endif %}，
+      可由财务在「财务系统 → 自动记账」中按「费用报销单」一键生成付款凭证：
+      <br><b>借：{{ r.account_code }} {{ r.category }} ￥{{ '%.2f'|format((r.amount or 0) - (r.tax_amount or 0)) }}</b>
+      {% if r.tax_amount %}<br><b>借：222101 应交增值税 ￥{{ '%.2f'|format(r.tax_amount or 0) }}</b>{% endif %}
+      <br><b>贷：1002 银行存款 ￥{{ '%.2f'|format(r.amount or 0) }}</b>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

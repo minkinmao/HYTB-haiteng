@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 合作经代公司{% endblock %}
+{% block pagename %}核心业务管理系统 · 合作经代公司{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  /* 列多且都要看清楚：单元格不折行，装不下让外层横向滚动 */
+  .ag-card td, .ag-card th{white-space:nowrap}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">合作经代公司
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（人力档案「所属经代公司」的取值来源 · 登记规则参照保司基础信息）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记合作经代（保险代理 / 经纪 / 公估）的<b>工商与许可证基础信息</b>：全称 / 简称 / 统一社会信用代码 /
+  保险中介业务许可证号 / 法定代表人 / 注册资本 / 成立日期 / 营业地址 / 经营范围 / 合作状态 / 对接人。
+  建好后，人力档案的「所属经代公司」<b>只能从这里下拉选</b>，不再手工填写。
+  <b>全称全系统唯一</b>；<b>名下挂了人的不允许删除</b>（先把人挪走）。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.org_struct') }}">人力架构</a>
+  <a class="crm-tab on" href="{{ url_for('crm.agencies') }}">合作经代<span class="n">{{ kpi.total }}</span></a>
+  <a class="crm-tab" href="{{ url_for('crm.manpower') }}">人力数据清单</a>
+  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
+  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">经代主体总数</div><div class="v">{{ kpi.total }}</div></div>
+  <div class="crm-kpi"><div class="k">合作中</div><div class="v">{{ kpi.coop }}</div></div>
+  <div class="crm-kpi"><div class="k">暂停合作</div><div class="v">{{ kpi.paused }}</div></div>
+  <div class="crm-kpi"><div class="k">在册人数</div><div class="v">{{ kpi.people }}</div></div>
+</div>
+
+<form class="crm-tool" method="get" action="{{ url_for('crm.agencies') }}">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="名称 / 简称 / 信用代码 / 许可证号 / 对接人">
+  <label>机构类型</label>
+  <select name="tp">
+    <option value="">— 全部 —</option>
+    {% for c, n in types %}
+    <option value="{{ c }}" {{ 'selected' if tp == c else '' }}>{{ n }}</option>
+    {% endfor %}
+  </select>
+  <label>合作状态</label>
+  <select name="st">
+    <option value="">— 全部 —</option>
+    {% for c, n in statuses %}
+    <option value="{{ c }}" {{ 'selected' if st == c else '' }}>{{ n }}</option>
+    {% endfor %}
+  </select>
+  <button class="crm-btn pri" type="submit">筛选</button>
+  <a class="crm-btn" href="{{ url_for('crm.agencies') }}">重置</a>
+  <div class="crm-spacer"></div>
+  {% if can_manage %}
+  <a class="crm-btn pri" href="{{ url_for('crm.agency_new') }}">＋ 新增经代公司</a>
+  {% endif %}
+</form>
+
+<div class="crm-card ag-card" style="overflow-x:auto">
+  <table class="crm-table" style="min-width:1480px">
+    <thead>
+      <tr>
+        <th>经代公司名称</th>
+        <th>简称</th>
+        <th>机构类型</th>
+        <th>合作状态</th>
+        <th>统一社会信用代码</th>
+        <th>中介许可证号</th>
+        <th>法定代表人</th>
+        <th>注册资本</th>
+        <th>成立日期</th>
+        <th>营业地址</th>
+        <th>联系电话</th>
+        <th>对接人</th>
+        <th>在册人数</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in rows %}
+      <tr>
+        <td>
+          <span class="crm-nm" title="{{ a.business_scope or '' }}">{{ a.name }}</span>
+          {% if a.note %}<div class="crm-sub">{{ a.note }}</div>{% endif %}
+        </td>
+        <td>{{ a.short_name or '-' }}</td>
+        <td>
+          {% if a.agency_type == 'broker' %}<span class="crm-tag t-info">保险经纪</span>
+          {% elif a.agency_type == 'adjust' %}<span class="crm-tag t-gray">保险公估</span>
+          {% elif a.agency_type == 'other' %}<span class="crm-tag t-gray">其他</span>
+          {% else %}<span class="crm-tag t-brand">保险代理</span>{% endif %}
+        </td>
+        <td>
+          {% if a.status == 'coop' %}<span class="crm-tag t-ok">合作中</span>
+          {% elif a.status == 'paused' %}<span class="crm-tag t-warn">暂停合作</span>
+          {% else %}<span class="crm-tag t-gray">未合作</span>{% endif %}
+        </td>
+        <td class="mono">{{ a.credit_code or '-' }}</td>
+        <td class="mono">{{ a.license_no or '-' }}</td>
+        <td>{{ a.legal_person or '-' }}</td>
+        <td>{{ a.reg_capital or '-' }}</td>
+        <td class="mono">{{ a.establish_date or '-' }}</td>
+        <td title="{{ a.address or '' }}">{{ (a.address or '-')[:22] }}{% if a.address and a.address|length > 22 %}…{% endif %}</td>
+        <td class="mono">{{ a.phone or '-' }}</td>
+        <td>
+          {% if a.contact_person %}<span class="crm-nm">{{ a.contact_person }}</span>
+            {% if a.contact_title %}<div class="crm-sub">{{ a.contact_title }}</div>{% endif %}
+            {% if a.contact_phone %}<div class="crm-sub mono">{{ a.contact_phone }}</div>{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td>{{ cnt.get(a.id, 0) }}</td>
+        <td style="white-space:nowrap">
+          {% if can_manage %}
+          <a class="crm-a" href="{{ url_for('crm.agency_edit', aid=a.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.agency_delete', aid=a.id) }}"
+                style="display:inline" onsubmit="return confirm('确认删除经代公司「{{ a.name }}」？')">
+            <button class="crm-del" type="submit">删除</button>
+          </form>
+          {% else %}<span style="color:#9C9288">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="14"><div class="crm-empty">还没有合作经代公司，点右上角「＋ 新增经代公司」登记</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div style="font-size:12.5px;color:#9C9288;margin-top:10px">
+  共 {{ rows|length }} 家{% if kw or tp or st %}（已筛选，共 {{ kpi.total }} 家）{% endif %}
+</div>
+{% endblock %}

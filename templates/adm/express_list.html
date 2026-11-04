@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 快递收发{% endblock %}
+{% block pagename %}行政事务 · 快递收发登记{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">快递收发登记
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（收件 / 寄件的统一台账）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记每一次快递收发：快递公司、运单号、对方、经手人与物品。未签收 / 待寄出的单据会标黄提醒跟进。
+</div>
+
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="编号 / 运单号 / 对方 / 物品 / 经手人">
+  <label>方向</label>
+  <select name="dr">
+    <option value="">全部</option>
+    {% for k, lb in dirs %}
+    <option value="{{ k }}" {{ 'selected' if dr == k else '' }}>{{ lb }}</option>
+    {% endfor %}
+  </select>
+  <label>状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    {% for k, lb in status_list %}
+    <option value="{{ k }}" {{ 'selected' if st == k else '' }}>{{ lb }}</option>
+    {% endfor %}
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.express_list') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.express_new') }}">＋ 登记快递</a>{% endif %}
+</form>
+
+{% if pending_n %}
+<div style="background:#FDF3E4;border:1px solid #F0D9B8;color:#8A5A18;border-radius:10px;
+            padding:10px 16px;font-size:13px;margin-bottom:14px">
+  提示：当前有 <b>{{ pending_n }}</b> 条快递处于「待签收 / 待寄出」，请留意跟进。
+</div>
+{% endif %}
+
+<div class="adm-stat" style="margin:0 0 14px">
+  <span>本页记录：<b>{{ items|length }}</b> 条</span>
+  <span>寄件费用合计：<b>¥ {{ '%.2f'|format(fee_total or 0) }}</b></span>
+</div>
+
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>方向</th><th>快递公司 / 运单号</th><th>对方</th>
+        <th>物品 / 文件</th><th>经手人</th><th>日期</th><th>费用</th><th>状态</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.code }}</td>
+        <td>
+          {% if it.direction == 'out' %}<span class="adm-tag t-info">寄件</span>
+          {% else %}<span class="adm-tag t-gray">收件</span>{% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          <div>{{ it.company or '—' }}</div>
+          {% if it.waybill %}<div class="adm-sub" style="font-variant-numeric:tabular-nums">{{ it.waybill }}</div>{% endif %}
+        </td>
+        <td>
+          <div class="adm-nm">{{ it.counterpart or '—' }}</div>
+          {% if it.dept %}<div class="adm-sub">{{ it.dept }}</div>{% endif %}
+        </td>
+        <td>{{ it.item or '—' }}</td>
+        <td style="white-space:nowrap">{{ it.handler or '—' }}</td>
+        <td class="mono">{{ it.express_date or '—' }}</td>
+        <td class="num">{% if it.direction == 'out' and it.fee %}¥ {{ '%.2f'|format(it.fee) }}{% else %}—{% endif %}</td>
+        <td>
+          {% if it.status == 'pending' %}<span class="adm-tag t-warn">{{ '待寄出' if it.direction == 'out' else '待签收' }}</span>
+          {% elif it.status == 'returned' %}<span class="adm-tag t-gray">已退回</span>
+          {% else %}<span class="adm-tag t-ok">{{ '已寄出' if it.direction == 'out' else '已签收' }}</span>{% endif %}
+        </td>
+        <td>
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.express_edit', xid=it.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('adm.express_delete', xid=it.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除这条快递登记？')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}<span style="color:#C9C0B4">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">暂无快递记录。{% if can_edit %}点右上角「＋ 登记快递」开始记录。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

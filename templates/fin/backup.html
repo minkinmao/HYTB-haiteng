@@ -1,0 +1,54 @@
+{# 财务数据备份与恢复页（#40）：一键备份 + 恢复 + 历史列表 #}
+{% extends "base.html" %}
+{% block title %}数据备份与恢复 · FMS{% endblock %}
+{% block content %}
+<div class="fin-card">
+  <h2 style="margin:0 0 4px">数据备份与恢复</h2>
+  <div style="font-size:12px;color:#9C9288">一键备份 SQLite 数据库文件；恢复会用历史备份覆盖当前库（恢复前自动留快照，可回退）。</div>
+
+  <div style="display:flex;gap:18px;flex-wrap:wrap;margin:14px 0;font-size:13px">
+    <div>当前数据库：<b>{{ db_name }}</b></div>
+    <div>当前大小：<b>{{ '{:,}'.format(cur_size) }}</b> 字节</div>
+    <div>备份目录：<span style="color:#6B6258">{{ bk_dir }}</span></div>
+  </div>
+
+  <form method="post" action="{{ url_for('fin.fin_backup_do') }}" style="margin-bottom:16px">
+    <button type="submit" style="padding:8px 18px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer">一键备份当前数据库</button>
+  </form>
+
+  <h3 style="margin:6px 0 8px;font-size:14px">备份历史</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <thead>
+      <tr style="background:#FBEEE2;color:#8A4A18;text-align:left">
+        <th style="padding:8px 10px">文件名</th>
+        <th style="padding:8px 10px">大小</th>
+        <th style="padding:8px 10px">类型</th>
+        <th style="padding:8px 10px">操作人</th>
+        <th style="padding:8px 10px">时间</th>
+        <th style="padding:8px 10px">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in backups %}
+      <tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:7px 10px">{{ b.filename }}</td>
+        <td style="padding:7px 10px">{{ '{:,}'.format(b.size) }}</td>
+        <td style="padding:7px 10px">{% if b.type=='auto' %}自动{% else %}手动{% endif %}</td>
+        <td style="padding:7px 10px">{{ b.created_by or '—' }}</td>
+        <td style="padding:7px 10px;white-space:nowrap">{{ b.created_at.strftime('%Y-%m-%d %H:%M') if b.created_at else '' }}</td>
+        <td style="padding:7px 10px">
+          <form method="post" action="{{ url_for('fin.fin_backup_restore') }}" style="display:inline"
+                onsubmit="return confirm('确定用此备份恢复数据库吗？恢复前会自动留快照，但当前未备份的数据将被覆盖。');">
+            <input type="hidden" name="bid" value="{{ b.id }}">
+            <button type="submit" style="padding:4px 10px;background:#fff;color:#C0392B;border:1px solid #C0392B;border-radius:5px;cursor:pointer">恢复</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="padding:20px;text-align:center;color:#9C9288">暂无备份记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="font-size:11px;color:#C0392B;margin-top:8px">⚠ 恢复是危险操作：会用所选备份覆盖当前库。请先确认该备份是你要回到的状态。</div>
+</div>
+{% endblock %}

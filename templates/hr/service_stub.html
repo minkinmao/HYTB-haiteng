@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}{{ name }} · 规划中{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">{{ name }}
+  </h2>
+  <div style="background:#fff;border-radius:8px;padding:40px 20px;text-align:center;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:40px;margin-bottom:12px">🚧</div>
+    <div style="font-size:16px;font-weight:600;color:#5C554D">{{ name }}（规划中）</div>
+    <div style="font-size:13px;color:#9C9288;margin-top:8px">该模块已列入人事系统规划，按计划逐步落地，当前暂未开发。</div>
+  </div>
+{% endblock %}

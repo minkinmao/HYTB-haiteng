@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}入职确认 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">入职确认 · {{ o.name }}（{{ o.employee_no }}）</h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    左侧为个人填报内容（只读回传）；请完善右侧人事信息（用工类型、职级/代理类型、职务、部门）后点击确认，数据将自动备份至员工花名册。
+  </div>
+
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+    {# 左：个人填报内容（只读） #}
+    <div style="flex:1;min-width:320px">
+      <div style="background:#FBF3EA;border-radius:8px;padding:16px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">招募阶段信息 <span style="font-size:11px;color:#9C9288;font-weight:400">操作员建号录入</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:7px 8px;color:#9C9288;width:96px">身份证号</td><td style="padding:7px 8px">{% if o.id_card %}{{ o.id_card[:6] }}********{{ o.id_card[-4:] }}{% else %}—{% endif %}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">入职年龄</td><td style="padding:7px 8px">{{ o.age if o.age is not none else '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">性别</td><td style="padding:7px 8px">{{ o.gender or '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">职级</td><td style="padding:7px 8px">{{ o.level.code if o.level else '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">试用期</td><td style="padding:7px 8px">{% if o.probation == 'Y' %}是（{{ o.probation_salary_pct }}%，{{ o.probation_start }}~{{ o.probation_end }}）{% else %}否{% endif %}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">薪资构成</td><td style="padding:7px 8px">
+            {% if o.regular_total %}基本 {{ '%.2f' % (o.regular_base or 0) }} + 绩效 {{ '%.2f' % (o.regular_perf or 0) }} + 岗位补贴 {{ '%.2f' % (o.regular_allow or 0) }}{% else %}—{% endif %}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">总薪资</td><td style="padding:7px 8px">{{ '%.2f' % o.regular_total if o.regular_total else '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">五险一金(个人)</td><td style="padding:7px 8px">{% if o.regular_total %}养老 {{ '%.2f' % o.social_pension }} / 医疗 {{ '%.2f' % o.social_medical }} / 失业 {{ '%.2f' % o.social_unemploy }} / 公积金 {{ '%.2f' % o.social_fund }}{% else %}—{% endif %}</td></tr>
+        </table>
+      </div>
+
+      <div style="background:#fff;border-radius:8px;padding:16px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">联系信息 <span style="font-size:11px;color:#9C9288;font-weight:400">个人填报</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:7px 8px;color:#9C9288;width:96px">个人手机</td><td style="padding:7px 8px">{{ o.phone or '—' }}</td></tr>
+          <tr><td style="padding:7px 8px;color:#9C9288">公司邮箱</td><td style="padding:7px 8px">{{ o.email or '—' }}</td></tr>
+        </table>
+      </div>
+
+      <div style="background:#fff;border-radius:8px;padding:16px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">基本信息 <span style="font-size:11px;color:#9C9288;font-weight:400">个人填报</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          {% for k, v in [('性别', o.gender), ('出生日期', o.birth_date), ('参加工作日期', o.work_start_date),
+                          ('入职日期', o.hire_date), ('婚姻状况', o.marital), ('是否有子女', o.children),
+                          ('籍贯', o.hometown), ('兴趣爱好', o.hobby), ('最后工作日', o.last_job)] %}
+          <tr><td style="padding:7px 8px;color:#9C9288;width:96px">{{ k }}</td><td style="padding:7px 8px">{{ v or '—' }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+
+      {% if work_history %}
+      <div style="background:#fff;border-radius:8px;padding:16px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">工作履历</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          {% for w in work_history %}
+          <tr><td style="padding:7px 8px;color:#9C9288;width:150px">{{ w.get('start','') }} ~ {{ w.get('end','') }}</td>
+              <td style="padding:7px 8px">{{ w.get('desc','') }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+
+      {% if education %}
+      <div style="background:#fff;border-radius:8px;padding:16px 18px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">教育经历</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          {% for e in education %}
+          <tr><td style="padding:7px 8px;color:#9C9288;width:150px">{{ e.get('start','') }} ~ {{ e.get('end','') }}</td>
+              <td style="padding:7px 8px">{{ e.get('school','') }} · {{ e.get('major','') }} · {{ e.get('edu','') }}/{{ e.get('degree','') }}
+                {% if e.get('edu_type') %}（{{ e.get('edu_type') }}）{% endif %}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    {# 右：主管完善表单 #}
+    <div style="flex:1;min-width:320px">
+      <div style="background:#fff;border-radius:8px;padding:16px 18px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px">人事信息完善 <span style="font-size:11px;color:#9C9288;font-weight:400">主管填写</span></div>
+        <form method="post">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">用工类型 *</div>
+              <select name="staff_type" id="staff_type" onchange="toggleStaff()" required
+                      style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+                <option value="internal" selected>内勤（劳动合同）</option>
+                <option value="external">外勤（代理合同）</option>
+              </select></div>
+            <div id="fld_level"><div style="font-size:12px;color:#9C9288;margin-bottom:4px">职级（内勤）</div>
+              <select name="level_id" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+                <option value="">未设</option>
+                {% for lv in levels %}<option value="{{ lv.id }}">{{ lv.code }} - {{ lv.name }}</option>{% endfor %}
+              </select></div>
+            <div id="fld_agent" style="display:none"><div style="font-size:12px;color:#9C9288;margin-bottom:4px">代理类型（外勤）</div>
+              <select name="agent_type" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+                <option value="">未设</option>
+                <option value="渠道总">渠道总</option>
+                <option value="主管">主管</option>
+                <option value="代理人">代理人</option>
+              </select></div>
+            <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">部门</div>
+              <select name="org_id" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+                <option value="">未设</option>
+                {% for og in orgs %}<option value="{{ og.id }}" {% if o.org_id == og.id %}selected{% endif %}>{{ og.name }}</option>{% endfor %}
+              </select></div>
+            <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">职务</div>
+              <input name="title" value="{{ o.job_title or '' }}"
+                     style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+            <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">入职日期</div>
+              <input type="date" name="hire_date" value="{{ o.hire_date or '' }}"
+                     style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+          </div>
+          <div style="margin-top:14px;padding:10px 12px;background:#FCFAF7;border-radius:6px;font-size:12px;color:#9C9288">
+            工号沿用建号时自动生成的 <b style="color:#C86432">{{ o.employee_no }}</b>；确认后将创建员工档案并写入花名册（花名册仅供查询）。
+          </div>
+          <button type="submit"
+                  style="margin-top:14px;background:#E6823C;color:#fff;border:none;padding:10px 28px;border-radius:6px;font-size:14px;cursor:pointer">确认入册</button>
+          <a href="{{ url_for('hr.onboard_list') }}"
+             style="margin-left:10px;font-size:13px;color:#6B5D4F;text-decoration:none">返回列表</a>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // 内勤→显示职级；外勤→显示代理类型（互斥）
+  function toggleStaff() {
+    var st = document.getElementById('staff_type').value;
+    document.getElementById('fld_level').style.display = st === 'internal' ? '' : 'none';
+    document.getElementById('fld_agent').style.display = st === 'external' ? '' : 'none';
+  }
+  </script>
+{% endblock %}

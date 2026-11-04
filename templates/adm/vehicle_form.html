@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% block title %}ADM · {{ '编辑车辆' if row else '登记车辆' }}{% endblock %}
+{% block pagename %}车辆管理 · {{ '编辑车辆档案' if row else '登记车辆' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑车辆档案' if row else '登记车辆' }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（编号 {{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  车辆编号由系统自动生成（CAR-年月-序号）。<b>保险到期日</b>与<b>年检到期日</b>填好后，
+  列表页会在 30 天内自动标黄、7 天内标红，过期显示已过期天数。
+</div>
+
+<form class="adm-form" method="post" enctype="multipart/form-data"
+      action="{{ url_for('adm.vehicle_edit', vid=row.id) if row else url_for('adm.vehicle_new') }}">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>车牌号码 <b>*</b></label>
+      <input type="text" name="plate_no" required value="{{ (row.plate_no or '') if row else '' }}"
+             placeholder="如：粤A·88888">
+    </div>
+    <div class="adm-fld">
+      <label>车辆名称 / 别名</label>
+      <input type="text" name="name" value="{{ (row.name or '') if row else '' }}"
+             placeholder="如：公司公务用车">
+    </div>
+    <div class="adm-fld">
+      <label>车辆类型</label>
+      <select name="kind">
+        <option value="">请选择</option>
+        {% for c in cats %}<option value="{{ c }}" {{ 'selected' if row and row.kind == c else '' }}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>品牌型号</label>
+      <input type="text" name="brand" value="{{ (row.brand or '') if row else '' }}"
+             placeholder="如：大众帕萨特 330TSI">
+    </div>
+    <div class="adm-fld">
+      <label>车架号 / VIN</label>
+      <input type="text" name="vin" value="{{ (row.vin or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>发动机号</label>
+      <input type="text" name="engine_no" value="{{ (row.engine_no or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>车身颜色</label>
+      <input type="text" name="color" value="{{ (row.color or '') if row else '' }}" placeholder="如：黑色">
+    </div>
+    <div class="adm-fld">
+      <label>核定载人数</label>
+      <input type="number" min="1" step="1" name="seats"
+             value="{{ row.seats if row else 5 }}">
+    </div>
+    <div class="adm-fld">
+      <label>登记所有人</label>
+      <input type="text" name="owner"
+             value="{{ row.owner if row else '广东海盈通保智能科技有限公司' }}">
+      <span class="hint">公司全称；个人挂靠的填个人姓名</span>
+    </div>
+    <div class="adm-fld">
+      <label>购置日期</label>
+      <input type="date" name="buy_date" value="{{ (row.buy_date or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>购置价格（元）</label>
+      <input type="number" step="0.01" min="0" name="price"
+             value="{{ '%g'|format(row.price or 0) if row else 0 }}">
+    </div>
+    <div class="adm-fld">
+      <label>当前里程（公里）</label>
+      <input type="number" step="1" min="0" name="mileage"
+             value="{{ '%g'|format(row.mileage or 0) if row else 0 }}">
+      <span class="hint">登记「用车 / 保养」动态时填更大里程会自动上浮</span>
+    </div>
+    <div class="adm-fld">
+      <label>责任人 / 使用人</label>
+      <input type="text" name="keeper" value="{{ (row.keeper or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>使用部门</label>
+      <input type="text" name="dept" value="{{ (row.dept or '') if row else '' }}" placeholder="如：人事行政部">
+    </div>
+    <div class="adm-fld">
+      <label>常停放地点</label>
+      <input type="text" name="place" value="{{ (row.place or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>车辆状态</label>
+      <select name="status">
+        {% for v, lb in statuses %}
+        <option value="{{ v }}" {{ 'selected' if (row and row.status == v) or (not row and v == 'in_use') else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>保险公司</label>
+      <input type="text" name="insurer" list="insList" value="{{ (row.insurer or '') if row else '' }}"
+             placeholder="如：中国人民财产保险">
+      <datalist id="insList">
+        <option value="中国人民财产保险"></option><option value="中国平安财产保险"></option>
+        <option value="中国太平洋财产保险"></option><option value="中国人寿财产保险"></option>
+        <option value="中华联合财产保险"></option><option value="阳光财产保险"></option>
+      </datalist>
+    </div>
+    <div class="adm-fld">
+      <label>保单号</label>
+      <input type="text" name="insurance_no" value="{{ (row.insurance_no or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>保险到期日</label>
+      <input type="date" name="insurance_expire" value="{{ (row.insurance_expire or '') if row else '' }}">
+      <span class="hint">列表页按此日期提醒续保</span>
+    </div>
+    <div class="adm-fld">
+      <label>年检到期日</label>
+      <input type="date" name="inspect_expire" value="{{ (row.inspect_expire or '') if row else '' }}">
+      <span class="hint">列表页按此日期提醒年检</span>
+    </div>
+    <div class="adm-fld">
+      <label>行驶证 / 登记证附件</label>
+      <input type="file" name="attach">
+      {% if row and row.file_name %}
+      <span class="hint">当前：{{ row.file_name }}（重新上传会替换旧文件）</span>
+      {% else %}
+      <span class="hint">支持 pdf / 图片 / Office / zip，单个不超过 10MB</span>
+      {% endif %}
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if row else '提交登记' }}</button>
+    <a class="adm-btn" href="{{ url_for('adm.vehicles') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,499 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 投保订单录入{% endblock %}
+{% block pagename %}核心业务管理系统 · 投保订单录入{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .sec{background:#fff;border:1px solid #EAE2D6;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .sec h3{font-size:14px;margin:0 0 12px;color:#9C4E2C;font-weight:600;border-left:4px solid #C86432;padding-left:8px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px}
+  .grid .full{grid-column:1/-1}
+  .fld label{display:block;font-size:12px;color:#6B5D4F;margin-bottom:3px}
+  .fld input,.fld select{width:100%;padding:7px 9px;border:1px solid #E0D2C0;border-radius:8px;font-size:13px;box-sizing:border-box}
+  .fld input[readonly]{background:#F6F2EA;color:#8A7B6C}
+  .auto{background:#FBF3E9 !important;color:#B5531E !important;font-weight:600}
+  .hint{font-size:11px;color:#9C9288;margin-top:2px}
+  .save-bar{position:sticky;bottom:0;background:#fff;border-top:1px solid #EAE2D6;padding:12px 0;margin-top:8px}
+  .po-btn{padding:9px 22px;border-radius:10px;border:1px solid #EAE2D6;background:#fff;color:#9C4E2C;font-weight:600;cursor:pointer}
+  .po-btn.primary{background:#C86432;color:#fff;border-color:#C86432}
+  .att-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px dashed #F0E9DD}
+  .att-row .lab{width:160px;font-size:13px}
+  .att-row .cur{font-size:12px;color:#3C8C3C}
+  .att-req{color:#B5301E;font-size:11px}
+</style>
+
+<form method="post" action="{{ url_for('crm.policy_order_edit', oid=row.id) if row else url_for('crm.policy_order_new') }}" enctype="multipart/form-data" id="poForm">
+  <input type="hidden" name="oid" value="{{ row.id if row else '' }}">
+
+  <!-- ① 出单 + 代理人 -->
+  <div class="sec">
+    <h3>出单信息 · 代理人（输入工号自动带出架构）</h3>
+    <div class="grid">
+      <div class="fld"><label>出单平台（合作经代）</label>
+        <select name="agency_platform">
+          <option value="">请选择</option>
+          {% for a in agencies %}<option value="{{ a }}" {{ 'selected' if (row and row.agency_platform==a) else '' }}>{{ a }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>代理人工号 *</label>
+        <input name="agent_no" id="agent_no" value="{{ row.agent_no or '' }}" placeholder="输入工号后自动带出" onblur="fetchAgent()">
+      </div>
+      <div class="fld"><label>代理人姓名（自动带出）</label>
+        <input name="agent_name" id="agent_name" value="{{ row.agent_name or '' }}" readonly class="auto">
+      </div>
+      <div class="fld"><label>省公司（自动带出）</label>
+        <input name="agent_province" id="agent_province" value="{{ row.agent_province or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>分支（自动带出）</label>
+        <input name="agent_branch" id="agent_branch" value="{{ row.agent_branch or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>所属经代公司（自动带出）</label>
+        <input name="agent_agency" id="agent_agency" value="{{ row.agent_agency or '' }}" readonly class="auto"></div>
+      <div class="fld full"><label>所属架构（营业组，自动带出）</label>
+        <input name="agent_org" id="agent_org" value="{{ row.agent_org or '' }}" readonly class="auto"></div>
+    </div>
+  </div>
+
+  <!-- ② 投保单 / 保单标识 -->
+  <div class="sec">
+    <h3>投保单 / 保单标识</h3>
+    <div class="grid">
+      <div class="fld"><label>投保单号</label><input name="app_form_no" value="{{ row.app_form_no or '' }}"></div>
+      <div class="fld"><label>保单号</label><input name="policy_no" value="{{ row.policy_no or '' }}"></div>
+    </div>
+  </div>
+
+  <!-- ③ 投保人 -->
+  <div class="sec">
+    <h3>投保人（身份证自动识别性别/出生/年龄/编码）</h3>
+    <div class="grid">
+      <div class="fld"><label>投保人姓名 *</label><input name="app_name" id="app_name" value="{{ row.app_name or '' }}"></div>
+      <div class="fld"><label>投保人身份证号 *</label>
+        <input name="app_idcard" id="app_idcard" value="{{ row.app_idcard or '' }}" onblur="parseApp()"></div>
+      <div class="fld"><label>投保人编码（自动生成/带出）</label>
+        <input name="app_code" id="app_code" value="{{ row.app_code or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>性别（自动算）</label>
+        <input id="app_gender" value="{{ '男' if row.app_gender=='male' else ('女' if row.app_gender=='female' else '') }}" readonly class="auto"></div>
+      <div class="fld"><label>出生年月（自动算）</label>
+        <input id="app_birth" value="{{ row.app_birth or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>年龄（自动算）</label>
+        <input id="app_age" value="{{ row.app_age or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>投保人手机号</label><input name="app_mobile" id="app_mobile" value="{{ row.app_mobile or '' }}"></div>
+      <div class="fld"><label>家庭住址·省份</label><select name="app_addr_province" id="app_addr_province" onchange="onProvinceChange('app')">
+        <option value="">— 请选择 —</option>
+        {% for p in provinces %}<option value="{{ p }}" {% if row and row.app_addr_province == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select></div>
+      <div class="fld"><label>家庭住址·地市</label><select name="app_addr_city" id="app_addr_city" onchange="onCityChange('app')"><option value="">— 请选择 —</option></select></div>
+      <div class="fld"><label>家庭住址·县区</label><select name="app_addr_county" id="app_addr_county"><option value="">— 请选择 —</option></select></div>
+      <div class="fld full"><label>家庭住址·街道（详细地址）</label><input name="app_addr_street" id="app_addr_street" value="{{ row.app_addr_street or '' }}"></div>
+      <div class="fld"><label>开户行</label>
+        <select name="app_bank_name" id="app_bank_name">
+          <option value="">请选择</option>
+          {% for b in banks %}<option value="{{ b }}" {{ 'selected' if (row and row.app_bank_name==b) else '' }}>{{ b }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>银行账号</label><input name="app_bank_account" id="app_bank_account" value="{{ row.app_bank_account or '' }}"></div>
+    </div>
+  </div>
+
+  <!-- ④ 被保人 -->
+  <div class="sec">
+    <h3>被保险人（身份证自动识别性别/出生/年龄/编码）</h3>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:#9C4E2C;font-weight:600;margin:0 0 10px">
+      <input type="checkbox" name="same_as_app" id="same_as_app" value="1" onchange="toggleSame()"
+        {{ 'checked' if row and row.app_idcard and row.ins_idcard and row.app_idcard==row.ins_idcard else '' }}>
+      投保人与被保险人为同一人（勾选后免录被保险人信息，自动复用投保人）
+    </label>
+    <div class="grid">
+      <div class="fld"><label>被保险人姓名 *</label><input name="ins_name" id="ins_name" value="{{ row.ins_name or '' }}"></div>
+      <div class="fld"><label>被保险人身份证号 *</label>
+        <input name="ins_idcard" id="ins_idcard" value="{{ row.ins_idcard or '' }}" onblur="parseIns()"></div>
+      <div class="fld"><label>被保人编码（自动生成/带出）</label>
+        <input name="ins_code" id="ins_code" value="{{ row.ins_code or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>性别（自动算）</label>
+        <input id="ins_gender" value="{{ '男' if row.ins_gender=='male' else ('女' if row.ins_gender=='female' else '') }}" readonly class="auto"></div>
+      <div class="fld"><label>出生年月（自动算）</label>
+        <input id="ins_birth" value="{{ row.ins_birth or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>年龄（自动算）</label>
+        <input id="ins_age" value="{{ row.ins_age or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>被保人手机号</label><input name="ins_mobile" id="ins_mobile" value="{{ row.ins_mobile or '' }}"></div>
+      <div class="fld"><label>家庭住址·省份</label><select name="ins_addr_province" id="ins_addr_province" onchange="onProvinceChange('ins')">
+        <option value="">— 请选择 —</option>
+        {% for p in provinces %}<option value="{{ p }}" {% if row and row.ins_addr_province == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select></div>
+      <div class="fld"><label>家庭住址·地市</label><select name="ins_addr_city" id="ins_addr_city" onchange="onCityChange('ins')"><option value="">— 请选择 —</option></select></div>
+      <div class="fld"><label>家庭住址·县区</label><select name="ins_addr_county" id="ins_addr_county"><option value="">— 请选择 —</option></select></div>
+      <div class="fld full"><label>家庭住址·街道（详细地址）</label><input name="ins_addr_street" id="ins_addr_street" value="{{ row.ins_addr_street or '' }}"></div>
+    </div>
+  </div>
+
+  <!-- ⑤ 保单状态 / 产品 -->
+  <div class="sec">
+    <h3>保单状态 · 产品（选保司联动产品，选产品带出编码/险种）</h3>
+    <div class="grid">
+      <div class="fld"><label>保单主状态</label><input name="policy_main_status" value="{{ row.policy_main_status or '' }}" placeholder="如 有效/失效/终止/撤单"></div>
+      <div class="fld"><label>保单子状态</label><input name="policy_sub_status" value="{{ row.policy_sub_status or '' }}" placeholder="如 正常/冻结/理赔中"></div>
+      <div class="fld"><label>险种状态</label><input name="policy_risk_status" value="{{ row.policy_risk_status or '' }}" placeholder="如 正常/失效/终止"></div>
+      <div class="fld"><label>保险公司名称（签约数据）</label>
+        <select name="insurer_name" id="insurer_name" onchange="onInsurer()">
+          <option value="">请选择</option>
+          {% for i in insurers %}<option value="{{ i }}" {{ 'selected' if (row and row.insurer_name==i) else '' }}>{{ i }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>产品名称</label>
+        <select name="product_name" id="product_name" onchange="fetchProduct()">
+          <option value="">请选择</option>
+          {% if row and row.insurer_name %}{% for p in prod_map.get(row.insurer_name, []) %}
+            <option value="{{ p }}" {{ 'selected' if row.product_name==p else '' }}>{{ p }}</option>{% endfor %}{% endif %}
+        </select>
+      </div>
+      <div class="fld"><label>产品编码（自动带出）</label>
+        <input name="product_code" id="product_code" value="{{ row.product_code or '' }}" readonly class="auto"></div>
+      <div class="fld"><label>险种类别（自动带出）</label>
+        <input name="insurance_type" id="insurance_type" value="{{ row.insurance_type or '' }}" readonly class="auto"></div>
+      <div class="fld full"><label>投保计划</label><input name="plan" value="{{ row.plan or '' }}"></div>
+    </div>
+  </div>
+
+  <!-- ⑦ 缴费方式 · 保险年期（调整到保费自动测算之前） -->
+  <div class="sec">
+    <h3>缴费方式 · 保险年期</h3>
+    <div class="grid">
+      <div class="fld"><label>缴费方式</label>
+        <select name="pay_method" id="pay_method" onchange="calcStd()">
+          {% for c,n in pay_methods %}<option value="{{ c }}" {{ 'selected' if (row and row.pay_method==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>保险年期标志</label>
+        <select name="ins_period_flag">
+          {% for c,n in period_flags %}<option value="{{ c }}" {{ 'selected' if (row and row.ins_period_flag==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>保险年期</label>
+        <select name="ins_period" id="ins_period" onchange="calcStd()">
+          {% for c,n in periods %}<option value="{{ c }}" {{ 'selected' if (row and row.ins_period==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>缴费年期</label>
+        <select name="pay_years" id="pay_years" onchange="calcStd()">
+          {% for c,n in pay_years_opts %}<option value="{{ c }}" {{ 'selected' if (row and row.pay_years==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ 保费与自动测算（保额 ↔ 规模保费 双向自动换算） -->
+  <div class="sec">
+    <h3>保费 · 自动测算（规模保费 × 佣金系数 / 折标率）</h3>
+    <div class="grid">
+      <div class="fld"><label>保额（元，2位）</label><input name="sum_assured" id="sum_assured" value="{{ '%.2f' % row.sum_assured if row and row.sum_assured else '' }}" oninput="calcSaPremium('sa')"></div>
+      <div class="fld"><label>基本保费（元，2位）</label><input name="basic_premium" value="{{ '%.2f' % row.basic_premium if row and row.basic_premium else '' }}"></div>
+      <div class="fld"><label>额外保费（元，2位）</label><input name="extra_premium" value="{{ '%.2f' % row.extra_premium if row and row.extra_premium else '' }}"></div>
+      <div class="fld"><label>追加保费（元，2位）</label><input name="add_premium" value="{{ '%.2f' % row.add_premium if row and row.add_premium else '' }}"></div>
+      <div class="fld"><label>职业健康加费（元，2位）</label><input name="health_load" value="{{ '%.2f' % row.health_load if row and row.health_load else '' }}"></div>
+      <div class="fld"><label>规模保费（元，2位）*</label><input name="scale_premium" id="scale_premium" value="{{ '%.2f' % row.scale_premium if row and row.scale_premium else '' }}" oninput="calcSaPremium('premium')"></div>
+      <div class="fld"><label>佣金系数（%，2位）</label><input name="commission_rate" id="commission_rate" value="{{ '%.2f' % row.commission_rate if row and row.commission_rate else '' }}" oninput="calcComm()" placeholder="选产品自动带出，可改"></div>
+      <div class="fld"><label>代理人佣金（元，自动算）</label><input id="commission" readonly class="auto"></div>
+      <div class="fld"><label>行业标保折标率（%，自动算）</label><input id="industry_std_rate" readonly class="auto"></div>
+      <div class="fld"><label>行业标保（元，自动算）</label><input id="industry_std_premium" readonly class="auto"></div>
+      <div class="fld"><label>受理件数（自动算）</label><input id="accept_count" readonly class="auto"></div>
+      <div class="fld"><label>长短险标识（自动算）</label><input id="ls_flag" readonly class="auto"></div>
+    </div>
+    <div class="hint">保额 ↔ 规模保费 双向自动换算：填其一自动算另一（需该产品在「保费测算」模块已导入费率表；未导入则手动填写）。行业标保折标率 = min(缴费年期×10, 100)%：趸交(1年)=10% · 3年=30% · 5年=50% · 10年=100% · 10年及以上封顶100%。</div>
+  </div>
+
+  <!-- ⑧ 关键日期 -->
+  <div class="sec">
+    <h3>关键日期</h3>
+    <div class="grid">
+      <div class="fld"><label>投保日期</label><input type="date" name="apply_date" value="{{ row.apply_date or '' }}"></div>
+      <div class="fld"><label>承保日期</label><input type="date" name="underwrite_date" value="{{ row.underwrite_date or '' }}"></div>
+      <div class="fld"><label>保单生效日期</label><input type="date" name="effective_date" value="{{ row.effective_date or '' }}"></div>
+      <div class="fld"><label>回访成功日期</label><input type="date" name="callback_date" value="{{ row.callback_date or '' }}"></div>
+      <div class="fld"><label>撤单日期</label><input type="date" name="cancel_date" value="{{ row.cancel_date or '' }}"></div>
+      <div class="fld"><label>撤单原因（非强制）</label><input name="cancel_reason" value="{{ row.cancel_reason or '' }}"></div>
+    </div>
+  </div>
+
+  <!-- ⑨ 标识类 -->
+  <div class="sec">
+    <h3>业务标识</h3>
+    <div class="grid">
+      <div class="fld"><label>自互保件标识（自动带出）</label>
+        <input value="{{ '互保件' if row and row.self_policy_flag=='mutual' else ('自保件' if row and row.self_policy_flag=='self' else '') }}" readonly class="auto"></div>
+      <div class="fld"><label>出单类型</label>
+        <select name="order_type">
+          <option value="">请选择</option>
+          {% for c,n in order_types %}<option value="{{ c }}" {{ 'selected' if (row and row.order_type==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>是否自动垫交</label>
+        <select name="auto_loan">
+          {% for c,n in yesno %}<option value="{{ c }}" {{ 'selected' if (row and row.auto_loan==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>保单类型（手工录单强制在职单）</label>
+        <select name="policy_kind">
+          <option value="">请选择</option>
+          {% for c,n in policy_kinds %}<option value="{{ c }}" {{ 'selected' if ((row and row.policy_kind==c) or (not row and c=='in_service')) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>双录单标识</label>
+        <select name="dual_record_flag">
+          {% for c,n in yesno %}<option value="{{ c }}" {{ 'selected' if (row and row.dual_record_flag==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>双录类型</label>
+        <select name="dual_record_type">
+          <option value="">请选择</option>
+          {% for c,n in dual_types %}<option value="{{ c }}" {{ 'selected' if (row and row.dual_record_type==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>双录状态</label>
+        <select name="dual_record_status">
+          <option value="">请选择</option>
+          {% for c,n in dual_status %}<option value="{{ c }}" {{ 'selected' if (row and row.dual_record_status==c) else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fld"><label>税优产品标识</label>
+        <select name="tax_pref_flag">
+          <option value="">空白</option>
+          <option value="yes" {{ 'selected' if row and row.tax_pref_flag=='yes' else '' }}>税优产品</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑩ 附件 -->
+  <div class="sec">
+    <h3>后台附件上传（投保人/被保人身份证正反面强制；其余非强制）</h3>
+    {% for kind in attach_kinds %}
+    <div class="att-row">
+      <div class="lab">{{ attach_labels.get(kind, kind) }}
+        {% if kind in ['app_idcard_front','app_idcard_back','ins_idcard_front','ins_idcard_back'] %}<span class="att-req">［强制正反面］</span>{% endif %}
+      </div>
+      <input type="file" name="{{ kind }}" accept=".pdf,.ofd,.jpg,.jpeg,.png,.zip,.doc,.docx,.xls,.xlsx">
+      {% set cur = row and getattr(row, kind) if row else None %}
+      {% if cur %}
+      <a class="cur" href="{{ url_for('crm.policy_order_file', oid=row.id, kind=kind) }}" target="_blank">查看当前文件</a>
+      <label class="hint"><input type="checkbox" name="del_{{ kind }}" value="1"> 删除</label>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ⑪ 备注 + 保存 -->
+  <div class="sec">
+    <h3>备注</h3>
+    <div class="grid"><div class="fld full"><textarea name="note" rows="3" style="width:100%;border:1px solid #E0D2C0;border-radius:8px;padding:8px;font-size:13px">{{ row.note or '' }}</textarea></div></div>
+  </div>
+
+  <div class="save-bar">
+    <button class="po-btn primary" type="submit">保存投保订单</button>
+    <a class="po-btn" href="{{ url_for('crm.policy_orders') }}">返回列表</a>
+  </div>
+</form>
+
+<script>
+  var PROD_MAP = {{ prod_map|tojson }};
+  var REGION = {{ regions|tojson }};
+  var SAVED = {
+    app: {prov:'{{ row.app_addr_province or '' }}', city:'{{ row.app_addr_city or '' }}', county:'{{ row.app_addr_county or '' }}'},
+    ins: {prov:'{{ row.ins_addr_province or '' }}', city:'{{ row.ins_addr_city or '' }}', county:'{{ row.ins_addr_county or '' }}'}
+  };
+  function num(v){ v = parseFloat(v); return isNaN(v) ? 0 : v; }
+  function pad(n){ return n<10 ? '0'+n : ''+n; }
+
+  function parseIdcard(id){
+    var s = (id||'').replace(/\s/g,'');
+    if(s.length !== 18) return null;
+    var gd = (parseInt(s[16]) % 2 === 1) ? '男' : '女';
+    var birth = s.slice(6,10)+'-'+s.slice(10,12)+'-'+s.slice(12,14);
+    var b = new Date(birth); var t = new Date();
+    var age = t.getFullYear()-b.getFullYear()-((t.getMonth()+1)<(b.getMonth()+1) || ((t.getMonth()+1)===(b.getMonth()+1) && t.getDate()<b.getDate()) ? 1 : 0);
+    return {gender: gd, birth: birth, age: age};
+  }
+
+  function fetchAgent(){
+    var no = document.getElementById('agent_no').value.trim();
+    if(!no) return;
+    fetch('{{ url_for("crm.policy_order_agent_json") }}?no='+encodeURIComponent(no))
+      .then(r=>r.json()).then(d=>{
+        if(d.found){
+          document.getElementById('agent_name').value = d.agent_name||'';
+          document.getElementById('agent_province').value = d.agent_province||'';
+          document.getElementById('agent_branch').value = d.agent_branch||'';
+          document.getElementById('agent_agency').value = d.agent_agency||'';
+          document.getElementById('agent_org').value = d.agent_org||'';
+        } else {
+          alert('代理人工号 '+no+' 在人力清单中查不到，无法录入');
+        }
+      });
+  }
+
+  function fillCustomer(prefix){
+    var id = document.getElementById(prefix+'_idcard').value.trim();
+    var info = parseIdcard(id);
+    if(info){
+      document.getElementById(prefix+'_gender').value = info.gender;
+      document.getElementById(prefix+'_birth').value = info.birth;
+      document.getElementById(prefix+'_age').value = info.age;
+    }
+    if(id.length === 18){
+      fetch('{{ url_for("crm.policy_order_customer_json") }}?idcard='+encodeURIComponent(id))
+        .then(r=>r.json()).then(d=>{
+          if(d.code) document.getElementById(prefix+'_code').value = d.code;
+          if(d.found){
+            if(d.name) document.getElementById(prefix+'_name').value = d.name;
+            if(d.mobile) document.getElementById(prefix+'_mobile').value = d.mobile;
+            if(d.bank_name) document.getElementById(prefix+'_bank_name').value = d.bank_name;
+            if(d.bank_account) document.getElementById(prefix+'_bank_account').value = d.bank_account;
+            if(d.addr_province) document.getElementById(prefix+'_addr_province').value = d.addr_province;
+            if(d.addr_city) document.getElementById(prefix+'_addr_city').value = d.addr_city;
+            if(d.addr_county) document.getElementById(prefix+'_addr_county').value = d.addr_county;
+            if(d.addr_street) document.getElementById(prefix+'_addr_street').value = d.addr_street;
+          }
+        });
+    }
+  }
+  function parseApp(){ fillCustomer('app'); }
+  function parseIns(){ fillCustomer('ins'); }
+
+  function onInsurer(){
+    var ins = document.getElementById('insurer_name').value;
+    var sel = document.getElementById('product_name');
+    sel.innerHTML = '<option value="">请选择</option>';
+    (PROD_MAP[ins]||[]).forEach(function(p){
+      var o = document.createElement('option'); o.value=p; o.text=p; sel.appendChild(o);
+    });
+  }
+
+  function fetchProduct(){
+    var ins = document.getElementById('insurer_name').value;
+    var p = document.getElementById('product_name').value;
+    if(!ins || !p) return;
+    fetch('{{ url_for("crm.policy_order_product_json") }}?insurer='+encodeURIComponent(ins)+'&product='+encodeURIComponent(p))
+      .then(r=>r.json()).then(d=>{
+        if(d.found){
+          document.getElementById('product_code').value = d.product_code||'';
+          document.getElementById('insurance_type').value = d.insurance_type||'';
+          if(d.fyc){ document.getElementById('commission_rate').value = d.fyc; calcComm(); }
+        }
+      });
+  }
+
+  // —— 省市区三级联动（省 → 市 → 县区）——
+  function onProvinceChange(prefix){
+    var prov = document.getElementById(prefix+'_addr_province').value;
+    var citySel = document.getElementById(prefix+'_addr_city');
+    citySel.innerHTML = '<option value="">— 请选择 —</option>';
+    // REGION 结构：省 → {市: [县区]}，市名用 Object.keys 取
+    Object.keys(REGION[prov]||{}).forEach(function(c){
+      var o = document.createElement('option'); o.value=c; o.text=c; citySel.appendChild(o);
+    });
+    var countySel = document.getElementById(prefix+'_addr_county');
+    countySel.innerHTML = '<option value="">— 请选择 —</option>';
+  }
+  function onCityChange(prefix){
+    var prov = document.getElementById(prefix+'_addr_province').value;
+    var city = document.getElementById(prefix+'_addr_city').value;
+    var list = (REGION[prov] && REGION[prov][city]) || [];
+    var countySel = document.getElementById(prefix+'_addr_county');
+    countySel.innerHTML = '<option value="">— 请选择 —</option>';
+    list.forEach(function(c){
+      var o = document.createElement('option'); o.value=c; o.text=c; countySel.appendChild(o);
+    });
+  }
+  function loadCity(prefix){
+    var s = SAVED[prefix];
+    if(!s || !s.prov) return;
+    onProvinceChange(prefix);
+    document.getElementById(prefix+'_addr_city').value = s.city || '';
+    onCityChange(prefix);
+    document.getElementById(prefix+'_addr_county').value = s.county || '';
+  }
+
+  // —— 投保人＝被保人 同一人 ——
+  function setInsLock(on){
+    ['ins_name','ins_idcard','ins_mobile','ins_addr_province','ins_addr_city','ins_addr_county','ins_addr_street','ins_bank_name','ins_bank_account'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el){ el.disabled = on; el.style.background = on ? '#F3EFE8' : ''; }
+    });
+  }
+  function copyAppToIns(){
+    document.getElementById('ins_name').value = document.getElementById('app_name').value;
+    document.getElementById('ins_idcard').value = document.getElementById('app_idcard').value;
+    document.getElementById('ins_mobile').value = document.getElementById('app_mobile').value;
+    document.getElementById('ins_addr_province').value = document.getElementById('app_addr_province').value;
+    onProvinceChange('ins');
+    document.getElementById('ins_addr_city').value = document.getElementById('app_addr_city').value;
+    onCityChange('ins');
+    document.getElementById('ins_addr_county').value = document.getElementById('app_addr_county').value;
+    document.getElementById('ins_addr_street').value = document.getElementById('app_addr_street').value;
+    document.getElementById('ins_bank_name').value = document.getElementById('app_bank_name').value;
+    document.getElementById('ins_bank_account').value = document.getElementById('app_bank_account').value;
+    parseIns();
+  }
+  function toggleSame(){
+    if(document.getElementById('same_as_app').checked){ copyAppToIns(); }
+    setInsLock(document.getElementById('same_as_app').checked);
+  }
+
+  // —— 保额 ↔ 规模保费 双向自动测算（复用保费测算因子表）——
+  function calcSaPremium(mode){
+    var insurer = document.getElementById('insurer_name').value;
+    var product = document.getElementById('product_name').value;
+    var sex = document.getElementById('ins_gender').value;
+    var age = document.getElementById('ins_age').value;
+    var payTerm = document.getElementById('pay_years').value;
+    if(!insurer || !product || !sex || !age || !payTerm) return;
+    var val = (mode==='sa') ? num(document.getElementById('sum_assured').value) : num(document.getElementById('scale_premium').value);
+    if(!val) return;
+    fetch('{{ url_for("crm.policy_order_calc_json") }}?insurer='+encodeURIComponent(insurer)+'&product='+encodeURIComponent(product)+'&sex='+encodeURIComponent(sex)+'&age='+encodeURIComponent(age)+'&pay_term='+encodeURIComponent(payTerm)+'&mode='+mode+'&value='+val)
+      .then(r=>r.json()).then(d=>{
+        if(d.ok){
+          if(mode==='sa'){ document.getElementById('scale_premium').value = d.scale_premium; }
+          else { document.getElementById('sum_assured').value = d.sum_assured; }
+          calcComm(); calcStd();
+        }
+        // 未配置费率表等产品不支持时静默跳过，由用户手动填写
+      });
+  }
+
+  function calcComm(){
+    var scale = num(document.getElementById('scale_premium').value);
+    var rate = num(document.getElementById('commission_rate').value);
+    document.getElementById('commission').value = (scale*rate/100).toFixed(2);
+  }
+
+  function calcStd(){
+    var elPy = document.getElementById('pay_years');
+    var py = elPy ? parseInt(elPy.value || '0', 10) : 0;
+    if(!py){  // 未选缴费年期 → 按缴费方式+保险年期兜底推算
+      var pm = document.getElementById('pay_method').value;
+      var ip = document.getElementById('ins_period').value;
+      py = (pm==='lump') ? 1 : (ip==='1year' ? 1 : 10);
+    }
+    var coef = Math.min(py, 10);
+    document.getElementById('industry_std_rate').value = (coef*10).toFixed(2) + '%';
+    // 行业标保(元) = 规模保费 × 折标率% ÷ 100（coef×10 为百分数，故再 ÷10）
+    document.getElementById('industry_std_premium').value = (num(document.getElementById('scale_premium').value)*coef/10).toFixed(2);
+    document.getElementById('accept_count').value = (py>1 ? 1 : 0);
+    document.getElementById('ls_flag').value = (py===1 ? '短期险' : '长期险');
+  }
+
+  // 初始渲染（编辑页回填计算值）
+  window.addEventListener('load', function(){
+    loadCity('app'); loadCity('ins');
+    if(document.getElementById('same_as_app').checked){ setInsLock(true); }
+    calcComm(); calcStd();
+    {% if row %}
+    // 编辑页：用已存值回填只读测算框
+    document.getElementById('commission').value = '{{ '%.2f' % row.commission if row and row.commission else '0.00' }}';
+    document.getElementById('industry_std_rate').value = '{{ '%.2f' % row.industry_std_rate if row and row.industry_std_rate else '0.00' }}%';
+    document.getElementById('industry_std_premium').value = '{{ '%.2f' % row.industry_std_premium if row and row.industry_std_premium else '0.00' }}';
+    document.getElementById('accept_count').value = '{{ row.accept_count if row else 0 }}';
+    document.getElementById('ls_flag').value = '{{ '长期险' if row and row.ls_flag=="long" else ("短期险" if row and row.ls_flag=="short" else "") }}';
+    {% endif %}
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% block title %}差勤申请 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">差勤申请
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（请假 / 出差 / 公出 / 补卡，复用审批流程）</small>
+  </h2>
+
+  {# ============ 提交差勤申请：按类型动态显示字段 ============ #}
+  {# 任意登录的内部员工均可提交；请假分支的额度按「累计工作年限」分级（与休假申请同口径） #}
+  <div class="card" style="padding:18px;margin-bottom:18px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:14px">提交差勤申请</div>
+
+    <form method="post" action="{{ url_for('oa.attendance_new') }}" id="attForm"
+          enctype="multipart/form-data">
+      {# 类型切换（分段按钮）：点击只切换界面字段，真正的值写进隐藏域 #}
+      <input type="hidden" name="type" id="attType" value="{{ attend_types[0] }}">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        {% for t in attend_types %}
+        <button type="button" class="att-tab{{ ' on' if loop.first }}"
+                data-type="{{ t }}"
+                style="padding:8px 18px;border:1px solid #E2D8CA;border-radius:9px;background:#FCFAF7;
+                       color:#5C554D;font-size:13.5px;cursor:pointer;transition:.16s">{{ t }}</button>
+        {% endfor %}
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-start">
+        {# —— 请假专有：假期类别（额度按工龄分级） —— #}
+        <div class="fld" data-only="请假" style="min-width:220px;flex:0 1 260px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">请假类别 *</div>
+          <select name="leave_type" id="ltSel" style="width:100%;padding:9px 10px">
+            <option value="">请选择</option>
+            {% for lt in leave_types %}
+              {% set q = my_quotas.get(lt.name) %}
+              <option value="{{ lt.name }}"
+                      data-unit="{{ lt.unit or 'day' }}"
+                      data-attach="{{ lt.need_attach or '0' }}"
+                      data-hint="{{ lt.attach_hint or '' }}">
+                {{ lt.name }}（{{ '不限额度' if (q and q.quota is none) else ('剩 ' ~ ('%g'|format(q.remain)) ~ (' 小时' if lt.unit == 'hour' else ' 天') if q else '—') }}）
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# —— 请假 / 出差 / 公出：起止时间 + 天数 —— #}
+        <div class="fld" data-not="补卡" style="min-width:200px;flex:0 1 230px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">开始时间 *</div>
+          <input type="datetime-local" name="start_time" style="width:100%;padding:9px 10px">
+        </div>
+        <div class="fld" data-not="补卡" style="min-width:200px;flex:0 1 230px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">结束时间 *</div>
+          <input type="datetime-local" name="end_time" style="width:100%;padding:9px 10px">
+        </div>
+        <div class="fld" data-not="补卡" style="min-width:110px;flex:0 1 130px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">时长（<span id="unitTxt">天</span>）</div>
+          <input name="days" id="attDays" placeholder="自动计算" style="width:100%;padding:9px 10px">
+        </div>
+
+        {# —— 出差 / 公出专有：地点 + 出行方式 —— #}
+        <div class="fld" data-only="出差,公出" style="min-width:220px;flex:1 1 280px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">
+            <span data-label="出差">出差地点</span><span data-label="公出">外出地点</span> *</div>
+          <input name="place" placeholder="如 深圳市南山区 / 广州市天河区客户处" style="width:100%;padding:9px 10px">
+        </div>
+        <div class="fld" data-only="出差,公出" style="min-width:170px;flex:0 1 190px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">出行方式 *</div>
+          <select name="transport" style="width:100%;padding:9px 10px">
+            <option value="">请选择</option>
+            {% for tr in transports %}<option value="{{ tr }}">{{ tr }}</option>{% endfor %}
+          </select>
+        </div>
+
+        {# —— 补卡专有：漏卡日期 + 补卡时段 + 实际打卡时间 —— #}
+        <div class="fld" data-only="补卡" style="min-width:170px;flex:0 1 190px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">漏卡日期 *</div>
+          <input type="date" name="card_date" value="{{ today }}" style="width:100%;padding:9px 10px">
+        </div>
+        <div class="fld" data-only="补卡" style="min-width:140px;flex:0 1 160px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">补卡时段 *</div>
+          <select name="card_slot" style="width:100%;padding:9px 10px">
+            {% for cs in card_slots %}<option value="{{ cs }}">{{ cs }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fld" data-only="补卡" style="min-width:140px;flex:0 1 160px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">实际打卡时间</div>
+          <input type="time" name="card_time" style="width:100%;padding:9px 10px">
+        </div>
+
+        {# —— 通用：事由（必填） —— #}
+        <div class="fld" style="flex:1 1 100%;min-width:260px">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">
+            <span data-label="请假">请假具体事由</span><span data-label="出差">出差事由 / 工作内容</span><span data-label="公出">外出事由</span><span data-label="补卡">补卡事由</span> *</div>
+          <textarea name="reason" rows="2" style="width:100%;padding:9px 10px"
+                    placeholder="请具体说明，如「回梅州探亲（父母）」「拜访平安人寿广东分公司洽谈银保合作」"></textarea>
+        </div>
+
+        {# —— 请假专有：证明附件（病假→病例、婚假→结婚证、产假→生育证明；仅须证明的假期显示） —— #}
+        <div class="fld" data-only="请假" id="leaveAttachFld" style="flex:1 1 100%;min-width:260px;display:none">
+          <div style="font-size:12px;color:#9C9288;margin-bottom:5px">
+            证明附件 * <span id="leaveAttachHint" style="color:#C86432"></span></div>
+          <input type="file" name="attach" id="leaveAttachIn" multiple
+                 accept=".pdf,.ofd,.xml,.jpg,.jpeg,.png,.gif,.bmp,.webp,.doc,.docx,.xls,.xlsx,.zip"
+                 style="font-size:13px">
+          <div style="font-size:11.5px;color:#9C9288;margin-top:6px">
+            仅病假 / 婚假 / 产假 / 流产假 / 工伤假等「须证明」的假期需要上传；支持 PDF / 图片 / Office / zip，单文件 ≤ 10MB。
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button type="submit" class="btn">提交申请</button>
+        <span id="attHint" style="font-size:12px;color:#9C9288"></span>
+      </div>
+    </form>
+  </div>
+
+  {# ============ 我的假期额度：年假按累计工作年限分级（法定口径） ============ #}
+  <div class="card" style="padding:16px 18px;margin-bottom:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div style="font-size:14px;font-weight:600">
+        我的假期额度（{{ year }} 年度）
+        {% if me %}<span style="font-size:12px;color:#9C9288;font-weight:400">
+          ｜ {{ me.name }}{% if me.work_start_date %} ｜ 参加工作 {{ me.work_start_date }}{% elif me.hire_date %} ｜ 入职 {{ me.hire_date }}{% endif %}</span>
+        {% else %}<span style="font-size:12px;color:#9C9288;font-weight:400">｜ 当前登录账号未对应员工档案，额度按最低档兜底</span>{% endif %}
+      </div>
+      <a href="{{ url_for('hr.leave_apply') }}" style="font-size:13px;color:#fff;background:#C86432;text-decoration:none;padding:8px 16px;border-radius:9px">休假申请（带额度明细）→</a>
+    </div>
+    <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+      {% for lt in leave_types %}
+        {% set q = my_quotas.get(lt.name) %}
+        <div style="border:1px solid #F0E8DC;border-radius:10px;padding:10px 13px;background:#FDFBF8">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-size:13.5px;font-weight:600">{{ lt.name }}{% if lt.need_attach == '1' %}<span style="font-size:10.5px;color:#C86432">·需{{ lt.attach_hint or '证明' }}</span>{% endif %}</span>
+            {% set u = '小时' if lt.unit == 'hour' else '天' %}
+            {% if q and q.quota is none %}
+              <span style="font-size:12.5px;color:#5C554D">{% if lt.unit == 'hour' %}已休 <b style="color:#C86432">{{ '%g'|format(q.used or 0) }}</b> 小时{% else %}不限额度{% endif %}</span>
+            {% elif q %}
+              <span style="font-size:12.5px;color:#5C554D">应享 <b style="color:#C86432">{{ '%g'|format(q.quota) }}</b> {{ u }} ｜ 剩 <b style="color:#166534">{{ '%g'|format(q.remain) }}</b> {{ u }}</span>
+            {% else %}
+              <span style="font-size:12.5px;color:#BDB2A5">—</span>
+            {% endif %}
+          </div>
+          {% if q and q.mode == 'tier' %}
+          <div style="font-size:11.5px;color:#9C9288;margin-top:5px">{{ q.note }}</div>
+          {% elif q and q.note %}
+          <div style="font-size:11.5px;color:#9C9288;margin-top:5px">{{ q.note }}</div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div style="color:#9C9288;font-size:13px">人事尚未配置假期类型（可到「人事 → 假期设置」添加）</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ============ 出勤数据：CSV 批量导入 + 月度查询入口（导入需 hr.attendance.manage 权限） ============ #}
+  <div class="card" style="padding:16px 18px;margin-bottom:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600">出勤数据</div>
+      <a href="{{ url_for('oa.attendance_records') }}"
+         style="font-size:13px;color:#E6823C;text-decoration:none">查看月度出勤 →</a>
+    </div>
+    {% if can_attendance_manage %}
+    <form method="post" action="{{ url_for('oa.attendance_import') }}" enctype="multipart/form-data"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">CSV 文件 *</div>
+        <input type="file" name="file" accept=".csv" required style="font-size:13px"></div>
+      <button type="submit" class="btn">导入出勤数据</button>
+    </form>
+    <div style="font-size:11.5px;color:#9C9288;margin-top:8px">
+      列顺序：工号, 日期(2026-09-17), 状态(正常/迟到/早退/旷工/请假), 上班打卡, 下班打卡, 备注。同一天重复导入会覆盖旧记录。
+    </div>
+    {% else %}
+    <div style="font-size:12px;color:#9C9288">您没有出勤数据导入权限，仅可查看。</div>
+    {% endif %}
+  </div>
+
+  {# ============ 差勤记录（全公司）：时间/时长/地点/出行方式结构化展示 ============ #}
+  <div class="card" style="padding:8px 18px;overflow:hidden">
+    <div style="font-size:14px;font-weight:600;padding:10px 0 4px">差勤记录</div>
+    {% for it in items %}
+    <div style="padding:13px 0;border-top:1px solid #F3EDE3">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:15px;font-weight:600">
+            {% if it.code %}<span style="font-size:12px;color:#E6823C;font-weight:600;margin-right:8px">{{ it.code }}</span>{% endif %}
+            {{ it.title }}
+            <span style="font-size:12px;color:#E6823C;font-weight:400;margin-left:6px">[{{ it.type }}]</span>
+          </div>
+          <div style="font-size:12px;color:#9C9288;margin-top:5px">
+            申请人：{{ it.applicant.username if it.applicant else '未知' }}
+            {% if it.start_time %} ｜ 时间：{{ it.start_time }}{% if it.end_time %} ~ {{ it.end_time }}{% endif %}{% endif %}
+            {% if it.att_days %} ｜ 时长：{{ '%g'|format(it.att_days) }} {{ '小时' if (it.type == '请假' and it.sub_type in hour_leave_names) else '天' }}{% endif %}
+          </div>
+          <div style="font-size:12px;color:#5C554D;margin-top:5px;display:flex;flex-wrap:wrap;gap:6px 16px">
+            {% if it.place %}<span>📍 {{ it.place }}</span>{% endif %}
+            {% if it.transport %}<span>🚄 {{ it.transport }}</span>{% endif %}
+            {% if it.sub_type %}<span>{{ '请假类别' if it.type == '请假' else '补卡时段' }}：{{ it.sub_type }}</span>{% endif %}
+            <span>提交：{{ it.created_at.strftime('%Y-%m-%d %H:%M') if it.created_at else '' }}</span>
+          </div>
+          {% if it.content %}
+          <div style="font-size:12px;color:#9C9288;margin-top:5px;white-space:pre-line">{{ it.content.split('\n')[-1] }}</div>
+          {% endif %}
+          {% set alist = attach_list.get(it.id) or [] %}
+          {% if alist %}
+          <div style="font-size:12px;color:#5C554D;margin-top:6px">
+            附件：
+            {% for f in alist %}
+              <a href="{{ url_for('hr.leave_attach', aid=it.id, idx=loop.index0) }}"
+                 style="display:inline-flex;align-items:center;gap:5px;background:#FBF7F1;border:1px solid #EFE5D8;
+                        border-radius:8px;padding:2px 9px;margin:2px 6px 2px 0;color:#C86432;text-decoration:none">
+                {{ f.name }} <span style="color:#9C9288">{{ (f.size / 1024)|round(0)|int }} KB</span>
+              </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if it.status != 'pending' %}
+          <div style="font-size:12px;color:#9C9288;margin-top:3px">
+            审批人：{{ it.approver.username if it.approver else '—' }} ｜ 意见：{{ it.opinion or '—' }}
+          </div>
+          {% endif %}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex:none">
+          <span style="font-size:12px;padding:2px 8px;border-radius:10px;
+                background:{{ '#FDF3E4' if it.status=='pending' else ('#dcfce7' if it.status=='approved' else '#FBE3DD') }};
+                color:{{ '#8A5A18' if it.status=='pending' else ('#166534' if it.status=='approved' else '#991b1b') }}">
+            {{ '待审批' if it.status=='pending' else ('已通过' if it.status=='approved' else '已驳回') }}
+          </span>
+          {# 待审批且当前用户有审批权限时，显示通过/驳回（action 指向通用审批接口，服务端闸门兜底） #}
+          {% if it.status == 'pending' and can_approve %}
+          <form method="post" action="{{ url_for('oa.approval_decide', aid=it.id) }}" style="display:flex;gap:6px">
+            <input type="hidden" name="opinion" value="">
+            <button name="action" value="approve" type="submit"
+                    style="font-size:12px;color:#166534;background:#fff;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px;cursor:pointer">通过</button>
+            <button name="action" value="reject" type="submit"
+                    style="font-size:12px;color:#991b1b;background:#fff;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px;cursor:pointer">驳回</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:26px 0;text-align:center;color:#9C9288">暂无差勤记录</div>
+    {% endfor %}
+  </div>
+
+  {# ============ 前端：类型切换 + 字段显隐 + 天数自动计算 ============ #}
+  <script>
+  (function () {
+    var form = document.getElementById('attForm');
+    if (!form) return;
+    var typeInput = document.getElementById('attType');
+    var tabs = form.querySelectorAll('.att-tab');
+    var daysEl = document.getElementById('attDays');
+    var hint = document.getElementById('attHint');
+    var ltSel = form.querySelector('[name=leave_type]');
+    var unitTxt = document.getElementById('unitTxt');
+    var attFld = document.getElementById('leaveAttachFld');
+    var attIn = document.getElementById('leaveAttachIn');
+    var attHint = document.getElementById('leaveAttachHint');
+
+    // 请假类别的单位（事假=小时）与附件要求；顺带刷新时长
+    function syncLeave() {
+      var o = ltSel ? ltSel.options[ltSel.selectedIndex] : null;
+      var isH = !!(o && o.getAttribute('data-unit') === 'hour');
+      var need = !!(o && o.getAttribute('data-attach') === '1');
+      if (unitTxt) unitTxt.textContent = isH ? '小时' : '天';
+      var showAtt = (typeInput.value === '请假') && need;
+      if (attFld) attFld.style.display = showAtt ? '' : 'none';
+      if (attIn) attIn.required = showAtt;
+      if (attHint) attHint.textContent = need ? ('（' + (o.getAttribute('data-hint') || '证明附件') + '）') : '';
+      calcDays();
+    }
+
+    // 按类型显示/隐藏字段：data-only="出差,公出" 只在该类型显示；data-not="补卡" 非补卡时显示
+    function applyType(t) {
+      typeInput.value = t;
+      tabs.forEach(function (b) {
+        b.classList.toggle('on', b.getAttribute('data-type') === t);
+        b.style.background = b.classList.contains('on') ? '#E6823C' : '#FCFAF7';
+        b.style.color = b.classList.contains('on') ? '#fff' : '#5C554D';
+        b.style.borderColor = b.classList.contains('on') ? '#E6823C' : '#E2D8CA';
+      });
+      form.querySelectorAll('[data-only]').forEach(function (el) {
+        var list = (el.getAttribute('data-only') || '').split(',');
+        el.style.display = list.indexOf(t) >= 0 ? '' : 'none';
+      });
+      form.querySelectorAll('[data-not]').forEach(function (el) {
+        var list = (el.getAttribute('data-not') || '').split(',');
+        el.style.display = list.indexOf(t) >= 0 ? 'none' : '';
+      });
+      // 标签里的默认文案 & 占位提示按类型切换
+      form.querySelectorAll('[data-label]').forEach(function (sp) {
+        sp.style.display = (sp.getAttribute('data-label') === t) ? '' : 'none';
+      });
+      hint.textContent = ({
+        '请假': '请假按「累计工作年限」分级核定额度，超出会被拦下；事假按小时计，病假/婚假/产假须传证明附件。',
+        '出差': '出差请填明目的地与出行方式，审批后可作差旅报销依据。',
+        '公出': '公出指因公在市内外出办事（不过夜），地点请写到具体单位/地址。',
+        '补卡': '补卡请选择漏卡的日期与时段，考勤管理员据实补录。'
+      })[t] || '';
+      if (typeof syncLeave === 'function') { syncLeave(); }
+    }
+    tabs.forEach(function (b) {
+      b.addEventListener('click', function () { applyType(b.getAttribute('data-type')); });
+    });
+
+    // 时长自动计算：与后端同口径（跨日含首尾；当天 8 小时=1 天、0.5 天为一档）；
+    // 事假（小时单位）按小时算：当天取实际小时、跨天按天数×8，向上取整（不足 1 小时按 1 小时）
+    function calcDays() {
+      var s = form.querySelector('[name=start_time]').value;
+      var e = form.querySelector('[name=end_time]').value;
+      if (!s || !e) return;
+      var sd = new Date(s), ed = new Date(e);
+      if (isNaN(sd) || isNaN(ed) || ed < sd) { daysEl.value = ''; return; }
+      var d = Math.round((new Date(ed.getFullYear(), ed.getMonth(), ed.getDate()) -
+                          new Date(sd.getFullYear(), sd.getMonth(), sd.getDate())) / 86400000);
+      var o = ltSel ? ltSel.options[ltSel.selectedIndex] : null;
+      var isH = (typeInput.value === '请假') && !!(o && o.getAttribute('data-unit') === 'hour');
+      var v;
+      if (isH) {
+        v = d === 0 ? Math.ceil((ed - sd) / 3600000) : Math.ceil((d + 1) * 8);
+      } else if (d === 0) {
+        var h = (ed - sd) / 3600000;
+        v = h >= 8 ? 1 : (h <= 0 ? 0 : Math.max(Math.round(h / 8 * 2) / 2, 0.5));
+      } else {
+        v = d + 1;
+      }
+      daysEl.value = v ? v : '';
+    }
+    form.querySelector('[name=start_time]').addEventListener('change', calcDays);
+    form.querySelector('[name=end_time]').addEventListener('change', calcDays);
+    if (ltSel) ltSel.addEventListener('change', syncLeave);
+
+    // 提交前做一次可见字段的必填校验（隐藏字段不加 required，避免浏览器卡住提交）
+    form.addEventListener('submit', function (ev) {
+      var t = typeInput.value, miss = '';
+      var get = function (n) { var el = form.querySelector('[name=' + n + ']'); return el ? el.value.trim() : ''; };
+      if (t === '请假') {
+        if (!get('leave_type')) miss = '请选择请假类别';
+        else if (!get('start_time') || !get('end_time')) miss = '请填写请假的开始与结束时间';
+        else {
+          var o = ltSel.options[ltSel.selectedIndex];
+          if (o && o.getAttribute('data-attach') === '1' && (!attIn.files || !attIn.files.length)) {
+            miss = '「' + o.text.split('（')[0] + '」必须上传'
+                 + (o.getAttribute('data-hint') || '证明附件') + '后才能提交';
+          }
+        }
+      } else if (t === '出差' || t === '公出') {
+        if (!get('place')) miss = '请填写' + (t === '出差' ? '出差' : '外出') + '地点';
+        else if (!get('transport')) miss = '请选择出行方式';
+        else if (!get('start_time') || !get('end_time')) miss = '请填写开始与结束时间';
+      } else if (t === '补卡') {
+        if (!get('card_date')) miss = '请选择漏卡日期';
+      }
+      if (!miss && !get('reason')) miss = '请填写事由';
+      if (miss) { ev.preventDefault(); alert(miss); }
+    });
+
+    applyType(typeInput.value);
+  })();
+  </script>
+{% endblock %}

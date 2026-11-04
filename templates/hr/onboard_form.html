@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>入职信息填报 · 海盈通保</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0 }
+  body { font-family:"Microsoft YaHei",sans-serif; background:#F7F4EF; color:#2A2A2A; padding:24px 12px }
+  .wrap { max-width:860px; margin:0 auto }
+  .brand { display:flex; align-items:center; gap:10px; margin-bottom:18px }
+  .brand .logo { width:38px; height:38px; border-radius:9px; background:#fff; box-shadow:0 1px 4px rgba(42,42,42,.08);
+                 display:flex; align-items:center; justify-content:center; overflow:hidden }
+  .brand .logo img { width:32px; height:32px }
+  .brand .t1 { font-size:16px; font-weight:700; letter-spacing:1px }
+  .brand .t2 { font-size:11px; color:#9C9288; letter-spacing:2px }
+  .card { background:#fff; border-radius:10px; padding:22px 24px; box-shadow:0 1px 4px rgba(42,42,42,.06); margin-bottom:18px }
+  .sec-title { font-size:15px; font-weight:700; border-left:3px solid #E6823C; padding-left:9px; margin-bottom:14px }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 18px }
+  .fld label { display:block; font-size:12px; color:#9C9288; margin-bottom:4px }
+  .fld input, .fld select { width:100%; padding:8px 10px; border:1px solid #E2D8CA; border-radius:6px; font-size:14px; background:#fff }
+  .fld input[readonly] { background:#F7F4EF; color:#6B5D4F }
+  .hint { font-size:12px; color:#9C9288; margin:6px 0 0 }
+  .row-table { width:100%; border-collapse:collapse; font-size:13px }
+  .row-table th { font-weight:600; color:#6B5D4F; background:#FCFAF7; padding:7px 8px; border:1px solid #F3EDE3; text-align:left; white-space:nowrap }
+  .row-table td { padding:5px 6px; border:1px solid #F3EDE3 }
+  .row-table input { width:100%; padding:6px 8px; border:1px solid #E2D8CA; border-radius:5px; font-size:13px }
+  .btn { background:#E6823C; color:#fff; border:none; padding:10px 26px; border-radius:6px; font-size:14px; cursor:pointer }
+  .btn-ghost { background:#fff; color:#6B5D4F; border:1px solid #E2D8CA; padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer }
+  .del { color:#b91c1c; background:#fff; border:1px solid #F3D9D3; border-radius:5px; padding:4px 8px; font-size:12px; cursor:pointer }
+  .ok-tip { background:#EAF7EC; border:1px solid #BFE3C6; color:#166534; border-radius:8px; padding:14px 16px; margin-bottom:18px; font-size:14px }
+  .ret-tip { background:#FDF1EC; border:1px solid #F0C9BE; color:#9A3412; border-radius:8px; padding:14px 16px; margin-bottom:18px; font-size:14px; line-height:1.7 }
+  .view-table { width:100%; border-collapse:collapse; font-size:13.5px }
+  .view-table td { padding:8px 10px; border-bottom:1px solid #F3EDE3 }
+  .view-table td:first-child { width:120px; color:#9C9288; white-space:nowrap }
+  @media (max-width:640px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="logo"><img src="/static/img/logo-mark.png" alt="logo"></div>
+    <div>
+      <div class="t1">海盈通保 · 入职信息填报</div>
+      <div class="t2">ONBOARDING FORM</div>
+    </div>
+  </div>
+
+  {% if submitted %}
+  <div class="ok-tip">✓ 提交成功！您填写的信息已回传至人事管理主管处，主管确认后即完成入职入册。</div>
+  {% endif %}
+
+  {# 身份卡：工号由系统自动生成，姓名/手机来自建号信息 #}
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="width:52px;height:52px;border-radius:50%;background:#FBEEE2;color:#C86432;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">{{ (o.name or '?')[:1] }}</div>
+      <div>
+        <div style="font-size:17px;font-weight:700">{{ o.name }}</div>
+        <div style="font-size:12px;color:#9C9288;margin-top:2px">员工编码：{{ o.employee_no }}
+          ｜ 部门：{{ o.org.name if o.org else '待分配' }} ｜ 岗位：{{ o.position or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if readonly %}
+    {# 只读回显：已提交或状态不可填报 #}
+    {% if o.status == 'submitted' %}<div class="ok-tip">您已提交入职信息，等待人事管理主管确认，请耐心等待。</div>{% endif %}
+    {% if o.status == 'confirmed' %}<div class="ok-tip">您的入职信息已由人事主管确认入册，欢迎加入海盈通保！</div>{% endif %}
+    <div class="card">
+      <div class="sec-title">联系信息</div>
+      <table class="view-table">
+        <tr><td>个人手机</td><td>{{ o.phone or '—' }}</td></tr>
+        <tr><td>公司邮箱</td><td>{{ o.email or '—' }}</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="sec-title">基本信息</div>
+      <table class="view-table">
+        <tr><td>性别</td><td>{{ o.gender or '—' }}</td></tr>
+        <tr><td>出生日期</td><td>{{ o.birth_date or '—' }}</td></tr>
+        <tr><td>参加工作日期</td><td>{{ o.work_start_date or '—' }}</td></tr>
+        <tr><td>入职日期</td><td>{{ o.hire_date or '—' }}</td></tr>
+        <tr><td>婚姻状况</td><td>{{ o.marital or '—' }}</td></tr>
+        <tr><td>是否有子女</td><td>{{ o.children or '—' }}</td></tr>
+        <tr><td>籍贯</td><td>{{ o.hometown or '—' }}</td></tr>
+        <tr><td>兴趣爱好</td><td>{{ o.hobby or '—' }}</td></tr>
+        <tr><td>最后工作日</td><td>{{ o.last_job or '无' }}</td></tr>
+      </table>
+    </div>
+  {% else %}
+  {% if o.status == 'returned' %}
+  <div class="ret-tip">⚠ 您提交的入职信息经人事主管审核需要补充/更正，请修改后重新提交。{% if o.return_reason %}<br>退回原因：<b>{{ o.return_reason }}</b>{% endif %}</div>
+  {% endif %}
+  <form method="post" id="the-form">
+    <input type="hidden" name="work_history" id="work_history">
+    <input type="hidden" name="education" id="education">
+
+    <div class="card">
+      <div class="sec-title">联系信息</div>
+      <div class="grid">
+        <div class="fld"><label>个人手机</label><input name="phone" value="{{ o.phone or '' }}" readonly></div>
+        <div class="fld"><label>公司邮箱</label><input name="email" value="{{ o.email or '' }}" placeholder="如 name@hywinpro.cn"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">基本信息</div>
+      <div class="grid">
+        <div class="fld"><label>性别</label>
+          <select name="gender"><option value="">请选择</option>
+            <option{{ ' selected' if o.gender == '男' }}>男</option><option{{ ' selected' if o.gender == '女' }}>女</option></select></div>
+        <div class="fld"><label>出生日期</label><input type="date" name="birth_date" value="{{ o.birth_date or '' }}"></div>
+        <div class="fld"><label>参加工作日期</label><input type="date" name="work_start_date" value="{{ o.work_start_date or '' }}"></div>
+        <div class="fld"><label>婚姻状况</label>
+          <select name="marital"><option value="">请选择</option>
+            <option{{ ' selected' if o.marital == '未婚' }}>未婚</option><option{{ ' selected' if o.marital == '已婚' }}>已婚</option><option{{ ' selected' if o.marital == '保密' }}>保密</option></select></div>
+        <div class="fld"><label>是否有子女</label>
+          <select name="children"><option value="">请选择</option>
+            <option{{ ' selected' if o.children == '是' }}>是</option><option{{ ' selected' if o.children == '否' }}>否</option></select></div>
+        <div class="fld"><label>籍贯</label><input name="hometown" value="{{ o.hometown or '' }}" placeholder="如 广东省广州市"></div>
+        <div class="fld"><label>兴趣爱好</label><input name="hobby" value="{{ o.hobby or '' }}" placeholder="无"></div>
+        <div class="fld"><label>最后工作日（上一家单位）</label><input type="date" name="last_job" value="{{ o.last_job or '' }}"></div>
+      </div>
+      <div class="hint">带 * 为建号时已录入信息（只读）；其余请如实填写，提交后由人事管理主管确认。</div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">工作履历</div>
+      <table class="row-table" id="wh-table">
+        <thead><tr><th style="width:130px">开始时间</th><th style="width:130px">结束时间</th><th>工作履历描述</th><th style="width:50px"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="margin-top:8px"><button type="button" class="btn-ghost" onclick="addWhRow()">+ 添加一段工作经历</button></div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">教育经历</div>
+      <table class="row-table" id="edu-table">
+        <thead><tr>
+          <th style="width:110px">入学时间</th><th style="width:110px">毕业时间</th><th style="width:130px">毕业学校</th>
+          <th style="width:100px">专业名称</th><th style="width:90px">学历</th><th style="width:90px">学位</th>
+          <th style="width:110px">教育类型</th><th style="width:70px">第一学历</th><th style="width:70px">最高学历</th>
+          <th style="width:60px"></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="margin-top:8px"><button type="button" class="btn-ghost" onclick="addEduRow()">+ 添加一段教育经历</button></div>
+      <div class="hint">教育类型：全日制统招 / 非全日制等；第一学历、最高学历、最高学位：是 / 否。</div>
+    </div>
+
+    <div style="text-align:center;margin:6px 0 30px">
+      <button type="submit" class="btn" onclick="return packRows()">提交入职信息</button>
+      <div class="hint" style="margin-top:8px">提交后数据将自动回传至人事管理主管处确认</div>
+    </div>
+  </form>
+
+  <script>
+  // 动态行：工作履历 / 教育经历。提交前把各行打包成 JSON 写入隐藏域。
+  function addWhRow(d) {
+    d = d || {};
+    var tb = document.querySelector('#wh-table tbody');
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><input placeholder="2021-07" value="' + (d.start||'') + '" data-k="start"></td>' +
+      '<td><input placeholder="2025-05" value="' + (d.end||'') + '" data-k="end"></td>' +
+      '<td><input placeholder="如：某公司某部门 某职务" value="' + (d.desc||'') + '" data-k="desc"></td>' +
+      '<td><button type="button" class="del" onclick="this.closest(\'tr\').remove()">删</button></td>';
+    tb.appendChild(tr);
+  }
+  function addEduRow(d) {
+    d = d || {};
+    var tb = document.querySelector('#edu-table tbody');
+    var tr = document.createElement('tr');
+    var sel = function(k, opts, val) {
+      var h = '<select data-k="' + k + '">';
+      for (var i = 0; i < opts.length; i++) {
+        h += '<option' + (val === opts[i] ? ' selected' : '') + '>' + opts[i] + '</option>';
+      }
+      return h + '</select>';
+    };
+    tr.innerHTML = '<td><input type="month" value="' + (d.start||'') + '" data-k="start"></td>' +
+      '<td><input type="month" value="' + (d.end||'') + '" data-k="end"></td>' +
+      '<td><input placeholder="学校" value="' + (d.school||'') + '" data-k="school"></td>' +
+      '<td><input placeholder="专业" value="' + (d.major||'') + '" data-k="major"></td>' +
+      '<td>' + sel('edu', ['', '博士', '硕士', '本科', '专科', '其他'], d.edu) + '</td>' +
+      '<td>' + sel('degree', ['', '学士', '硕士', '博士', '无'], d.degree) + '</td>' +
+      '<td>' + sel('edu_type', ['', '全日制统招', '非全日制'], d.edu_type) + '</td>' +
+      '<td>' + sel('first', ['否', '是'], d.first) + '</td>' +
+      '<td>' + sel('highest_edu', ['否', '是'], d.highest_edu) + '</td>' +
+      '<td><button type="button" class="del" onclick="this.closest(\'tr\').remove()">删</button></td>';
+    tb.appendChild(tr);
+  }
+  function packRows() {
+    function collect(tableId) {
+      var rows = [];
+      document.querySelectorAll('#' + tableId + ' tbody tr').forEach(function(tr) {
+        var item = {};
+        tr.querySelectorAll('[data-k]').forEach(function(el) { item[el.getAttribute('data-k')] = el.value.trim(); });
+        var has = false;
+        for (var k in item) { if (item[k]) { has = true; break; } }
+        if (has) rows.push(item);
+      });
+      return rows;
+    }
+    document.getElementById('work_history').value = JSON.stringify(collect('wh-table'));
+    document.getElementById('education').value = JSON.stringify(collect('edu-table'));
+    return true;
+  }
+  // 预填：被退回修改时把上次填写的行回填出来（首次填报时为空白）
+  {% for row in (work_history or []) %}addWhRow({{ row|tojson }});{% endfor %}
+  {% for row in (education or []) %}addEduRow({{ row|tojson }});{% endfor %}
+  </script>
+  {% endif %}
+</div>
+</body>
+</html>

@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}假期设置 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">假期设置（假期类型 · 额度 · 工龄分级）</h2>
+  <div style="font-size:12px;color:#9C9288;margin-bottom:16px">
+    两种额度模式：① <b>固定天数</b> —— 所有员工同一额度；② <b>按工龄分级</b> —— 配了「工龄档位」的假期，
+    系统按员工<b>累计工作年限</b>（参加工作日期算起，未登记则退回本单位入职日期）自动落档。
+    年假已预置法定三档：满 1 年 5 天 / 满 10 年 10 天 / 满 20 年 15 天（《职工带薪年休假条例》第三条）。
+    天数填 0 表示不限额度（如病假凭证明）。
+  </div>
+
+  <div class="card" style="padding:16px;margin-bottom:18px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增假期类型</div>
+    <form method="post" action="{{ url_for('hr.leave_type_new') }}" style="display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:5px">编码 *</div>
+        <input name="code" placeholder="如 annual" required style="padding:9px 10px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:5px">名称 *</div>
+        <input name="name" placeholder="如 年假" required style="padding:9px 10px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:5px">年度可请天数 *</div>
+        <input name="total_days" value="0" required style="padding:9px 10px;width:110px"></div>
+      <div style="display:flex;align-items:center;gap:7px;padding-bottom:9px">
+        <input type="checkbox" name="prorate" id="prNew" value="1" style="width:auto">
+        <label for="prNew" style="font-size:13px;color:#5C554D">当年新入职按剩余天数折算</label></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:5px">说明</div>
+        <input name="description" placeholder="可选" style="padding:9px 10px"></div>
+      <button type="submit" class="btn">添加</button>
+    </form>
+  </div>
+
+  {% for it in items %}
+  <div class="card" style="padding:14px 16px;margin-bottom:14px">
+    {# —— 第一行：名称 / 编码 / 当前额度模式 / 保存 · 删除 —— #}
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="min-width:0">
+        <span style="font-size:15px;font-weight:600">{{ it.name }}</span>
+        <span style="font-size:12px;color:#9C9288;font-weight:400">｜ {{ it.code }}</span>
+        {% if it.tiers %}
+          <span style="font-size:12px;color:#C86432;font-weight:600;margin-left:10px">按工龄分级（{{ it.tiers|length }} 档）</span>
+          {% if it.prorate == '1' %}<span style="font-size:11.5px;color:#8A5A18;background:#FDF3E4;padding:2px 7px;border-radius:8px;margin-left:6px">当年入职折算</span>{% endif %}
+        {% else %}
+          <span style="font-size:12px;color:#166534;font-weight:600;margin-left:10px">{{ '不限额度' if not it.total_days else ('固定 ' ~ (it.total_days|string) ~ ' 天/年') }}</span>
+          {% if it.prorate == '1' %}<span style="font-size:11.5px;color:#8A5A18;background:#FDF3E4;padding:2px 7px;border-radius:8px;margin-left:6px">当年入职折算</span>{% endif %}
+        {% endif %}
+        {% if it.description %}<div style="font-size:11.5px;color:#9C9288;margin-top:4px">{{ it.description }}</div>{% endif %}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <form method="post" action="{{ url_for('hr.leave_type_update', lid=it.id) }}" style="display:flex;gap:6px;align-items:center">
+          <input name="name" value="{{ it.name }}" style="width:84px;padding:6px 8px;font-size:13px">
+          <input name="total_days" value="{{ it.total_days }}" style="width:70px;padding:6px 8px;font-size:13px" title="固定额度天数（配了工龄档位时本值不生效）">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#5C554D">
+            <input type="checkbox" name="prorate" value="1" {% if it.prorate == '1' %}checked{% endif %} style="width:auto">折算</label>
+          <button type="submit" style="font-size:12px;color:#E6823C;background:#fff;border:1px solid #E2D8CA;padding:5px 12px;border-radius:8px;cursor:pointer">保存</button>
+        </form>
+        <form method="post" action="{{ url_for('hr.leave_type_delete', lid=it.id) }}" onsubmit="return confirm('确认删除假期类型「{{ it.name }}」？已提交的请假记录不受影响。')">
+          <button type="submit" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:5px 12px;border-radius:8px;cursor:pointer">删除</button>
+        </form>
+      </div>
+    </div>
+
+    {# —— 第二行：工龄档位（可折叠） —— #}
+    <details style="margin-top:12px" {% if it.tiers %}open{% endif %}>
+      <summary style="font-size:12.5px;color:#E6823C;cursor:pointer;outline:none">
+        工龄档位设置{% if it.tiers %}（{{ it.tiers|length }} 档，按工龄自动落档）{% else %}（未设置 → 用上面的固定天数）{% endif %}
+      </summary>
+      <div style="margin-top:10px;border:1px solid #F0E8DC;border-radius:10px;padding:10px 12px;background:#FDFBF8">
+        {% for t in it.tiers %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;{% if not loop.first %}border-top:1px solid #F3EDE3;{% endif %}">
+          <span style="font-size:13px;color:#5C554D">
+            累计工作
+            <b>满 {{ '%g'|format(t.min_years or 0) }} 年</b>
+            {% if t.max_years and t.max_years > 0 %}不满 {{ '%g'|format(t.max_years) }} 年{% else %}及以上{% endif %}
+            → <b style="color:#C86432">{{ '%g'|format(t.days) }}</b> 天/年
+          </span>
+          <form method="post" action="{{ url_for('hr.leave_tier_delete', tid=t.id) }}" onsubmit="return confirm('删除该档位？')">
+            <button type="submit" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:3px 10px;border-radius:8px;cursor:pointer">删除</button>
+          </form>
+        </div>
+        {% else %}
+        <div style="font-size:12.5px;color:#9C9288;padding:2px 0 6px">暂无档位，该假期按上方固定天数执行。</div>
+        {% endfor %}
+
+        <form method="post" action="{{ url_for('hr.leave_tier_new', lid=it.id) }}"
+              style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px;padding-top:10px;border-top:1px dashed #E8DFD2">
+          <div><div style="font-size:11.5px;color:#9C9288;margin-bottom:4px">工龄下限（含）</div>
+            <input name="min_years" value="0" style="width:88px;padding:6px 8px;font-size:13px"></div>
+          <div><div style="font-size:11.5px;color:#9C9288;margin-bottom:4px">工龄上限（不含，空=不限）</div>
+            <input name="max_years" placeholder="0" style="width:110px;padding:6px 8px;font-size:13px"></div>
+          <div><div style="font-size:11.5px;color:#9C9288;margin-bottom:4px">可休天数</div>
+            <input name="days" placeholder="如 5" style="width:88px;padding:6px 8px;font-size:13px"></div>
+          <button type="submit" style="font-size:12.5px;color:#fff;background:#E6823C;border:none;padding:7px 14px;border-radius:8px;cursor:pointer">添加档位</button>
+        </form>
+      </div>
+    </details>
+  </div>
+  {% else %}
+  <div class="card" style="padding:26px;text-align:center;color:#9C9288">暂无假期类型，可在上方添加（如 年假 / 事假 / 病假）</div>
+  {% endfor %}
+{% endblock %}

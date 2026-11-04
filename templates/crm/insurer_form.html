@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ '编辑保司' if row else '新建保司' }}{% endblock %}
+{% block pagename %}核心业务管理系统 · {{ '编辑保司档案' if row else '新建保司档案' }}{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .lm-row{background:#FFFDFA;border:1px solid #E8DCCE;border-radius:10px;padding:10px 12px;
+    margin-bottom:10px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑保司档案' if row else '新建保司档案' }}</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  保司全称为必填且唯一；其余信息可后续补充完善。
+</div>
+
+{% if not row %}
+<div class="crm-tool" style="background:#FBF6F1;border-color:#E8DCCE">
+  <label style="font-weight:600;color:#9C4E2C">内置保司库一键填充</label>
+  <select id="biSel" style="min-width:300px">
+    <option value="">— 选择一家保司 —</option>
+  </select>
+  <button class="crm-btn pri" type="button" onclick="fillBuiltin()">填充到表单</button>
+  <span style="font-size:12px;color:#9C9288">
+    内置库仅预置公知信息（全称 / 简称 / 类型 / 官网）；信用代码、许可证号、税号、法人等请核实后补录。
+  </span>
+</div>
+{% endif %}
+
+<form class="crm-form" method="post">
+  <input type="hidden" name="from_builtin" id="fromBuiltin" value="0">
+
+  <div class="crm-sec">一、基本信息</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>保司全称 <b>*</b></label>
+      <input type="text" name="name" id="fName" required value="{{ row.name if row and row.name else '' }}"
+             placeholder="如：中国人寿保险股份有限公司">
+    </div>
+    <div class="crm-fld">
+      <label>保司简称</label>
+      <input type="text" name="short_name" id="fShort" value="{{ row.short_name if row and row.short_name else '' }}"
+             placeholder="如：中国人寿">
+    </div>
+    <div class="crm-fld">
+      <label>公司类型</label>
+      <select name="insurer_type" id="fType">
+        {% for c, n in types %}
+        <option value="{{ c }}" {{ 'selected' if row and row.insurer_type == c else ('selected' if not row and c == 'life' else '') }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>合作状态</label>
+      <select name="status">
+        {% for c, n in statuses %}
+        <option value="{{ c }}" {{ 'selected' if row and row.status == c else ('selected' if not row and c == 'coop' else '') }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>官方网站</label>
+      <input type="text" name="website" id="fSite" value="{{ row.website if row and row.website else '' }}" placeholder="www.example.com">
+    </div>
+  </div>
+
+  <div class="crm-sec">二、工商与资质</div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>统一社会信用代码</label>
+      <input type="text" name="credit_code" value="{{ row.credit_code if row and row.credit_code else '' }}" placeholder="18 位">
+    </div>
+    <div class="crm-fld">
+      <label>工商注册号</label>
+      <input type="text" name="reg_no" value="{{ row.reg_no if row and row.reg_no else '' }}" placeholder="旧版 15 位（如仅有此项）">
+    </div>
+    <div class="crm-fld">
+      <label>保险许可证号</label>
+      <input type="text" name="license_no" value="{{ row.license_no if row and row.license_no else '' }}">
+    </div>
+    {# 四十一改：许可证批准设立日期（监管口径），与下方「成立日期」（工商口径）不是一回事 #}
+    <div class="crm-fld">
+      <label>许可证批准日期</label>
+      <input type="text" name="license_date" value="{{ row.license_date if row and row.license_date else '' }}"
+             placeholder="YYYY-MM-DD（监管口径，一键抓取自动带出）">
+    </div>
+    <div class="crm-fld">
+      <label>税号</label>
+      <input type="text" name="tax_no" value="{{ row.tax_no if row and row.tax_no else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>法定代表人</label>
+      <input type="text" name="legal_person" value="{{ row.legal_person if row and row.legal_person else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>注册资本</label>
+      <input type="text" name="reg_capital" value="{{ row.reg_capital if row and row.reg_capital else '' }}" placeholder="如：182.8 亿元">
+    </div>
+    <div class="crm-fld">
+      <label>成立日期</label>
+      <input type="date" name="establish_date" value="{{ row.establish_date if row and row.establish_date else '' }}">
+    </div>
+    <div class="crm-fld full">
+      <label>工商营业地址</label>
+      <input type="text" name="address" value="{{ row.address if row and row.address else '' }}">
+    </div>
+    <div class="crm-fld full">
+      <label>经营范围</label>
+      <textarea name="business_scope">{{ row.business_scope if row and row.business_scope else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-sec">三、联系与对接 <span>一个保司可登记多个联络人</span></div>
+  <div id="lmBox">
+    {% for lm in linkmen %}
+    <div class="lm-row">
+      <input type="hidden" name="lm_idx" value="{{ loop.index0 }}">
+      <div class="crm-grid">
+        <div class="crm-fld">
+          <label>联络人姓名</label>
+          <input type="text" name="lm_name_{{ loop.index0 }}" value="{{ lm.name or '' }}">
+        </div>
+        <div class="crm-fld">
+          <label>联络人身份与职务</label>
+          <input type="text" name="lm_title_{{ loop.index0 }}" value="{{ lm.title or '' }}" placeholder="如 中介渠道部 渠道经理">
+        </div>
+        <div class="crm-fld">
+          <label>联络人联系电话</label>
+          <input type="text" name="lm_phone_{{ loop.index0 }}" value="{{ lm.phone or '' }}">
+        </div>
+        <div class="crm-fld">
+          <label>联络人邮箱</label>
+          <input type="text" name="lm_email_{{ loop.index0 }}" value="{{ lm.email or '' }}" placeholder="如 name@example.com">
+        </div>
+        <div class="crm-fld full">
+          <label>备注</label>
+          <input type="text" name="lm_note_{{ loop.index0 }}" value="{{ lm.note or '' }}">
+        </div>
+        <div class="crm-fld full" style="text-align:right">
+          <button class="crm-del" type="button" onclick="delLm(this)">删除该联络人</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <button class="crm-btn sm" type="button" onclick="addLm()">＋ 添加联络人</button>
+
+  <div class="crm-grid" style="margin-top:12px">
+    <div class="crm-fld full">
+      <label>保司备注</label>
+      <input type="text" name="note" value="{{ row.note if row and row.note else '' }}" placeholder="整体备注（非单个联络人）">
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.insurers') }}">取消</a>
+  </div>
+</form>
+
+<template id="lmTpl">
+  <div class="lm-row">
+    <input type="hidden" name="lm_idx" value="__IX__">
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>联络人姓名</label>
+        <input type="text" name="lm_name___IX__">
+      </div>
+      <div class="crm-fld">
+        <label>联络人身份与职务</label>
+        <input type="text" name="lm_title___IX__" placeholder="如 中介渠道部 渠道经理">
+      </div>
+      <div class="crm-fld">
+        <label>联络人联系电话</label>
+        <input type="text" name="lm_phone___IX__">
+      </div>
+      <div class="crm-fld">
+        <label>联络人邮箱</label>
+        <input type="text" name="lm_email___IX__" placeholder="如 name@example.com">
+      </div>
+      <div class="crm-fld full">
+        <label>备注</label>
+        <input type="text" name="lm_note___IX__">
+      </div>
+      <div class="crm-fld full" style="text-align:right">
+        <button class="crm-del" type="button" onclick="delLm(this)">删除该联络人</button>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+  var LM_TPL = document.getElementById('lmTpl').innerHTML;
+  var LMSEQ = 0;
+  function addLm() {
+    var ix = 'n' + (LMSEQ++);
+    var box = document.createElement('div');
+    box.innerHTML = LM_TPL.replace(/__IX__/g, ix);
+    document.getElementById('lmBox').appendChild(box.firstElementChild);
+  }
+  function delLm(btn) {
+    var r = btn.closest('.lm-row');
+    if (r) { r.parentNode.removeChild(r); }
+  }
+  // 一条都没有时，先给一张空行，方便直接录入
+  if (!document.querySelectorAll('#lmBox .lm-row').length) { addLm(); }
+</script>
+
+{% if not row %}
+<script>
+  var BUILTIN = {{ builtin|safe }};
+  (function () {
+    var sel = document.getElementById('biSel');
+    BUILTIN.forEach(function (b, i) {
+      var o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = b.name + (b.short_name ? '（' + b.short_name + '）' : '');
+      sel.appendChild(o);
+    });
+  })();
+  function fillBuiltin() {
+    var sel = document.getElementById('biSel');
+    if (sel.value === '') { alert('请先选择一家保司'); return; }
+    var b = BUILTIN[parseInt(sel.value, 10)];
+    document.getElementById('fName').value = b.name || '';
+    document.getElementById('fShort').value = b.short_name || '';
+    document.getElementById('fSite').value = b.website || '';
+    if (b.insurer_type) { document.getElementById('fType').value = b.insurer_type; }
+    document.getElementById('fromBuiltin').value = '1';
+  }
+</script>
+{% endif %}
+{% endblock %}

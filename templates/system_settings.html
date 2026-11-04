@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}{{ system.en }} · {{ system.name }} · 系统设置{% endblock %}
+{% block pagename %}{{ system.en }} · {{ system.name }} · 系统设置{% endblock %}
+{% block content %}
+
+  <div class="card" style="padding:22px 24px;border-top:3px solid {{ system.color }}">
+    <div style="font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:.8px;margin-bottom:16px">
+      {{ system.en }} · {{ system.name }} · 系统设置
+    </div>
+
+    {# 关键区分：IT = 总版块（全局系统管理）；其余 = 分版块（仅本版块设置） #}
+    {% if is_global %}
+      <div style="background:#EDEAE6;color:#3E3933;border-left:3px solid #4A443E;font-size:13px;
+                  padding:13px 16px;border-radius:0 10px 10px 0;line-height:1.8;margin-bottom:20px">
+        <b>总版块 · 全局系统管理</b>　负责职级权限流、用户、系统参数等<b>全局</b>配置，改动会影响所有版块。
+      </div>
+    {% else %}
+      <div style="background:var(--brand-soft);color:#8A4A18;border-left:3px solid var(--brand);font-size:13px;
+                  padding:13px 16px;border-radius:0 10px 10px 0;line-height:1.8;margin-bottom:20px">
+        <b>分版块 · 本版块设置管理</b>　仅负责本版块的细分配置与版块内权限。
+        全局权限流（职级 × 权限）由
+        <a href="{{ url_for('admin.levels') }}" style="color:#8A4A18;font-weight:600">IT管理系统 · 权限设置</a> 统一配置。
+      </div>
+    {% endif %}
+
+    <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:13px">
+      <div style="font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.8px">本版块设置项</div>
+      <span style="font-size:10.5px;color:var(--muted);letter-spacing:1.5px">SETTINGS</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:24px">
+      {% for st in system.settings %}
+        {% if st.url %}
+          <a class="chip" href="{{ url_for(st.url) }}"
+             style="padding:10px 16px;font-size:13.5px"><span class="en">{{ st.en }}</span> · {{ st.name }}</a>
+        {% else %}
+          <div class="chip plan" style="padding:10px 16px;font-size:13.5px;cursor:default">
+            <span class="en">{{ st.en }}</span> · {{ st.name }} <span style="font-size:10.5px">规划中</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:13px">
+      <div style="font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:.8px">版块权限配置</div>
+      <span style="font-size:10.5px;color:var(--muted);letter-spacing:1.5px">PERMISSION</span>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:16px 18px;font-size:13px;
+                color:var(--ink-2);line-height:1.9;background:#FCFAF7">
+      {% if is_global %}
+        全局权限流配置（职级 × 权限）：在
+        <a href="{{ url_for('admin.levels') }}" style="color:var(--brand-deep);font-weight:600">权限设置 · 权限流配置</a>
+        中按职级勾选权限，决定各职级能进入哪些版块、操作哪些功能。<br>
+        这是全公司权限的总开关；其他版块的「版块权限配置」只能在本版块内做细分设置，<b>不能改动全局权限流</b>。
+      {% else %}
+        本版块的版块内权限（如本版块内细分功能的可见 / 操作范围）规划中。<br>
+        全局权限流由
+        <a href="{{ url_for('admin.levels') }}" style="color:var(--brand-deep);font-weight:600">IT管理系统 · 权限设置</a>
+        统一维护；如需要调整「谁能进入{{ system.name }}、能操作其中哪些功能」，
+        请在 IT管理系统 的权限流中配置对应权限点（如 hr.employee.manage、commission.admin 等）。
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

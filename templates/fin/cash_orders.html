@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}出纳收付款单 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 出纳收付款{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">出纳收付款单 <span style="font-size:13px;font-weight:400;color:#9C9288">Cash Receipt / Payment</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    录入收/付款单，提交即<b style="color:#5C554D">自动生成银行存款（1002）凭证</b>，替代手工录 1002 分录。
+    生成的凭证走现有流程由会计审核记账；记账后该 1002 分录自动进入「银企对账」候选。<b style="color:#C86432">制单≠审核</b>，出纳只制单。
+  </div>
+
+  {# —— 新建表单 —— #}
+  <div class="card" style="padding:18px 20px;margin-bottom:18px">
+    <div style="font-size:15px;font-weight:700;color:#2A2A2A;margin-bottom:14px">＋ 新建收付款单</div>
+    <form method="post" action="{{ url_for('fin.cash_order_new') }}">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+        <div style="min-width:160px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">类型</div>
+          <div style="display:flex;gap:14px;padding:8px 0">
+            <label style="font-size:14px;color:#2A2A2A;cursor:pointer"><input type="radio" name="type" value="receive" checked style="margin-right:5px">收款单</label>
+            <label style="font-size:14px;color:#2A2A2A;cursor:pointer"><input type="radio" name="type" value="pay" style="margin-right:5px">付款单</label>
+          </div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">银行账户（1002）<span style="color:#C86432">*</span></div>
+          <select name="bank_account_id" required style="width:100%;padding:9px 11px;border:1px solid #EAE2D6;border-radius:9px;background:#FFFFFF;font-size:14px;color:#2A2A2A">
+            <option value="">— 请选择 —</option>
+            {% for ba in accounts %}
+            <option value="{{ ba.id }}">{{ ba.name }}（{{ ba.account_code }}）</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">对方科目<span style="color:#C86432">*</span></div>
+          <select name="account_code" required style="width:100%;padding:9px 11px;border:1px solid #EAE2D6;border-radius:9px;background:#FFFFFF;font-size:14px;color:#2A2A2A">
+            <option value="">— 请选择 —</option>
+            {% for a in others %}
+            <option value="{{ a.code }}">{{ a.code }} {{ a.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-top:4px">
+        <div style="min-width:160px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">金额（元）<span style="color:#C86432">*</span></div>
+          <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00"
+                 style="width:100%;padding:9px 11px;border:1px solid #EAE2D6;border-radius:9px;background:#FFFFFF;font-size:14px;color:#2A2A2A">
+        </div>
+        <div style="min-width:160px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">业务日期<span style="color:#C86432">*</span></div>
+          <input type="date" name="trans_date" value="{{ now.isoformat() }}" required
+                 style="width:100%;padding:9px 11px;border:1px solid #EAE2D6;border-radius:9px;background:#FFFFFF;font-size:14px;color:#2A2A2A">
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">摘要</div>
+          <input type="text" name="summary" maxlength="200" placeholder="如：收到客户X货款 / 支付Y费用"
+                 style="width:100%;padding:9px 11px;border:1px solid #EAE2D6;border-radius:9px;background:#FFFFFF;font-size:14px;color:#2A2A2A">
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:5px">备注</div>
+          <input type="text" name="note" maxlength="200" placeholder="选填"
+                 style="width:100%;padding:9px 11px;border:1px solid #EAE2D6;border-radius:9px;background:#FFFFFF;font-size:14px;color:#2A2A2A">
+        </div>
+        <div>
+          <button type="submit" class="btn" style="padding:9px 22px;font-size:14px">生成凭证</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {# —— 列表 —— #}
+  <div class="card" style="padding:18px 20px;overflow-x:auto">
+    <div style="font-size:15px;font-weight:700;color:#2A2A2A;margin-bottom:12px">收付款单记录（共 {{ orders|length }} 笔）</div>
+    {% if not orders %}
+    <div style="text-align:center;color:#9C9288;font-size:14px;padding:30px">暂无收付款单。上面填一张试试。</div>
+    {% else %}
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead>
+        <tr style="color:#9C9288;text-align:left;border-bottom:1px solid #EAE2D6">
+          <th style="padding:10px 8px;font-weight:500">单号</th>
+          <th style="padding:10px 8px;font-weight:500">类型</th>
+          <th style="padding:10px 8px;font-weight:500">银行账户</th>
+          <th style="padding:10px 8px;font-weight:500">对方科目</th>
+          <th style="padding:10px 8px;font-weight:500;text-align:right">金额</th>
+          <th style="padding:10px 8px;font-weight:500">业务日期</th>
+          <th style="padding:10px 8px;font-weight:500">凭证号</th>
+          <th style="padding:10px 8px;font-weight:500">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr style="border-bottom:1px solid #F2ECE0">
+          <td style="padding:10px 8px;font-family:monospace;color:#5C554D">{{ o.code }}</td>
+          <td style="padding:10px 8px">
+            <span style="font-size:12px;padding:2px 9px;border-radius:6px;{{ 'background:#E8F5EC;color:#166534' if o.type=='receive' else 'background:#FDECEC;color:#991b1b' }}">{{ o.type_cn }}</span>
+          </td>
+          <td style="padding:10px 8px;color:#2A2A2A">{{ o.bank_name }}</td>
+          <td style="padding:10px 8px;color:#2A2A2A">{{ o.account_code }} {{ o.account_name }}</td>
+          <td style="padding:10px 8px;text-align:right;font-weight:700;color:#2A2A2A">￥{{ amt(o.amount) }}</td>
+          <td style="padding:10px 8px;color:#6B5D4F">{{ o.trans_date.strftime('%Y-%m-%d') if o.trans_date else '—' }}</td>
+          <td style="padding:10px 8px">
+            {% if o.voucher_id %}
+            <a href="{{ url_for('fin.voucher_detail', vid=o.voucher_id) }}" style="color:#C86432;text-decoration:none;font-family:monospace">{{ o.voucher_no or '—' }}</a>
+            {% else %}<span style="color:#9C9288">未生成</span>{% endif %}
+          </td>
+          <td style="padding:10px 8px">
+            {% if o.can_delete %}
+            <form method="post" action="{{ url_for('fin.cash_order_delete', oid=o.id) }}" style="display:inline" onsubmit="return confirm('确定删除该收付款单及其凭证？');">
+              <button type="submit" style="border:1px solid #F3C9C9;background:#FDECEC;color:#991b1b;border-radius:7px;padding:4px 12px;font-size:12.5px;cursor:pointer">删除</button>
+            </form>
+            {% else %}
+            <span style="font-size:12px;color:#9C9288">凭证已审核/记账<br>去凭证模块红冲</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+
+  <div style="margin-top:16px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">借贷方向：</b>收款单 = 借 1002（本账户）＋ 贷 对方科目；付款单 = 借 对方科目 ＋ 贷 1002（本账户）。
+    凭证字别：收款「收」、付款「付」，与手工凭证共用独立连续编号。
+  </div>
+{% endblock %}

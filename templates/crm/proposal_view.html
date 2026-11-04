@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+{% block title %}PROPOSAL · 计划书{% endblock %}
+{% block pagename %}PROPOSAL · 计划书 · 计划书详情{% endblock %}
+{% block content %}
+
+<style>
+.pv{max-width:960px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:14px;
+     padding:24px 26px 26px;box-shadow:0 1px 2px rgba(42,42,42,.05)}
+/* 头部：品牌渐变（H5 计划书风格） */
+.pv-head{background:linear-gradient(135deg,#C86432 0%,#E6823C 100%);color:#fff;border-radius:12px;
+         padding:18px 22px;margin-bottom:16px}
+.pv-head .b{font-size:11px;letter-spacing:2px;opacity:.92}
+.pv-head .t{font-family:var(--serif);font-size:24px;font-weight:600;margin:6px 0 12px;line-height:1.3}
+.pv-chips{display:flex;flex-wrap:wrap;gap:8px}
+.pv-chip{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.34);border-radius:999px;
+         padding:4px 12px;font-size:12px}
+/* 关键指标卡 */
+.pv-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.pv-card{background:var(--brand-soft);border:1px solid #F3DCC6;border-radius:12px;padding:13px 15px}
+.pv-card .k{font-size:12px;color:var(--ink-2)}
+.pv-card .v{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--brand-deep);margin-top:6px;line-height:1.2}
+.pv-card .s{font-size:11px;color:var(--muted);margin-top:3px}
+.pv-card.plain{background:#fff;border-color:var(--line)}
+.pv-card.plain .v{color:var(--ink)}
+/* 红利领取方式切换（条款3.2：现金领取 / 累积生息） */
+.pv-mode{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;
+         background:#FFFDF8;border:1px dashed #E0C9A8;border-radius:10px;padding:10px 14px}
+.pv-mode .mk{font-size:12px;color:var(--ink-2)}
+.pv-mode .mo{border:1px solid var(--brand);background:#fff;color:var(--brand);border-radius:999px;
+             padding:5px 14px;font-size:12px;text-decoration:none}
+.pv-mode .mo.on{background:var(--brand-deep);color:#fff;border-color:var(--brand-deep)}
+/* 分段卡片 */
+.pv-block{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.pv-block .h{font-size:14px;font-weight:600;color:var(--ink);border-left:4px solid var(--brand);
+             padding-left:10px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.pv-block .h .tag{font-size:11px;font-weight:400;color:var(--muted);border:1px solid var(--line);
+                  border-radius:999px;padding:2px 8px}
+.pv-scroll{overflow-x:auto}
+.pv-tbl{width:auto;min-width:100%;border-collapse:collapse;font-size:12.5px;table-layout:auto}
+.pv-tbl th,.pv-tbl td{border:1px solid var(--line);padding:5px 7px;text-align:center;white-space:nowrap}
+.pv-tbl th{background:var(--brand-soft);color:var(--ink-2);font-weight:600}
+.pv-tbl th.grp{background:#F6E6D6;color:#8A3A10}
+.pv-tbl td.div{background:#FFFCF6}
+.pv-tbl tbody tr:nth-child(even){background:#FCFAF7}
+.pv-tbl tbody tr:nth-child(even) td.div{background:#FDF6EC}
+.pv-chart{width:100%;height:300px}
+.pv-note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.7}
+.pv-disc{margin-top:6px;padding:14px 16px;background:#FBF7F1;border:1px dashed #E0C9A8;border-radius:10px;
+          font-size:12px;color:#8A5A18;line-height:1.9}
+.pv-disc b{color:#8A3A10}
+.pv-bar{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 4px;align-items:center}
+.pv-btn{background:var(--brand-deep);color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer}
+.pv-btn.ghost{background:#fff;color:var(--brand-deep);border:1px solid var(--brand-deep);text-decoration:none;
+              display:inline-block;padding:9px 18px}
+.pv-btn.alt{background:#fff;color:var(--brand);border:1px solid var(--brand);text-decoration:none;
+            display:inline-block;padding:9px 18px}
+.pv-btn[disabled]{opacity:.6;cursor:wait}
+.pv-warn{background:#FDECEA;color:#C00;border:1px solid #F4C9C4;padding:14px 16px;border-radius:10px;font-size:13px}
+@media (max-width:640px){
+  .pv{padding:14px 12px 18px}
+  .pv-head .t{font-size:20px}
+  .pv-tbl{font-size:11.5px}
+  .pv-tbl th,.pv-tbl td{padding:4px 4px}
+}
+@media print {
+  .sidebar, .topstrip, .backbar, .pv-noprint { display: none !important; }
+  .main { margin-left: 0 !important; }
+  .container { padding: 0 !important; max-width: 100%; }
+  .pv { border: none; box-shadow: none; padding: 0; }
+  .pv-head { background: #fff !important; color: #2A2A2A !important; border: 1px solid var(--line); }
+  .pv-chip { background: #FBF7F1 !important; color: #2A2A2A !important; border-color: var(--line) !important; }
+}
+</style>
+
+<div class="pv" id="pv-root">
+  <div class="pv-head">
+    <div class="b">广东海盈通保智能科技有限公司 · 产品计划书</div>
+    <div class="t">{{ p.product_name }}</div>
+    <div class="pv-chips">
+      <span class="pv-chip">{{ p.insurer_name or '—' }}</span>
+      {% if p.client_name %}<span class="pv-chip">客户 {{ p.client_name }}</span>{% endif %}
+      <span class="pv-chip">{{ '男' if p.sex == 'M' else ('女' if p.sex == 'F' else '通用') }} · {{ p.issue_age }}岁</span>
+      <span class="pv-chip">年交保费 ¥{{ '%.0f'|format(p.premium) }}</span>
+      <span class="pv-chip">{{ '趸交' if p.pay_term == 0 else (p.pay_term|string + '年交') }}</span>
+      <span class="pv-chip">演示类型：{{ p.illustration_mode or '标准' }}</span>
+      <span class="pv-chip" id="chip-divmode" style="display:none"></span>
+      <span class="pv-chip">编号 {{ p.proposal_no }}</span>
+    </div>
+  </div>
+
+  {% if err %}
+  <div class="pv-warn">⚠ 该计划书对应产品「{{ p.insurer_name }} · {{ p.product_name }}」的因子数据缺失，无法生成利益演示：{{ err }}
+    请先在「保费测算」模块导入该产品的费率表与现金价值表。</div>
+  {% else %}
+  <!-- 红利领取方式切换（条款3.2：现金领取 / 累积生息）——分红型才显示 -->
+  <div class="pv-mode pv-noprint" id="pv-mode" style="display:none">
+    <span class="mk">红利领取方式（条款 3.1）：</span>
+    <a class="mo" id="mo-cash" href="{{ url_for('crm.proposal_view', pid=p.id, mode='cash') }}">现金领取</a>
+    <a class="mo" id="mo-accum" href="{{ url_for('crm.proposal_view', pid=p.id, mode='accum') }}">累积生息（年复利）</a>
+    <a class="mo" id="mo-pua" href="{{ url_for('crm.proposal_view', pid=p.id, mode='pua') }}">购买交清增额保险</a>
+    <span class="mk" id="pv-rate"></span>
+  </div>
+
+  <div class="pv-cards" id="pv-cards"></div>
+
+  <div class="pv-block">
+    <div class="h">利益演示表 <span class="tag" id="pv-tag">保证利益确定给付 · 红利为非保证</span></div>
+    <div class="pv-scroll"><table class="pv-tbl" id="pv-tbl"></table></div>
+    <div class="pv-note" id="pv-note"></div>
+  </div>
+
+  <div class="pv-block">
+    <div class="h">利益走势</div>
+    <div class="pv-chart" id="pv-chart"></div>
+  </div>
+  {% endif %}
+
+  <div class="pv-disc">
+    <b>重要提示（合规声明）：</b>本计划书由海盈通保系统依据已导入的保险费率表与现金价值表自动测算生成，
+    所列「基本保险金额 / 现金价值 / 单利 / IRR」为<b>保证利益口径的演示数据，不代表未来实际收益</b>。
+    <span id="pv-disc-div" style="display:none">
+      本产品为<b>分红型保险</b>，红利部分依据保险合同条款「保单红利 / 红利的领取」演示，
+      投保时可选择<b>现金领取</b>、<b>累积生息</b>（红利留存本公司以年复利方式累积生息，年利率由保险公司确定，
+      本计划书按 <b id="pv-disc-rate"></b> 演示）或<b>购买交清增额保险</b>（以红利作为净保险费购买交清增额保险，
+      累积增额基本保险金额不确定）。
+      红利、万能账户结算利率等<b>非保证利益不保证给付，实际可能为 0</b>，以保险公司实际经营情况与合同约定为准。
+    </span>
+    保险责任、责任免除、犹豫期、退保损失、现金价值等关键权益<b>以保险条款及保险合同为准</b>。
+    投保前请务必仔细阅读产品条款与投保提示书。
+  </div>
+
+  <div class="pv-bar pv-noprint">
+    <button class="pv-btn" id="btn-print">打印 / 导出 PDF</button>
+    <button class="pv-btn alt" id="btn-shot">生成长图（PNG）</button>
+    <a class="pv-btn ghost" href="{{ url_for('crm.proposals') }}">返回计划书列表</a>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/echarts.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/html2canvas.min.js') }}"></script>
+<script>
+// 条款 3.1 三种红利领取方式 → 各自读哪一组字段
+const MODE_CFG = {
+  cash:  {cum: 'cum_cash',  tot: 'total_cash', short: '现金分红（现金领取）',
+          name: '累计已领红利（现金领取）'},
+  accum: {cum: 'cum_acc',   tot: 'total_acc',  short: '累积生息（年复利）',
+          name: '累积红利（累积生息）'},
+  pua:   {cum: 'cum_pua',   tot: 'total_pua',  short: '购买交清增额保险',
+          name: '增额部分现金价值（交清增额）'}
+};
+const PV = {
+  illu: {{ (illu | tojson) if illu else 'null' }},
+  mode: {{ (div_mode or 'accum') | tojson }},
+  rate: {{ (accum_rate or 0.0175) | tojson }},
+  meta: {
+    no: {{ (p.proposal_no or '') | tojson }},
+    product: {{ (p.product_name or '') | tojson }},
+    client: {{ (p.client_name or '') | tojson }}
+  },
+  money(v){ return '¥' + (typeof v === 'number' ? v.toLocaleString() : v); },
+  num(v){ return (typeof v === 'number' ? v.toLocaleString() : v); },
+  card(k, v, s, plain){ return '<div class="pv-card' + (plain ? ' plain' : '') + '"><div class="k">' + k
+      + '</div><div class="v">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; },
+  build() {
+    if (!PV.illu) return;
+    const d = PV.illu, rows = d.rows;
+    const first = rows[0], last = rows[rows.length - 1];
+    const y10 = rows.find(r => r.year === 10) || last;
+    // 分红型才有红利数据：无红利时整块隐藏，避免满屏 0
+    const hasDiv = !!d.has_div && rows.some(r => (r.div_d || 0) > 0 || (r.div_g || 0) > 0);
+    // 「购买交清增额保险」要保司给了增额因子才能演示，没给就不显示这个按钮
+    const hasPua = !!d.has_pua;
+    if (PV.mode === 'pua' && !hasPua) PV.mode = 'accum';
+    const MC = MODE_CFG[PV.mode] || MODE_CFG.accum;
+    const cumKey = MC.cum, totKey = MC.tot, cumName = MC.name;
+
+    if (hasDiv) {
+      document.getElementById('pv-mode').style.display = 'flex';
+      ['cash', 'accum', 'pua'].forEach(m => {
+        const el = document.getElementById('mo-' + m);
+        if (!el) return;
+        el.style.display = (m === 'pua' && !hasPua) ? 'none' : '';
+        el.className = 'mo' + (m === PV.mode ? ' on' : '');
+      });
+      document.getElementById('pv-rate').textContent = (PV.mode === 'accum')
+        ? '（本次按年利率 ' + (PV.rate * 100).toFixed(2) + '% 复利累积）'
+        : (PV.mode === 'cash' ? '（红利每年领取，不产生累积利息）'
+                              : '（红利购买交清增额保险，增额部分参与现价）');
+      const chip = document.getElementById('chip-divmode');
+      chip.style.display = '';
+      chip.textContent = '红利：' + MC.short
+        + (PV.mode === 'accum' ? ' @' + (PV.rate * 100).toFixed(2) + '%' : '');
+      document.getElementById('pv-disc-div').style.display = 'inline';
+      document.getElementById('pv-disc-rate').textContent = (PV.rate * 100).toFixed(2) + '%';
+    }
+
+    document.getElementById('pv-cards').innerHTML =
+      PV.card('基本保险金额', PV.money(d.base_sa), (d.pay_term === 0 ? '趸交' : d.pay_term + '年交'))
+      + PV.card('首年现金价值', PV.money(first.cv), '第 1 保单年度末', true)
+      + PV.card('第10年现金价值', PV.money(y10.cv), '第 ' + y10.year + ' 保单年度末', true)
+      + PV.card('末年末现金价值', PV.money(last.cv), '第 ' + last.year + ' 年 · IRR ' + last.irr + '%', true)
+      + (hasDiv ? PV.card('末年末' + cumName, PV.money(last[cumKey]), '第 ' + last.year + ' 年 · 非保证') : '')
+      + (hasDiv ? PV.card('末年末总利益', PV.money(last[totKey]),
+          '现价 ' + PV.money(last.cv) + ' ＋ ' + (PV.mode === 'pua' ? '增额部分现价' : '红利累积')) : '');
+
+    // —— 一张表：保证利益 + 红利利益（两级表头，与保司建议书一致）——
+    const fixCols = ['保单年度', '年末年龄', '年交保费', '累计保费', '年末现金价值', '单利%', 'IRR%'];
+    let h = '<thead>';
+    if (hasDiv) {
+      // 分红型：两级表头 + 收益率分「含红利演示」与「仅保证利益」两组，和保司建议书对齐
+      h += '<tr><th rowspan="2">保单年度</th><th rowspan="2">年末年龄</th><th rowspan="2">年交保费</th>'
+        + '<th rowspan="2">累计保费</th><th rowspan="2">年末现金价值</th>'
+        + '<th class="grp" colspan="3">红利利益演示（非保证）</th>'
+        + '<th class="grp" colspan="2">' + MC.short + '</th>'
+        + '<th class="grp" colspan="2">仅保证利益</th></tr>'
+        + '<tr><th class="grp">当年度红利</th><th class="grp">' + cumName + '</th>'
+        + '<th class="grp">年末总利益</th>'
+        + '<th class="grp">单利%</th><th class="grp">IRR%</th>'
+        + '<th class="grp">单利%</th><th class="grp">IRR%</th></tr>';
+    } else {
+      h += '<tr>' + fixCols.map(t => '<th>' + t + '</th>').join('') + '</tr>';
+    }
+    h += '</thead><tbody>';
+    rows.forEach(r => {
+      let line = '<td>' + r.year + '</td><td>' + r.age_end + '</td><td>' + PV.num(r.premium) + '</td>'
+        + '<td>' + PV.num(r.cum_prem) + '</td><td>' + PV.num(r.cv) + '</td>';
+      if (hasDiv) {
+        line += '<td class="div">' + PV.num(r.div_d) + '</td>'
+          + '<td class="div">' + PV.num(r[cumKey]) + '</td>'
+          + '<td class="div">' + PV.num(r[totKey]) + '</td>';
+      }
+      line += '<td>' + r.simple + '</td><td>' + r.irr + '</td>';
+      if (hasDiv) line += '<td>' + r.simple_g + '</td><td>' + r.irr_g + '</td>';
+      h += '<tr>' + line + '</tr>';
+    });
+    document.getElementById('pv-tbl').innerHTML = h + '</tbody>';
+
+    if (hasDiv) {
+      const desc = {
+        cash: '当年度红利每年领取、不再计息，累计已领红利＝各年红利之和',
+        accum: '当年度红利留存本公司按年利率 <b>' + (PV.rate * 100).toFixed(2) + '%</b> 以年复利累积生息'
+               + '（累积红利＝上年累积×（1＋利率）＋当年红利）',
+        pua: '当年度红利购买交清增额保险，累积增额基本保额对应的现金价值＝累积增额保额/1000×增额现价单价'
+      };
+      const others = ['cash', 'accum', 'pua'].filter(m => m !== PV.mode && (m !== 'pua' || hasPua))
+        .map(m => MODE_CFG[m].short + ' <b>' + PV.money(last[MODE_CFG[m].cum]) + '</b>');
+      document.getElementById('pv-note').innerHTML =
+        '口径：<b>' + MC.short + '</b>——' + desc[PV.mode]
+        + '；年末总利益＝年末现金价值＋' + cumName + '。'
+        + (others.length ? '（条款 3.1 其他领取方式在第 ' + last.year + ' 年末：' + others.join('、') + '）' : '')
+        + '　收益率按「持有到该保单年度末退保」测算，IRR 用现金流折现、单利用时间加权单利，'
+        + '保费年初交、退保金年末收回；⚠ 红利为<b>非保证利益，实际可能为 0</b>。';
+    }
+    PV.draw(rows, hasDiv, cumKey, totKey);
+  },
+  draw(rows, hasDiv, cumKey, totKey) {
+    const el = document.getElementById('pv-chart');
+    if (typeof echarts === 'undefined') return;
+    const series = [{name: '现金价值（保证）', type: 'line', smooth: true, data: rows.map(r => r.cv),
+                     itemStyle: {color: '#B5532A'}, areaStyle: {color: 'rgba(181,83,42,0.12)'}}];
+    if (hasDiv) {
+      series.push({name: '总利益（含红利演示）', type: 'line', smooth: true,
+                   data: rows.map(r => r[totKey]), itemStyle: {color: '#E6823C'}});
+      series.push({name: '累计红利（非保证）', type: 'line', smooth: true,
+                   lineStyle: {type: 'dashed', width: 1.6},
+                   data: rows.map(r => r[cumKey]), itemStyle: {color: '#F0A050'}});
+    }
+    echarts.init(el).setOption({
+      title: {text: '各保单年度末利益走势', left: 'center', textStyle: {fontSize: 13, color: '#2A2A2A'}},
+      tooltip: {trigger: 'axis'},
+      legend: {top: 22, textStyle: {fontSize: 11, color: '#2A2A2A'}, data: series.map(s => s.name)},
+      grid: {left: 70, right: 24, top: 52, bottom: 44},
+      xAxis: {type: 'category', data: rows.map(r => r.year), name: '保单年度'},
+      yAxis: {type: 'value', name: '金额(元)'},
+      series: series
+    });
+  },
+  // 生成长图：把整份计划书渲染成 PNG 下载（可直接发给客户）
+  shot() {
+    const btn = document.getElementById('btn-shot');
+    if (typeof html2canvas === 'undefined') { alert('截图组件未加载，请刷新页面重试'); return; }
+    btn.disabled = true; btn.textContent = '生成中…';
+    window.scrollTo(0, 0);
+    html2canvas(document.getElementById('pv-root'), {
+      scale: 2, backgroundColor: '#FFFFFF', useCORS: true, logging: false
+    }).then(cv => {
+      const a = document.createElement('a');
+      const nm = [PV.meta.product, PV.meta.client].filter(Boolean).join('_') || PV.meta.no || '计划书';
+      a.download = '计划书_' + nm.replace(/[\\/:*?"<>|]/g, '') + '.png';
+      a.href = cv.toDataURL('image/png');
+      a.click();
+      btn.disabled = false; btn.textContent = '生成长图（PNG）';
+    }).catch(e => {
+      btn.disabled = false; btn.textContent = '生成长图（PNG）';
+      alert('生成长图失败：' + e);
+    });
+  }
+};
+PV.build();
+document.getElementById('btn-print').onclick = () => window.print();
+document.getElementById('btn-shot').onclick = PV.shot;
+</script>
+{% endblock %}

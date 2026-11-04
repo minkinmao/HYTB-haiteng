@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}新员工招募 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">新员工招募 <span style="font-size:13px;font-weight:400;color:#9C9288">Onboarding</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px;line-height:1.8;overflow-wrap:anywhere">
+    流程：操作员后台建号（系统自动生成<b>系统编码 RC****</b>；工号可自定义，留空则给候选值 HY***）→ 复制填报链接推送本人 →
+    个人按人事卡片格式填写提交 → 人事主管确认（完善用工类型/职级/代理类型/职务）→ 自动入册员工花名册。<br>
+    说明：<b>系统编码是登记记录的稳定标识，不可修改</b>；工号是给人看的编号，有权限者可随时修改（方便把 001-010 等编号留给公司创始人）。
+  </div>
+
+  {# 建号表单：仅拥有 hr.employee.manage 权限者可见 #}
+  {% if can_manage %}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新建招募登记（建号后自动生成工号与个人填报链接）</div>
+    <form method="post" action="{{ url_for('hr.onboard_new') }}" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">姓名 *</div>
+        <input name="name" required style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">工号（留空自动生成）</div>
+        <input name="employee_no" maxlength="16" placeholder="可填 001、010 等"
+               style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">个人手机</div>
+        <input name="phone" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">部门</div>
+        <select name="org_id" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">未设</option>
+          {% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">岗位</div>
+        <input name="position" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">职务</div>
+        <input name="job_title" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">入职日期</div>
+        <input type="date" name="hire_date" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">身份证号 *</div>
+        <input name="id_card" id="id_card" maxlength="18" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">性别</div>
+        <select name="gender" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">未填</option><option value="男">男</option><option value="女">女</option></select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">职级（S/A/B/C/D/E）</div>
+        <select name="level_id" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">未设</option>
+          {% for l in levels %}<option value="{{ l.id }}">{{ l.code }} · {{ l.name }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">出生/年龄（自动）</div>
+        <input id="age_show" readonly style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;background:#F7F4EF;color:#6B5D4F"></div>
+      {# 薪资设定（含试用期联动 + 人力成本双向测算）：共用模板 hr/_salary_block.html #}
+      {% set sb = {'base': '', 'perf': '', 'allow': '', 'pct': '', 'probation': 'N',
+                   'prob_start': '', 'prob_end': '', 'total_show': '', 'detail': {}} %}
+      {% include 'hr/_salary_block.html' %}
+      <div style="grid-column:1/-1;border-top:1px dashed #EAE2D6;padding-top:12px">
+        <div style="font-size:12px;color:#9C9288;line-height:1.8;overflow-wrap:anywhere">
+          五险一金按系统配置自动测算：个人 养老 {{ cfg.pension_pct }}%／医疗 {{ cfg.medical_pct }}%／失业 {{ cfg.unemploy_pct }}%／公积金 {{ cfg.fund_pct }}%；
+          单位 养老 {{ cfg.corp_pension_pct }}%／医疗 {{ cfg.corp_medical_pct }}%／失业 {{ cfg.corp_unemploy_pct }}%／工伤 {{ cfg.corp_injury_pct }}%／生育 {{ cfg.corp_maternity_pct }}%／公积金 {{ cfg.corp_fund_pct }}%
+          （基数上下限、比例均可在「五险一金比例」设置里调整）；
+          年龄／出生日期由身份证号自动测算。<br>
+          系统自动生成<b>系统编码 RC****</b>（不可改，作为登记的稳定标识）；<b>工号</b>可由您指定，留空按 HY*** 自动生成。
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px">
+          <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">建号并生成填报链接</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  {# 登记列表：每条一行，元数据用自适应网格排布（窄屏自动换行，避免横向溢出把左侧挤出屏幕） #}
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {% for o in items %}
+    {% set link = url_for('hr.onboard_form', token=o.token, _external=True) %}
+    <div style="padding:14px 0;border-bottom:1px solid #F3EDE3">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div style="flex:1 1 260px;min-width:0">
+          <div style="font-size:15px;font-weight:600;overflow-wrap:anywhere">{{ o.name }}
+            <span style="font-size:12px;color:#9C9288;font-weight:400">｜ 工号 {{ o.employee_no or '待分配' }}</span>
+            <span style="font-size:11px;color:#B3A895;font-weight:400">｜ 系统编码 {{ o.sys_code or '—' }}</span>
+            <span style="font-size:11px;padding:1px 8px;border-radius:9px;
+              background:{{ {'pending':'#FBEEE2','submitted':'#FDF3E4','returned':'#FBE3DD','confirmed':'#dcfce7','cancelled':'#F3EDE3'}.get(o.status, '#F3EDE3') }};
+              color:{{ {'pending':'#C86432','submitted':'#8A5A18','returned':'#991b1b','confirmed':'#166534','cancelled':'#9C9288'}.get(o.status, '#9C9288') }}">
+              {{ status_name.get(o.status, o.status) }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:3px 16px;margin-top:7px;font-size:12px;color:#9C9288">
+            <div style="overflow-wrap:anywhere">部门：{{ o.org.name if o.org else '未设' }}</div>
+            <div style="overflow-wrap:anywhere">岗位：{{ o.position or '—' }}</div>
+            <div style="overflow-wrap:anywhere">职务：{{ o.job_title or '—' }}</div>
+            <div>手机：{{ o.phone or '—' }}</div>
+            <div>身份证：{% if o.id_card %}{{ o.id_card[:6] }}********{{ o.id_card[-4:] }}{% else %}—{% endif %}</div>
+            <div>年龄：{{ o.age if o.age is not none else '—' }}</div>
+            <div>职级：{{ o.level.code if o.level else '—' }}</div>
+            <div>试用期：{% if o.probation == 'Y' %}是（{{ o.probation_salary_pct }}%）{% else %}否{% endif %}</div>
+            <div style="overflow-wrap:anywhere">
+              总薪资：{{ '%.2f' % o.regular_total if o.regular_total else '—' }}
+              {%- if o.regular_total %}（基本 {{ '%.2f' % (o.regular_base or 0) }} + 绩效 {{ '%.2f' % (o.regular_perf or 0) }} + 岗位补贴 {{ '%.2f' % (o.regular_allow or 0) }}）{% endif %}
+            </div>
+            <div>五险一金(个人)：{{ '%.2f' % (o.social_pension + o.social_medical + o.social_unemploy + o.social_fund) if o.regular_total else '—' }}</div>
+            {% if o.confirmed_at %}<div>确认：{{ o.confirmed_at.strftime('%Y-%m-%d %H:%M') }}</div>{% endif %}
+          </div>
+        </div>
+        {% if can_manage %}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:0 0 auto">
+          <a href="{{ url_for('hr.onboard_edit', oid=o.id) }}"
+             style="font-size:12px;color:#4A6BB0;background:#fff;border:1px solid #E2D8CA;text-decoration:none;padding:5px 12px;border-radius:6px">修改</a>
+          <button type="button" onclick="toggleNo({{ o.id }})"
+                  style="font-size:12px;color:#4A6BB0;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">改工号</button>
+          {% if o.status == 'submitted' %}
+            <a href="{{ url_for('hr.onboard_confirm', oid=o.id) }}"
+               style="font-size:12px;color:#fff;background:#E6823C;text-decoration:none;padding:5px 14px;border-radius:6px">主管确认入册 →</a>
+            <button type="button" onclick="toggleRet({{ o.id }})"
+                    style="font-size:12px;color:#b45309;background:#fff;border:1px solid #F0D9AE;padding:4px 12px;border-radius:6px;cursor:pointer">退回修改</button>
+          {% elif o.status == 'pending' %}
+            <a href="{{ url_for('hr.onboard_confirm', oid=o.id) }}"
+               style="font-size:12px;color:#6B5D4F;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">查看</a>
+          {% endif %}
+          {% if o.status != 'confirmed' %}
+          {% if o.status != 'cancelled' %}
+          {# 取消：仅变更状态、可逆，用中性色；危险操作留给红色「删除」 #}
+          <form method="post" action="{{ url_for('hr.onboard_cancel', oid=o.id) }}"
+                onsubmit="return confirm('确认取消 {{ o.name }}（{{ o.employee_no }}）的入职登记？取消后仍可在本页删除。')">
+            <button type="submit"
+                    style="font-size:12px;color:#6B5D4F;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">取消</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('hr.onboard_delete', oid=o.id) }}"
+                onsubmit="return confirm('确认彻底删除 {{ o.name }}（{{ o.employee_no }}）的入职登记？删除后不可恢复，个人填报链接将同时失效。')">
+            <button type="submit"
+                    style="font-size:12px;color:#fff;background:#b91c1c;border:none;padding:5px 12px;border-radius:6px;cursor:pointer">删除</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      {# 改工号：内联表单（默认收起，点「改工号」展开）。系统编码不变，只改工号 #}
+      {% if can_manage %}
+      <form id="noform-{{ o.id }}" method="post" action="{{ url_for('hr.onboard_set_no', oid=o.id) }}"
+            style="display:none;margin-top:8px;padding:8px 10px;background:#FCFAF7;border:1px dashed #E2D8CA;border-radius:6px;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#9C9288">新工号：</span>
+        <input name="employee_no" value="{{ o.employee_no or '' }}" maxlength="16"
+               style="width:150px;padding:5px 9px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        <span style="font-size:12px;color:#9C9288;overflow-wrap:anywhere">系统编码 {{ o.sys_code or '—' }} 保持不变；工号可填 001-010 等自有编号</span>
+        <button type="submit"
+                style="font-size:12px;color:#fff;background:#E6823C;border:none;padding:5px 14px;border-radius:6px;cursor:pointer">保存</button>
+        <button type="button" onclick="toggleNo({{ o.id }})"
+                style="font-size:12px;color:#6B5D4F;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">取消</button>
+      </form>
+
+      {# 退回修改：内联表单（默认收起，点「退回修改」展开），填写退回原因后可退回给本人重填 #}
+      <form id="retform-{{ o.id }}" method="post" action="{{ url_for('hr.onboard_return', oid=o.id) }}"
+            style="display:none;margin-top:8px;padding:8px 10px;background:#FEF6F0;border:1px dashed #F0D9AE;border-radius:6px;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#9C9288;white-space:nowrap">退回原因：</span>
+        <input name="return_reason" maxlength="200" placeholder="如：身份证号有误 / 学历信息不全，请补充后重新提交"
+               style="flex:1 1 320px;min-width:0;padding:6px 9px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        <button type="submit"
+                style="font-size:12px;color:#fff;background:#E6823C;border:none;padding:5px 14px;border-radius:6px;cursor:pointer">确认退回</button>
+        <button type="button" onclick="toggleRet({{ o.id }})"
+                style="font-size:12px;color:#6B5D4F;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">取消</button>
+      </form>
+      {% endif %}
+
+      {# 个人填报链接：待填报 / 已退回 状态时展示，方便复制推送给本人 #}
+      {% if o.status in ('pending', 'returned') %}
+      {% if o.status == 'returned' %}
+      <div style="margin-top:8px;padding:8px 10px;background:#FBE3DD;border:1px solid #F0C9BE;border-radius:6px;
+                  font-size:12.5px;color:#991b1b;overflow-wrap:anywhere">
+        已退回本人修改{% if o.return_reason %}｜退回原因：{{ o.return_reason }}{% endif %}（本人重新提交后状态回到"待主管确认"）
+      </div>
+      {% endif %}
+      <div style="margin-top:8px;padding:8px 10px;background:#FCFAF7;border:1px dashed #E2D8CA;border-radius:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#9C9288">个人填报链接：</span>
+        <code style="font-size:12px;color:#C86432;flex:1 1 220px;min-width:0;overflow-wrap:anywhere">{{ link }}</code>
+        <a href="{{ link }}" target="_blank"
+           style="font-size:12px;color:#E6823C;text-decoration:none;white-space:nowrap">打开 ↗</a>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div style="padding:20px 0;text-align:center;color:#9C9288">暂无招募登记，有权限者可点击上方"新建招募登记"建号</div>
+    {% endfor %}
+  </div>
+
+  <script>
+    // 身份证号自动测算出生年月 + 入职年龄（前端辅助显示，真实测算以服务端为准）
+    function calcAge(idcard){
+      if(!/^\d{17}[\dXx]$/.test(idcard||'')) return '';
+      var y=+idcard.substr(6,4), m=+idcard.substr(10,2), d=+idcard.substr(12,2);
+      var t=new Date(), age=t.getFullYear()-y-((t.getMonth()+1)*100+t.getDate() < m*100+d);
+      return y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2)+' ｜ '+age+'岁';
+    }
+    document.getElementById('id_card').addEventListener('input', function(){
+      document.getElementById('age_show').value = calcAge(this.value);
+    });
+    // 改工号：点「改工号」展开内联表单，再点一次收起
+    function toggleNo(id){
+      var f = document.getElementById('noform-' + id);
+      if (!f) return;
+      f.style.display = (f.style.display === 'flex') ? 'none' : 'flex';
+    }
+    // 退回修改：点「退回修改」展开退回原因表单，再点一次收起
+    function toggleRet(id){
+      var f = document.getElementById('retform-' + id);
+      if (!f) return;
+      f.style.display = (f.style.display === 'flex') ? 'none' : 'flex';
+    }
+  </script>
+{% endblock %}

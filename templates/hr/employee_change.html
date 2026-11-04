@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}人员异动 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">人员异动 · {{ emp.name }}（{{ emp.employee_no }}）</h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    办理晋升 / 降职 / 调岗：系统记录异动前后的部门、职级、职务快照，保存后同步更新员工当前任职信息。
+  </div>
+
+  <div style="background:#fff;border-radius:8px;padding:16px 18px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    {# 当前任职（异动前快照） #}
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">当前任职（异动前）</div>
+    <div style="font-size:13px;color:#6B5D4F;margin-bottom:16px;padding:10px 12px;background:#FCFAF7;border-radius:6px">
+      部门：{{ emp.org.name if emp.org else '未设' }} ｜
+      职级：{% if emp.staff_type == 'external' %}—（外勤不挂职级）{% else %}{{ emp.level.code if emp.level else '未设' }}{% endif %} ｜
+      职务：{{ emp.title or '—' }}
+    </div>
+
+    <form method="post">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:640px">
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">异动类型 *</div>
+          <select name="change_type" required
+                  style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            <option value="晋升">晋升</option>
+            <option value="降职">降职</option>
+            <option value="调岗">调岗</option>
+          </select></div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">生效日期</div>
+          <input type="date" name="effective_date"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">新部门（不选=不变）</div>
+          <select name="to_org_id" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            <option value="">保持不变（{{ emp.org.name if emp.org else '未设' }}）</option>
+            {% for o in orgs %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
+          </select></div>
+        {% if emp.staff_type != 'external' %}
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">新职级（内勤，不选=不变）</div>
+          <select name="to_level_id" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            <option value="">保持不变（{{ emp.level.code if emp.level else '未设' }}）</option>
+            {% for lv in levels %}<option value="{{ lv.id }}">{{ lv.code }} - {{ lv.name }}</option>{% endfor %}
+          </select></div>
+        {% endif %}
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">新职务（留空=不变）</div>
+          <input name="to_title" placeholder="{{ emp.title or '—' }}"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+        <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">异动事由</div>
+          <input name="reason" placeholder="如 年度晋升、组织调整"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      </div>
+      <div style="margin-top:16px">
+        <button type="submit"
+                style="background:#E6823C;color:#fff;border:none;padding:10px 28px;border-radius:6px;font-size:14px;cursor:pointer">保存异动</button>
+        <a href="{{ url_for('hr.employees_active') }}"
+           style="margin-left:10px;font-size:13px;color:#6B5D4F;text-decoration:none">返回在职人员</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

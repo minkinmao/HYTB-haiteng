@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 人力架构基础信息{% endblock %}
+{% block pagename %}核心业务管理系统 · 人力架构基础信息{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  /* 层级树：同层级重复的值留空，靠缩进与左边线体现从属 */
+  .org-card td, .org-card th{white-space:nowrap}
+  .org-lv1{font-weight:600;color:#9C4E2C}
+  .org-lv2{color:#6B5D4F}
+  .org-lv3,.org-lv4{color:#2A2A2A}
+  .org-card tr.lv-sep td{border-top:1px solid #EAE2D6}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">人力架构基础信息
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（省公司 → 分支 → 分区 → 营业部 → 营业组 · 录人前先建）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  一条记录 = 一个<b>营业组</b>（最末级），上级链一并记在同一行。
+  <b>分区 / 营业部 / 营业组编码由系统自动生成</b>（层级式，一眼看出从属）：
+  <b style="color:#C86432">分区 FQ001</b> ／ <b style="color:#C86432">营业部 FQ001-B01</b> ／
+  <b style="color:#C86432">营业组 FQ001-B01-G01</b>。
+  同一「省公司+分支+分区」会<b>复用</b>同一分区编码，不会重复建号。删人之前请先把人挪走——
+  <b>已挂人员的营业组不允许删除</b>。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab on" href="{{ url_for('crm.org_struct') }}">人力架构<span class="n">{{ kpi.group }}</span></a>
+  <a class="crm-tab" href="{{ url_for('crm.manpower') }}">人力数据清单<span class="n">{{ kpi.people }}</span></a>
+  <a class="crm-tab" href="{{ url_for('crm.team_coefficient') }}">团队系数设置</a>
+  <a class="crm-tab" href="{{ url_for('crm.sales_fee') }}">销售费用清单</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">省公司</div><div class="v">{{ kpi.province }}</div></div>
+  <div class="crm-kpi"><div class="k">分支</div><div class="v">{{ kpi.branch }}</div></div>
+  <div class="crm-kpi"><div class="k">分区</div><div class="v">{{ kpi.zone }}</div></div>
+  <div class="crm-kpi"><div class="k">营业部</div><div class="v">{{ kpi.dept }}</div></div>
+  <div class="crm-kpi"><div class="k">营业组</div><div class="v">{{ kpi.group }}</div></div>
+  <div class="crm-kpi"><div class="k">已挂人员</div><div class="v">{{ kpi.people }}</div></div>
+</div>
+
+<div class="crm-tool">
+  {% if can_manage %}
+  <a class="crm-btn pri" href="{{ url_for('crm.org_struct_new') }}">＋ 新增架构</a>
+  {% endif %}
+  <span style="font-size:12px;color:#9C9288">
+    新增架构后才能录入人力档案（人力档案的「所属营业组」从这里取值）
+  </span>
+</div>
+
+<div class="crm-card org-card" style="overflow-x:auto">
+  <table class="crm-table" style="min-width:1080px">
+    <thead>
+      <tr>
+        <th style="white-space:nowrap">省公司</th>
+        <th style="white-space:nowrap">分支</th>
+        <th style="white-space:nowrap">分区（编码 / 名称）</th>
+        <th style="white-space:nowrap">营业部（编码）</th>
+        <th style="white-space:nowrap">营业组（编码）</th>
+        <th style="white-space:nowrap">人数</th>
+        <th style="white-space:nowrap">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      {% set p = loop.previtem %}
+      <tr class="{{ 'lv-sep' if p and p.zone_code != r.zone_code else '' }}">
+        <td class="org-lv1">{{ r.province if not p or p.province != r.province else '' }}</td>
+        <td class="org-lv2">{% if not p or p.province != r.province or p.branch != r.branch %}{{ r.branch or '-' }}{% endif %}</td>
+        <td class="org-lv3">
+          {% if not p or p.zone_code != r.zone_code %}
+          <span class="crm-nm">{{ r.zone_name or r.zone or '-' }}</span>
+          <div class="crm-sub">{{ r.zone_code or '-' }}{% if r.zone and r.zone_name %} · {{ r.zone }}{% endif %}</div>
+          {% endif %}
+        </td>
+        <td class="org-lv4">
+          {% if not p or p.dept_code != r.dept_code %}
+          {{ r.dept or '-' }}<div class="crm-sub">{{ r.dept_code or '-' }}</div>
+          {% endif %}
+        </td>
+        <td>
+          <span class="crm-nm">{{ r.group_name or '-' }}</span>
+          <div class="crm-sub">{{ r.group_code or '-' }}</div>
+        </td>
+        <td class="num">{{ cnt.get(r.id, 0) }}</td>
+        <td style="white-space:nowrap">
+          {% if can_manage %}
+          <a class="crm-a" href="{{ url_for('crm.org_struct_edit', oid=r.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.org_struct_delete', oid=r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确认删除「{{ r.group_name }}」（{{ r.group_code }}）？')">
+            <button class="crm-del" type="submit">删除</button>
+          </form>
+          {% else %}<span style="color:#9C9288">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7"><div class="crm-empty">
+        还没有人力架构，点左上角「＋ 新增架构」建第一条（省公司 → 分支 → 分区 → 营业部 → 营业组）
+      </div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div style="font-size:12.5px;color:#9C9288;margin-top:10px">共 {{ rows|length }} 个营业组</div>
+{% endblock %}

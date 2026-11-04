@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}ADM · {{ '编辑资产' if row else '登记资产' }}{% endblock %}
+{% block pagename %}行政管理系统 · {{ '编辑资产' if row else '登记资产' }}{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑固定资产' if row else '登记固定资产' }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（编号 {{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  资产编号由系统自动生成（ZC-年月-序号）。折旧年限与残值率用于计算月折旧额，默认 3 年 / 5%。
+</div>
+
+<form class="adm-form" method="post" enctype="multipart/form-data"
+      action="{{ url_for('adm.asset_edit', aid=row.id) if row else url_for('adm.asset_new') }}">
+  <div class="adm-grid">
+    <div class="adm-fld">
+      <label>资产名称 <b>*</b></label>
+      <input type="text" name="name" required value="{{ (row.name or '') if row else '' }}" placeholder="如：笔记本电脑">
+    </div>
+    <div class="adm-fld">
+      <label>资产类别</label>
+      <select name="category">
+        <option value="">请选择</option>
+        {% for c in cats %}
+        <option value="{{ c }}" {{ 'selected' if row and row.category == c else '' }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld">
+      <label>规格型号</label>
+      <input type="text" name="spec" value="{{ (row.spec or '') if row else '' }}" placeholder="如：ThinkPad E14 / i5-1340P">
+    </div>
+    <div class="adm-fld">
+      <label>资产原值（元）</label>
+      <input type="number" step="0.01" name="price" value="{{ (row.price or '') if row else '' }}" placeholder="0.00">
+    </div>
+    <div class="adm-fld">
+      <label>购置日期</label>
+      <input type="date" name="buy_date" value="{{ (row.buy_date or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>使用人 / 保管人</label>
+      <input type="text" name="keeper" value="{{ (row.keeper or '') if row else '' }}">
+    </div>
+    <div class="adm-fld">
+      <label>使用部门</label>
+      <input type="text" name="dept" value="{{ (row.dept or '') if row else '' }}" placeholder="如：营销部">
+    </div>
+    <div class="adm-fld">
+      <label>存放地点</label>
+      <input type="text" name="place" value="{{ (row.place or '') if row else '' }}" placeholder="如：公司办公室">
+    </div>
+    <div class="adm-fld">
+      <label>折旧年限（年）</label>
+      <input type="number" min="0" step="1" name="life_years" value="{{ row.life_years if row else 3 }}">
+    </div>
+    <div class="adm-fld">
+      <label>残值率（%）</label>
+      <input type="number" min="0" step="0.1" name="salvage_rate" value="{{ row.salvage_rate if row else 5 }}">
+    </div>
+    <div class="adm-fld">
+      <label>使用状态</label>
+      <select name="status">
+        {% for v, lb in statuses %}
+        <option value="{{ v }}" {{ 'selected' if (row.status if row else 'in_use') == v else '' }}>{{ lb }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="adm-fld full">
+      <label>购置凭证 / 发票</label>
+      <input type="file" name="file">
+      <span class="hint">
+        支持 pdf / ofd / 图片 / office 文档 / zip，单个不超过 10MB。
+        {% if row and row.file_path %}当前已上传：{{ row.file_name }}（重新上传会覆盖）{% endif %}
+      </span>
+    </div>
+    <div class="adm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="领用 / 调拨 / 维修 / 报废记录等">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+  <div class="adm-acts">
+    <button class="adm-btn pri" type="submit">{{ '保存修改' if row else '登记入库' }}</button>
+    <a class="adm-btn" href="{{ url_for('adm.assets') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

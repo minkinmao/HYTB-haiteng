@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}我的资料 · 完善个人入职电子信息 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">完善个人入职电子信息 <span style="font-size:13px;font-weight:400;color:#9C9288">My Profile</span></h2>
+
+  {% if not emp %}
+  <div class="card" style="padding:18px 20px;max-width:760px">
+    <div style="font-size:14px;color:#9C9288">当前登录账号（{{ username or '—' }}）未关联到员工档案，暂无可完善的个人电子信息。</div>
+    <div style="font-size:13px;color:#9C9288;margin-top:8px">若您已入职，请确认登录名是否为本人工号；或联系人事管理员为您开通办公账号。</div>
+  </div>
+  {% else %}
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    亲爱的 {{ emp.name }}（工号 {{ emp.employee_no }}）：HR 已为您开通办公账号，请补全以下个人电子信息，提交后 HR 即可用于工资发放与紧急联络。
+  </div>
+
+  <div class="card" style="padding:18px 20px;max-width:760px">
+    <form method="post" action="{{ url_for('hr.my_profile') }}">
+      {# 联系信息 #}
+      <div style="font-size:14px;font-weight:600;margin-bottom:10px;color:#C86432">联系信息</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">手机号</div>
+          <input name="phone" value="{{ emp.phone or '' }}" placeholder="如 13800000000"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">公司邮箱</div>
+          <input name="email" value="{{ emp.email or '' }}" placeholder="如 name@hywinpro.cn"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+      </div>
+      <div style="flex:1;min-width:220px;margin-bottom:14px">
+        <div style="font-size:11px;color:#9C9288;margin-bottom:3px">现居住址</div>
+        <input name="address" value="{{ emp.address or '' }}" placeholder="用于紧急联络与材料寄送"
+               style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+      </div>
+
+      {# 紧急联系人 #}
+      <div style="font-size:14px;font-weight:600;margin:6px 0 10px;color:#C86432">紧急联系人</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">联系人姓名</div>
+          <input name="emergency_name" value="{{ emp.emergency_name or '' }}" placeholder="如 配偶/父母姓名"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">联系人电话</div>
+          <input name="emergency_phone" value="{{ emp.emergency_phone or '' }}" placeholder="如 13900000000"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+      </div>
+
+      {# 工资卡 #}
+      <div style="font-size:14px;font-weight:600;margin:6px 0 10px;color:#C86432">工资卡（用于发放薪资）</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">开户行</div>
+          <input name="bank_name" value="{{ emp.bank_name or '' }}" placeholder="如 招商银行广州分行"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">银行卡号</div>
+          <input name="bank_account" value="{{ emp.bank_account or '' }}" placeholder="工资卡账号"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+      </div>
+
+      {# 其他基本信息 #}
+      <div style="font-size:14px;font-weight:600;margin:6px 0 10px;color:#C86432">其他基本信息</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">婚姻状况</div>
+          <select name="marital" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+            {% for opt in ['', '未婚', '已婚', '离异', '丧偶', '保密'] %}
+            <option value="{{ opt }}" {% if emp.marital == opt %}selected{% endif %}>{{ opt or '请选择' }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex:1;min-width:220px;margin-bottom:12px">
+          <div style="font-size:11px;color:#9C9288;margin-bottom:3px">籍贯</div>
+          <input name="hometown" value="{{ emp.hometown or '' }}" placeholder="如 广东广州"
+                 style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+        </div>
+      </div>
+      <div style="flex:1;min-width:220px;margin-bottom:14px">
+        <div style="font-size:11px;color:#9C9288;margin-bottom:3px">兴趣爱好</div>
+        <input name="hobby" value="{{ emp.hobby or '' }}" placeholder="选填"
+               style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px">
+      </div>
+
+      <button type="submit"
+              style="margin-top:6px;background:#C86432;color:#fff;border:none;padding:10px 26px;border-radius:6px;font-size:14px;cursor:pointer">
+        提交并完善
+      </button>
+    </form>
+  </div>
+  {% endif %}
+{% endblock %}

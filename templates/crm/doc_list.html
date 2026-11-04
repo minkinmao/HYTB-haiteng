@@ -1,0 +1,224 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 产品资料库{% endblock %}
+{% block pagename %}核心业务管理系统 · 产品资料库{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+{# 数值统一按百分比呈现；为 0 / 空 的一律显示 "-" #}
+{% macro pct(v) %}{% if v %}{{ '%.2f'|format(v) }}%{% else %}-{% endif %}{% endmacro %}
+
+<h2 style="font-size:18px;margin:0 0 6px">产品资料库
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（产品台账 ＋ 保司微投指南 / 产品条款 / 说明书 / 费率表 等材料）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  十八改：原「产品查询」与本页合并 —— 在<b>产品台账</b>里搜到产品，行内即可查看 / 下载 / 上传该产品的材料；
+  <b>资料清单</b>页签按材料条目浏览（含尚未关联产品的材料）。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.commission_query') }}">佣金查询</a>
+  <a class="crm-tab on" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">产品数</div><div class="v">{{ kpi.product }}</div></div>
+  <div class="crm-kpi"><div class="k">资料总数</div><div class="v">{{ kpi.total }}</div></div>
+  <div class="crm-kpi"><div class="k">微投指南</div><div class="v">{{ kpi.guide }}</div></div>
+  <div class="crm-kpi"><div class="k">产品条款</div><div class="v">{{ kpi.clause }}</div></div>
+</div>
+
+{# ---------- 二级页签：产品台账 / 资料清单 ---------- #}
+<div class="crm-tabs" style="margin-bottom:14px">
+  <a class="crm-tab {{ 'on' if tab == 'product' else '' }}"
+     href="{{ url_for('crm.docs', tab='product', insurer_id=iid, itype=itype, ptype=ptype, kw=kw) }}">产品台账</a>
+  <a class="crm-tab {{ 'on' if tab == 'doc' else '' }}"
+     href="{{ url_for('crm.docs', tab='doc', insurer_id=iid, kw=kw, doc_type=dt) }}">资料清单（{{ kpi.total }}）</a>
+</div>
+
+{% if can_manage %}
+<form class="crm-tool" method="post" enctype="multipart/form-data" action="{{ url_for('crm.doc_new') }}"
+      style="background:#FBF6F1;border-color:#E8DCCE">
+  <label style="font-weight:600;color:#9C4E2C">上传资料</label>
+  <select name="insurer_id" required style="min-width:180px">
+    <option value="">— 选择保司 —</option>
+    {% for iv in insurers %}
+    <option value="{{ iv.id }}" {{ 'selected' if iid == iv.id|string else '' }}>{{ iv.short_name or iv.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="doc_type" required>
+    <option value="">— 资料类型 —</option>
+    {% for c, n in doc_types %}<option value="{{ c }}">{{ n }}</option>{% endfor %}
+  </select>
+  {# 从产品台账点「＋上传材料」过来时自动带上产品名，避免手工重输 #}
+  <input type="text" name="product_name" value="{{ pname }}" placeholder="产品名称（可选）">
+  <input type="text" name="version" placeholder="版本 / 生效日（可选）" style="min-width:140px">
+  <input type="file" name="file" required style="min-width:0;max-width:210px;padding:6px 8px">
+  <button class="crm-btn pri" type="submit">上传</button>
+</form>
+{% endif %}
+
+<form class="crm-tool" method="get">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="产品 / 标题 / 保司">
+  <label>保司</label>
+  <select name="insurer_id">
+    <option value="">全部</option>
+    {% for iv in insurers %}
+    <option value="{{ iv.id }}" {{ 'selected' if iid == iv.id|string else '' }}>{{ iv.short_name or iv.name }}</option>
+    {% endfor %}
+  </select>
+  {% if tab == 'product' %}
+  <label>险种</label>
+  <select name="itype">
+    <option value="">全部</option>
+    {% for c in itypes %}<option value="{{ c }}" {{ 'selected' if c == itype else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <label>缴费方式</label>
+  <select name="ptype">
+    <option value="">全部</option>
+    {% for c, n in ptypes %}<option value="{{ c }}" {{ 'selected' if c == ptype else '' }}>{{ n }}</option>{% endfor %}
+  </select>
+  {% else %}
+  <label>资料类型</label>
+  <select name="doc_type">
+    <option value="">全部</option>
+    {% for c, n in doc_types %}<option value="{{ c }}" {{ 'selected' if c == dt else '' }}>{{ n }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <button class="crm-btn pri" type="submit">查询</button>
+  <a class="crm-btn" href="{{ url_for('crm.docs', tab=tab) }}">重置</a>
+  {% if tab == 'product' %}
+  <span class="crm-spacer"></span>
+  <span style="font-size:12.5px;color:#9C9288">共 {{ kpi.product }} 个产品</span>
+  <a class="crm-btn" href="{{ url_for('crm.product_export', insurer_id=iid, itype=itype, ptype=ptype, kw=kw) }}">导出 Excel</a>
+  {% endif %}
+</form>
+
+{% if tab == 'product' %}
+{# ===================== 产品台账（一行＝一个产品） ===================== #}
+<div class="crm-card">
+  {% if prows %}
+  <div style="overflow-x:auto">
+  <table class="crm-table" style="min-width:1340px">
+    <thead>
+      <tr>
+        <th>保司简称</th>
+        <th style="min-width:150px">产品名称</th>
+        <th>产品编码</th>
+        <th>险种</th>
+        <th>缴费方式</th>
+        <th style="min-width:140px">缴别</th>
+        <th>合约口径</th>
+        <th style="text-align:right;white-space:nowrap">首年佣金率</th>
+        <th style="white-space:nowrap">合约期间</th>
+        <th>状态</th>
+        <th style="min-width:180px">产品材料</th>
+        <th style="white-space:nowrap">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in prows %}
+      <tr>
+        <td style="white-space:nowrap">{{ r.insurer_short }}</td>
+        <td>{{ r.product_name }}</td>
+        <td class="mono">{{ r.product_code or '—' }}</td>
+        <td style="white-space:nowrap">{{ r.insurance_type }}</td>
+        <td style="white-space:nowrap">{{ dname.get(r.pay_type, r.pay_type or '—') }}</td>
+        <td>{% if r.periods %}{{ r.periods|join(' / ') }}{% else %}-{% endif %}</td>
+        <td style="white-space:nowrap">
+          {% if r.levels %}<span class="crm-tag t-gray">{{ r.levels|join(' + ') }}</span>{% else %}-{% endif %}
+        </td>
+        <td style="text-align:right;white-space:nowrap" class="mono">
+          {% if r.rate_max %}
+            {% if r.rate_min == r.rate_max %}{{ pct(r.rate_max) }}{% else %}{{ '%.2f'|format(r.rate_min) }}% ~ {{ '%.2f'|format(r.rate_max) }}%{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td style="white-space:nowrap" class="mono">
+          {% if r.dmin or r.dmax %}{{ r.dmin or '—' }} ~ {{ r.dmax or '—' }}{% else %}-{% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          {% set sc = {'draft': 't-gray', 'active': 't-ok', 'ended': 't-danger'} %}
+          <span class="crm-tag {{ sc.get(r.status, 't-gray') }}">{{ dname.get(r.status, r.status or '—') }}</span>
+        </td>
+        {# ⭐ 合并后的核心：产品 → 材料，行内直接可下载；没材料的给上传入口 #}
+        <td>
+          {% if r.docs %}
+            {% for d in r.docs[:3] %}
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px">
+              <a class="crm-a" href="{{ url_for('crm.doc_download', did=d.id) }}"
+                 title="{{ d.title }}（{{ dname.get(d.doc_type, d.doc_type or '') }}）">{{ d.file_name or d.title }}</a>
+            </div>
+            {% endfor %}
+            {% if r.docs|length > 3 %}<div class="crm-sub">…共 {{ r.docs|length }} 份</div>{% endif %}
+          {% else %}
+            <span style="color:#B9B0A6">未上传</span>
+          {% endif %}
+          {% if can_manage %}
+          <div style="margin-top:4px">
+            <a class="crm-a" href="{{ url_for('crm.docs', tab='doc', insurer_id=r.insurer_id, pname=r.product_name) }}">＋上传材料</a>
+          </div>
+          {% endif %}
+        </td>
+        <td>
+          <a class="crm-a" href="{{ url_for('crm.contract_detail', cid=r.cids[0]) }}">详情</a>
+          {% if r.codes|length > 1 %}<span style="font-size:12px;color:#9C9288" title="{{ r.codes|join(' / ') }}"> 共{{ r.codes|length }}份</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="crm-empty">当前筛选条件下没有产品。可清空筛选条件，或换一个保司 / 险种再试。</div>
+  {% endif %}
+</div>
+
+{% else %}
+{# ===================== 资料清单（原产品资料库） ===================== #}
+<div class="crm-card">
+  {% if rows %}
+  <table class="crm-table">
+    <thead>
+      <tr>
+        <th style="white-space:nowrap;min-width:100px">资料类型</th><th>标题 / 版本</th><th>保司</th><th>产品</th>
+        <th>文件名 / 大小</th><th>上传时间</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in rows %}
+      <tr>
+        <td style="white-space:nowrap"><span class="crm-tag t-info">{{ dname.get(d.doc_type, d.doc_type or '—') }}</span></td>
+        <td>
+          <div class="crm-nm">{{ d.title }}</div>
+          <div class="crm-sub">{{ d.version or '—' }}{% if d.note %} · {{ d.note }}{% endif %}</div>
+        </td>
+        {# 十六改：保司统一按**简称**展示（简称缺失回落全称） #}
+        <td style="white-space:nowrap">{{ ishort.get(d.insurer_id) or d.insurer_name or '—' }}</td>
+        <td>{{ d.product_name or '—' }}</td>
+        <td>
+          <div>{{ d.file_name or '—' }}</div>
+          <div class="crm-sub">{{ size_text(d.file_size) }}</div>
+        </td>
+        <td class="mono">{{ d.upload_at.strftime('%Y-%m-%d %H:%M') if d.upload_at else '—' }}</td>
+        <td>
+          <a class="crm-a" href="{{ url_for('crm.doc_download', did=d.id) }}">下载</a>
+          {% if can_manage %}
+          <form method="post" action="{{ url_for('crm.doc_delete', did=d.id) }}" style="display:inline"
+                onsubmit="return confirm('确定删除资料「{{ d.title }}」？附件会一并删除。')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无产品资料。{% if can_manage %}在上方选择保司与资料类型后上传。{% endif %}</div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

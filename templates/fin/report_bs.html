@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}资产负债表 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 资产负债表{% endblock %}
+
+{% macro bs_row(r) %}
+  {% if r.head %}
+  <tr style="background:#FAF7F2">
+    <td style="width:46px"></td>
+    <td colspan="3" style="padding:8px 9px;font-weight:600;color:#6B5D4F;font-size:12.5px">{{ r.label }}</td>
+  </tr>
+  {% else %}
+  <tr style="{{ 'border-top:1.5px solid #C86432;font-weight:700;background:#FFFDFA' if r.total else '' }}">
+    <td style="padding:6px 9px;text-align:center;color:#9C9288;font-size:12px">{{ r.line or '' }}</td>
+    <td style="padding:6px 9px{% if r.label.startswith('减：') %};padding-left:20px;color:#6B5D4F{% endif %}">
+      {{ r.label }}
+    </td>
+    <td style="padding:6px 9px;text-align:right;font-variant-numeric:tabular-nums">
+      {{ '{:,.2f}'.format(r.value_b) }}
+    </td>
+    <td style="padding:6px 9px;text-align:right;font-variant-numeric:tabular-nums;
+               width:112px;{{ 'color:#C86432' if r.total else '' }}">
+      {{ '{:,.2f}'.format(r.value) }}
+    </td>
+  </tr>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">资产负债表
+    <span style="font-size:13px;font-weight:400;color:#9C9288">Balance Sheet · 会小企01表</span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    这张表是<b style="color:#5C554D">「账做对了没有」的最终裁判</b>：
+    资产 ＝ 负债 + 所有者权益，不平说明有凭证绕过了借贷校验。
+    取数只认已记账凭证，红字凭证负数天然抵减。
+  </div>
+
+  {# 平衡横幅——这张表最重要的一句话 #}
+  {% set ok = meta.balanced %}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px;
+              border-left:3px solid {{ '#1E8E4E' if ok else '#CC2B2B' }};
+              background:{{ '#F2FAF5' if ok else '#FDF4F4' }}">
+    <div style="font-size:14px;color:{{ '#166534' if ok else '#991b1b' }}">
+      <b>{{ '✓ 试算平衡：资产 ＝ 负债 + 所有者权益' if ok else '✗ 不平衡：资产 ≠ 负债 + 所有者权益，差额 ￥' ~ '{:,.2f}'.format(meta.diff) }}</b>
+    </div>
+    <div style="font-size:13px;color:#5C554D;margin-top:5px">
+      资产总计 <b>￥{{ '{:,.2f}'.format(meta.assets) }}</b>
+      ｜ 负债和所有者权益总计 <b>￥{{ '{:,.2f}'.format(meta.liab_equity) }}</b>
+      ｜ 会计期间 <b>{{ period }}</b>
+      ｜ 本期已记账凭证 <b>{{ meta.vch_count }}</b> 张
+    </div>
+  </div>
+
+  {# 期间切换 + 导出 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.report_bs') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">切换期间</button>
+      <a href="{{ url_for('fin.report_export', kind='bs', period=period) }}"
+         style="font-size:13px;color:#C86432;border:1px solid #E9D9C6;border-radius:8px;
+                padding:8px 16px;text-decoration:none;background:#FCFAF7">导出 Excel</a>
+      <a href="{{ url_for('fin.report_custom', tid=meta.tpl.id, period=period) if meta.tpl else '#' }}"
+         style="font-size:13px;color:#9C9288;padding-bottom:9px">查看 / 修改取数公式 →</a>
+    </form>
+  </div>
+
+  {# 左右两栏：左资产 / 右负债与所有者权益 #}
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="card" style="flex:1;min-width:430px;padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#F7F3EC;color:#6B5D4F">
+            <th style="padding:9px 9px;font-size:12.5px;border-bottom:1px solid #EAE2D6">行次</th>
+            <th style="padding:9px 9px;font-size:12.5px;text-align:left;border-bottom:1px solid #EAE2D6">资产</th>
+            <th style="padding:9px 9px;font-size:12.5px;text-align:right;border-bottom:1px solid #EAE2D6">年初余额</th>
+            <th style="padding:9px 9px;font-size:12.5px;text-align:right;border-bottom:1px solid #EAE2D6">期末余额</th>
+          </tr>
+        </thead>
+        <tbody>{% for r in left %}{{ bs_row(r) }}{% endfor %}</tbody>
+      </table>
+    </div>
+    <div class="card" style="flex:1;min-width:430px;padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#F7F3EC;color:#6B5D4F">
+            <th style="padding:9px 9px;font-size:12.5px;border-bottom:1px solid #EAE2D6">行次</th>
+            <th style="padding:9px 9px;font-size:12.5px;text-align:left;border-bottom:1px solid #EAE2D6">负债和所有者权益</th>
+            <th style="padding:9px 9px;font-size:12.5px;text-align:right;border-bottom:1px solid #EAE2D6">年初余额</th>
+            <th style="padding:9px 9px;font-size:12.5px;text-align:right;border-bottom:1px solid #EAE2D6">期末余额</th>
+          </tr>
+        </thead>
+        <tbody>{% for r in right %}{{ bs_row(r) }}{% endfor %}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">口径说明：</b>
+    ① 「年初余额」栏取该年度 1 月的期初数（账套年中启用时即建账期初数），「期末余额」栏取报表期期末数，两列用同一套公式算出；
+    ② 未分配利润已把<b>尚未结转的损益类科目余额</b>一并计入，所以没做期末结转时这张表也平——做完结转（#36）该项自动退化为「本年利润 + 利润分配」；
+    ③ 累计折旧按资产抵减项处理（固定资产账面价值 ＝ 原价 − 累计折旧）。
+  </div>
+{% endblock %}

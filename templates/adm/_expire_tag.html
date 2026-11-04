@@ -1,0 +1,12 @@
+{# 到期状态标签：依赖外层循环变量 it（含 it.state / it.days） #}
+{% if it.state == 'none' %}
+  <span class="adm-tag t-gray">长期有效</span>
+{% elif it.state == 'expired' %}
+  <span class="adm-tag t-danger">已过期 {{ -it.days }} 天</span>
+{% elif it.state == 'danger' %}
+  <span class="adm-tag t-danger">{{ it.days }} 天后到期</span>
+{% elif it.state == 'warn' %}
+  <span class="adm-tag t-warn">{{ it.days }} 天后到期</span>
+{% else %}
+  <span class="adm-tag t-ok">{{ it.days }} 天后到期</span>
+{% endif %}

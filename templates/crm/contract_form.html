@@ -1,0 +1,3638 @@
+{% extends 'base.html' %}
+{# =====================================================================
+   产品合约表单（六改 2026-10-02）
+   · side=hq 总公司合约协议：只填「总总」（tt）数据，**不出现任何分公司层面元素**
+   · side=br 分公司合约协议：只填「分分」（ff）数据，产品名只能从总总已录产品下拉筛，
+     选完产品自动带出总总已录缴别（正序），用户只填分分系数
+   · 变量 PRE = tt / ff，用它把「总总 / 分分」两套字段在同一份模板里切换，
+     另一侧不渲染 → 保存时取不到即 0，正好符合「单口径」口径
+   · 产品缴别多选 → 自动生成缴别行（正序），RYC 与 FYC 平铺在同一张卡里一次填完
+   ===================================================================== #}
+{% set PRE = 'tt' if side == 'hq' else 'ff' %}
+{% set LBL = '总总' if side == 'hq' else '分分' %}
+{% block title %}CRM · {{ '编辑' if row else '新建' }}{{ sname }}{% endblock %}
+{% block pagename %}核心业务管理系统 · {{ '编辑' if row else '新建' }}{{ sname }}{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .tier-card{background:#FFFDFA;border:1px solid #E8DCCE;border-radius:12px;padding:14px 16px 12px;
+    margin-bottom:14px}
+  .tier-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;
+    padding-bottom:10px;border-bottom:1px dashed #EEE3D6}
+  .tier-hd b{font-size:14px;color:#9C4E2C;white-space:nowrap}
+  .tier-hd .sp{flex:1}
+  .tier-hd select{padding:7px 10px;border:1px solid #E2D8CA;border-radius:8px;font-size:13px;
+    background:#fff;color:#2A2A2A;min-width:150px}
+  /* 二十八改：缴别卡头部的「所属组件 + 缴别」只读标签 */
+  .tier-pd{padding:6px 12px;border:1px solid #E8DCCE;border-radius:8px;background:#F7F2EA;
+    font-size:13px;color:#2A2A2A;font-weight:600}
+  .tier-comp{font-size:12px;color:#2F7d4f;background:#EEF7EA;border:1px solid #CFE6C6;
+    border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .tier-comp:empty{display:none}
+  /* 二十八改：组件内的「本组件缴别」芯片区 */
+  .comp-pp-wrap{margin-top:12px;padding-top:12px;border-top:1px dashed #DCE9D8}
+  .comp-pp-lb{display:block;font-size:12.5px;color:#2F7d4f;font-weight:600;margin-bottom:8px}
+  .comp-pp-lb b{color:#C0392B}
+  .comp-pp{margin-bottom:8px}
+  .comp-pp .pp{background:#fff}
+  .comp-pp .pp.on{background:#E9F6E2;border-color:#9FCF9F;color:#2F7d4f}
+  .comp-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;
+    border-bottom:1px dashed #DCE9D8}
+  .comp-hd .comp-no{width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;
+    background:#2F7d4f;color:#fff;font-size:12px}
+  .comp-hd .comp-tag{font-size:11.5px;color:#2F7d4f}
+  .comp-hd .sp{flex:1}
+  .tier-sum{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding:9px 14px;
+    background:#EEF4FA;border:1px solid #D7E3F0;border-radius:9px;font-size:12.5px;color:#4A6B8A}
+  .tier-sum b{color:#2F6BA8;font-variant-numeric:tabular-nums;margin-left:6px}
+  .tier-card .crm-grid{margin-top:12px}
+  .tier-card > .crm-block:first-of-type{margin-top:4px}
+  /* ===== 二十九改：续期继续率分档（续期佣金特殊通道） ===== */
+  .rs-toggle{margin-top:12px;padding:9px 12px;background:#F7F4EE;border:1px dashed #E2D8CA;
+    border-radius:9px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+  .rs-toggle label{display:flex;align-items:center;gap:7px;font-size:13px;color:#5C554D;cursor:pointer}
+  .rs-toggle label b{color:#9C4E2C}
+  .rs-toggle input[type=checkbox]{width:15px;height:15px;accent-color:#E6823C;margin:0}
+  .rs-tip{font-size:12px;color:#9C9288}
+  .rs-wrap{margin-top:10px;padding:11px 13px;background:#FBF6EF;border:1px solid #EFE0CD;border-radius:10px}
+  .rs-wrap-hd{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding-bottom:8px;
+    border-bottom:1px dashed #F0DCC6;margin-bottom:10px}
+  .rs-wrap-hd b{font-size:13px;color:#9C4E2C}
+  .rs-wrap-note{font-size:12px;color:#9C9288}
+  .rs-wrap-hd .sp{flex:1}
+  .rs-blk{background:#fff;border:1px solid #EFE0CD;border-radius:9px;padding:10px 12px;margin-bottom:10px}
+  .rs-blk-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .rs-blk-hd .rs-lb{font-size:12.5px;color:#5C554D}
+  .rs-blk-hd select{padding:5px 8px;border:1px solid #E2D8CA;border-radius:7px;font-size:13px;
+    background:#fff;color:#2A2A2A}
+  .rs-blk-hd .rs-yname{font-size:12px;color:#9C9288}
+  .rs-blk-hd .sp{flex:1}
+  .rs-blk-hd .rs-full{font-size:12.5px;color:#2F6BA8;font-variant-numeric:tabular-nums}
+  .rs-blk-hd .rs-full b{color:#1F5288}
+  .rs-tb{width:100%;border-collapse:collapse;font-size:12.5px}
+  .rs-tb th{background:#F7F2EA;color:#7A6E60;font-weight:600;font-size:12px;
+    padding:5px 8px;border-bottom:1px solid #EAE2D6;text-align:left}
+  .rs-tb td{padding:5px 8px;border-bottom:1px dashed #F2EADC;color:#5C554D;white-space:nowrap}
+  .rs-tb td input[type=number]{width:96px;padding:4px 7px;font-size:13px;border-radius:7px;
+    border:1px solid #E2D8CA;background:#FCFAF7}
+  .rs-tb .rs-c3{width:44px;text-align:right}
+  .rs-add{margin-top:8px}
+  /* ===== 三十一改（2026-10-29）：续期分档改为「区间做行 × 年度做列」的矩阵 =====
+     威哥：「继续率是要有区间的」—— 一个区间行里直接填 RYC2 / RYC3…，同一套区间不必每年度重录一遍。 */
+  .rs-years{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+  .rs-years .rs-lb{font-size:12.5px;color:#5C554D;white-space:nowrap}
+  .rs-yc{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:#5C554D;
+    background:#fff;border:1px solid #E8DCCE;border-radius:8px;padding:4px 9px;cursor:pointer}
+  .rs-yc:hover{border-color:#E5B58C}
+  .rs-yc.on{border-color:#E6823C;background:#FDF3E4;color:#9C4E2C;font-weight:600}
+  .rs-yc input{width:14px;height:14px;accent-color:#E6823C;margin:0}
+  .rs-matrix th{text-align:center;white-space:nowrap}
+  .rs-matrix th .rs-fh{display:block;font-size:11px;color:#2F6BA8;font-weight:600;margin-top:1px}
+  .rs-matrix td{text-align:center}
+  .rs-matrix td input[type=number]{width:84px;text-align:right}
+  .rs-matrix .rs-rng{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:12.5px}
+  .rs-matrix .rs-rng input[type=number]{width:76px}
+  .rs-matrix .rs-c3{width:36px}
+  .rs-empty{font-size:12.5px;color:#9C9288;padding:8px 2px}
+  .rs-foot{font-size:12px;color:#9C9288;margin-top:7px;line-height:1.7}
+  /* ===== 三十二改（2026-10-29）：分档「自动沿用后续缴别」===== */
+  .rs-sync{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .rs-badge{font-size:11.5px;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .rs-badge.auto{background:#EAF3FB;color:#1F5288;border:1px solid #C9DFF2}
+  .rs-badge.own{background:#F6F1E9;color:#8A7C6C;border:1px solid #E6DACB}
+  .rs-lk{font-size:11.5px;color:#2F6BA8;cursor:pointer;text-decoration:underline;
+    text-decoration-style:dotted;white-space:nowrap}
+  .rs-lk:hover{color:#1F5288}
+  .rs-push{font-size:12px;padding:3px 10px}
+  /* ===== 四十改（2026-10-29）：续期服务费比例（整个产品共用一份） ===== */
+  .blk-ratio{background:#FBFAF6}
+  .blk-ratio .blk-tag.tag-ratio{background:#EDF5EA;color:#3F6B34}
+  .rr-tip{margin-top:10px;padding:8px 11px;background:#F7F4EE;border:1px dashed #E2D8CA;
+    border-radius:9px;font-size:12px;color:#7A6E60;line-height:1.7}
+  .rr-tip b{color:#9C4E2C}
+  .rr-hint{font-size:12px;color:#9C9288;margin-left:4px}
+  .rr-matrix td input[type=number]{width:74px}
+  .rr-matrix .rr-del{border:1px solid #E6C9B4;background:#fff;color:#B5532A;border-radius:7px;
+    font-size:12px;padding:3px 8px;cursor:pointer}
+  .rr-matrix .rr-del:hover{background:#FBEDE3}
+  .rr-empty{font-size:12.5px;color:#9C9288;padding:8px 2px;line-height:1.8}
+  /* 沿用来的镜像块：区间灰底锁死，但费率框保持白底可填（三十四改） */
+  .rs-wrap.rs-ro{background:#F8F5F0;border:1px dashed #E1D6C7;border-radius:9px;padding:10px 12px}
+  .rs-ro input[readonly]{background:#F1ECE4;color:#6B6156;cursor:not-allowed}
+  .rs-ro .rs-fee{background:#fff;border-color:#E9C39C}
+  .rs-ro .rs-fee:focus{background:#fff;border-color:#E6823C;box-shadow:0 0 0 3px rgba(230,130,60,.14)}
+  .rs-ro input[type=checkbox]{pointer-events:none}
+  .rs-ro .rs-add,.rs-ro .rs-c3{display:none}
+  .rs-ro .rs-wrap-note,.rs-ro .rs-wrap-hd b{color:#8A7C6C}
+  /* 三十五改：轻提示（自动屏蔽前卡数据时用） */
+  #rsToast{position:fixed;left:50%;bottom:52px;transform:translate(-50%,14px);
+    background:rgba(42,42,42,.93);color:#fff;font-size:13px;padding:10px 18px;border-radius:9px;
+    box-shadow:0 8px 26px rgba(0,0,0,.22);opacity:0;pointer-events:none;z-index:9999;
+    transition:opacity .22s,transform .22s;max-width:78vw}
+  #rsToast.on{opacity:1;transform:translate(-50%,0)}
+  /* ===== 三十三改（2026-10-29）：RYC 只显示到实际年数 ===== */
+  .ryc-lb{font-size:12px;color:#8A9AA8;white-space:nowrap}
+  .blk-contract .ryc-cnt{padding:3px 8px;border:1px solid #D7E3F0;border-radius:7px;
+    font-size:12.5px;background:#fff;color:#2F6BA8;font-weight:600;cursor:pointer}
+  .blk-contract .ryc-cnt:hover{border-color:#A9C8E4}
+  .pct.rs-auto{background:#EEF4FA;color:#1F5288;font-weight:600}
+  .rs-blk-hd .crm-del{font-size:12px;padding:3px 9px}
+  /* 十改：① 合约块 / ② 方案块 的配色统一在 _crm_css.html 的 .blk-* 里。
+     十二改：方案独立成「四、」一节，方案块改用 .plan-block（旧的卡内行内方案样式已废弃）。 */
+  .plan-block{background:#fff;border:1px solid #EFE0CD;border-radius:10px;
+    padding:12px 14px;margin-bottom:12px}
+  .plan-block.tier-out{border-color:#E8C89A;background:#FDF3E4}
+  .pb-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;
+    border-bottom:1px dashed #F0DCC6}
+  .pb-hd b{font-size:13px;color:#9C4E2C}
+  .pb-hd .sp{flex:1}
+  .pb-no{color:#C86432;font-weight:700}
+  .award-hd{font-size:12.5px;color:#9C4E2C;font-weight:600;margin:10px 0 6px}
+  .award-tb{width:100%}
+  .award-tb th{font-size:12px;padding:6px 8px;background:#FDF3E4}
+  .award-tb td{padding:5px 8px;border-top:1px solid #F2E9DC}
+  .award-tb .ap{font-size:13px;color:#6B5D4F;white-space:nowrap}
+  .award-tb input{padding:6px 8px;border:1px solid #E2D8CA;border-radius:7px;font-size:13px;
+    width:100%;box-sizing:border-box;font-family:inherit;background:#fff;color:#2A2A2A}
+  .award-tb input:focus{outline:none;border-color:#E5B58C;
+    box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  /* 产品缴别多选 */
+  .pp-wrap{display:flex;flex-wrap:wrap;gap:8px 10px;padding:8px 10px;border:1px solid #E2D8CA;
+    border-radius:9px;background:#fff;max-height:190px;overflow:auto}
+  .pp{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#2A2A2A;
+    background:#F8F3EC;border:1px solid #EADFCE;border-radius:14px;padding:4px 11px 4px 8px;
+    cursor:pointer;white-space:nowrap;user-select:none}
+  .pp input{margin:0;cursor:pointer}
+  .pp.on{background:#FBEEE0;border-color:#E5B58C;color:#9C4E2C;font-weight:600}
+  .pp.lock{opacity:.72;cursor:default}
+  /* 二十七改：手工添加缴别（仅总公司） */
+  .pp.custom{background:#EAF4EC;border-color:#BFE0C4;color:#2F7d4f}
+  .pp.custom.on{background:#DCEFD9;border-color:#9FCF9F;color:#1f6b3a}
+  .pp-add{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .pp-add input[type=text]{padding:6px 10px;border:1px solid #E2D8CA;border-radius:7px;
+    font-size:13px;width:240px;font-family:inherit;background:#fff;color:#2A2A2A}
+  .pp-add input[type=text]:focus{outline:none;border-color:#E5B58C;
+    box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .pp-add-btn{padding:6px 14px;border:none;border-radius:7px;background:#E6823C;color:#fff;
+    font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .pp-add-btn:hover{background:#D9742E}
+  .pp-add-msg{font-size:12.5px;color:#2F7d4f}
+  .pp-add-msg.err{color:#C0392B}
+  /* 二十七改2：定制类产品（组合产品） */
+  .chk-inline{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#2F7d4f;cursor:pointer}
+  .chk-inline input{width:16px;height:16px;accent-color:#2F7d4f;cursor:pointer}
+  .blk-custom{border-style:dashed;border-color:#9FCF9F;background:#F6FBF4}
+  .blk-custom .blk-hd .blk-no{color:#2F7d4f}
+  .comp-row{position:relative;padding:12px;margin-bottom:10px;border:1px solid #DCE9D8;
+    border-radius:10px;background:#fff}
+  .comp-row .crm-grid{margin-bottom:0}
+  .comp-row .crm-del{margin:0}
+  /* 二十六改（2026-10-28）：继续率奖金 → 缴别做行、区间做列；
+     长期服务奖单列一个模块；科目勾选控制模块是否出现 */
+  .pr-tool{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:9px 12px;margin-bottom:10px;background:#FFF8F0;border:1px dashed #E8D3BC;
+    border-radius:9px}
+  .pr-tool .lb{font-size:12.5px;color:#9C4E2C;font-weight:600;min-width:132px}
+  .pr-tool input[type=text]{padding:6px 10px;border:1px solid #E2D8CA;border-radius:7px;
+    font-size:13px;width:210px;font-family:inherit;background:#fff;color:#2A2A2A}
+  .pr-tool input[type=text]:focus{outline:none;border-color:#E5B58C;
+    box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .pr-tool .sp{flex:1}
+  .pr-tool .tip{font-size:12px;color:#9C9288}
+  /* 缴别 / 科目 胶囊复选框 */
+  .pr-pp{display:flex;gap:6px;flex-wrap:wrap}
+  .pr-ppc{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid #E2D8CA;
+    border-radius:16px;background:#fff;font-size:12.5px;cursor:pointer;user-select:none;
+    color:#6B5D4F;transition:.15s}
+  .pr-ppc input{margin:0;accent-color:#E6823C;cursor:pointer}
+  .pr-ppc.on{background:#FBEEE0;border-color:#E5B58C;color:#9C4E2C;font-weight:600}
+  /* 区间档位定义（横列的表头来源） */
+  .pr-rngs{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .pr-rngrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    padding:7px 10px;background:#FFFDFA;border:1px solid #E8DCCE;border-radius:9px}
+  .pr-rngrow .no{font-size:12px;color:#9C4E2C;font-weight:600;min-width:52px}
+  .pr-rngrow input[type=number]{padding:6px 8px;border:1px solid #E2D8CA;border-radius:7px;
+    font-size:13px;width:74px;box-sizing:border-box;font-family:inherit;background:#fff;
+    color:#2A2A2A;text-align:right}
+  .pr-rngrow input[type=number]:focus{outline:none;border-color:#E5B58C;
+    box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  /* 填写表 */
+  .pr-sub{font-size:12.5px;color:#8A4A21;font-weight:600;margin:2px 0 6px}
+  .pr-tbl{min-width:0;margin-bottom:14px}
+  .pr-tbl th{font-size:12px;padding:6px 8px;background:#F6EDE2;white-space:nowrap}
+  .pr-tbl th.grp{text-align:center;color:#9C4E2C;font-size:12px;
+    border-left:2px solid #E5B58C}
+  .pr-tbl th.sub{font-weight:400;color:#6B5D4F;text-align:right}
+  .pr-tbl td{padding:5px 8px;border-top:1px solid #F2E9DC}
+  .pr-tbl td.grp{border-left:2px solid #F0E0CE}
+  .pr-tbl td.pr-pc{font-size:13px;font-weight:600;color:#5A4A3C;white-space:nowrap;
+    background:#FCF7F0}
+  .pr-tbl input[type=number]{padding:6px 8px;border:1px solid #E2D8CA;border-radius:7px;
+    font-size:13px;width:100%;min-width:74px;box-sizing:border-box;font-family:inherit;
+    background:#fff;color:#2A2A2A;text-align:right}
+  .pr-tbl input[type=number]:focus{outline:none;border-color:#E5B58C;
+    box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .pr-rng{display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .pr-rng select{padding:6px 4px;border:1px solid #E2D8CA;border-radius:7px;font-size:13px;
+    background:#fff}
+  .pr-rng span{font-size:12px;color:#9C9288}
+  .pr-tip{font-size:12.5px;color:#9C9288;padding:10px 2px}
+  /* ===== 三十改（2026-10-29）：提交前二次确认对话框 ===== */
+  .cf-mask{display:none;position:fixed;inset:0;background:rgba(42,42,42,.42);
+    z-index:2000;align-items:flex-start;justify-content:center;padding:40px 20px;overflow:auto}
+  .cf-dlg{background:#fff;border:1px solid #EAE2D6;border-radius:16px;width:100%;max-width:1020px;
+    box-shadow:0 18px 48px rgba(42,42,42,.22);display:flex;flex-direction:column;max-height:calc(100vh - 80px)}
+  .cf-hd{display:flex;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid #F0E9DE}
+  .cf-hd b{font-family:var(--serif);font-size:16px;letter-spacing:.5px;color:#2A2A2A}
+  .cf-hd .cf-sub{font-size:12.5px;color:#9C9288}
+  .cf-x{margin-left:auto;cursor:pointer;color:#B9B0A6;font-size:20px;line-height:1;padding:0 4px}
+  .cf-x:hover{color:#C86432}
+  .cf-bd{padding:16px 22px;overflow:auto;font-size:13px;color:#2A2A2A}
+  .cf-sec{font-size:13px;font-weight:600;color:#9C4E2C;margin:16px 0 8px;
+    padding-left:8px;border-left:3px solid #E6823C}
+  .cf-sec:first-child{margin-top:0}
+  .cf-tb{width:100%;border-collapse:collapse;background:#fff}
+  .cf-tb th,.cf-tb td{border:1px solid #EDE5D9;padding:7px 10px;font-size:12.5px;
+    text-align:left;vertical-align:top}
+  .cf-tb th{background:#FAF5EE;color:#6B5D4F;font-weight:600;white-space:nowrap}
+  .cf-tb td.k{background:#FCFAF7;color:#6B5D4F;white-space:nowrap;width:110px}
+  .cf-tb td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cf-lg{color:#166534}
+  .cf-warn{color:#991b1b}
+  .cf-ft{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid #F0E9DE;
+    background:#FCFAF7;border-radius:0 0 16px 16px;flex-wrap:wrap}
+  .cf-ft .cf-tip{font-size:12.5px;color:#9C9288}
+  .cf-ft .sp{flex:1}
+  .cf-empty{color:#9C9288;font-size:12.5px;padding:6px 2px}
+  /* 四十六改：跟随总总的产品级字段（只读态）—— 光标与底色都要明确「不能改」 */
+  input.ro,select.ro,textarea.ro{background:#F1EDE6 !important;color:#6B6259 !important;
+    cursor:not-allowed;border-color:#E0D6C7 !important;box-shadow:none !important}
+  .hq-sync{font-size:12.5px;color:#8A5A2B;background:#FDF3E7;border:1px dashed #E8C9A6;
+    border-radius:9px;padding:8px 11px;line-height:1.7}
+  /* 跟随总总的复选框（定制类产品）—— 锁定态只读不可点 */
+  .chk-inline.ro{pointer-events:none;opacity:.72}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑' if row else '新建' }}{{ sname }}
+  {% if row %}<small style="font-size:12px;color:#9C9288;font-weight:400">（{{ row.code }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  {% if side == 'br' %}
+    录入顺序：<b>选保司 → 选省分公司 → 选产品（下拉筛选总总已有产品）→ 自动带出总总缴别 → 只填分分数据</b>。
+    分分公司合约协议的数据<b>独立存放</b>，与总总公司互不覆盖。
+  {% else %}
+    录入顺序：<b>选保司 → 选产品 → 勾选产品缴别 → 一次填完总总的 FYC / RYC + 阶段方案</b>。
+    本页面只登记<b>总总</b>数据，不涉及任何分公司层面的内容。
+  {% endif %}
+  产品协议分两节，页面里<b>彻底分开</b>、各用一套颜色，不混在一起：
+  <b style="color:#2F6BA8">① 产品合约费用政策（蓝色实线块）</b> —— 基础合约：FYC / RYC / 继续率，<b>以缴别为单位</b>；
+  <b style="color:#9C4E2C">② 保司阶段产品方案政策（橙色虚线块）</b> —— 方案独立登记：方案名称 / 时间 / 奖励，
+  可多条可空，登记<b>费项类型</b>。
+  本合约下<b>所有缴别共用同一条合约有效期</b>，<b>所有阶段方案共用同一条方案期间</b>；
+  方案的名称与形式<b>只填一次</b>，各缴别只填自己那一行的奖励系数 —— 不再每个缴别重复填一遍方案。
+  继续率考核不在这里选，统一到「继续率考核规则」板块登记适用范围后自动匹配。
+  FYC / RYC / 方案系数均为佣金率或系数（%），保留 2 位小数，<b>可参与报表合并计算</b>；
+  涉及<b>现金 / 旅游 / 实物 / 权益</b>的方案：把「费用形式」选成「现金 / 购物或其他」，该方案块即变成文字说明框（仍在「四、」内、与系数类方案并列），<b>不参与合并</b>。
+</div>
+
+{# 四十四改（2026-10-29）：AI 机器人识别出来的**待审草稿**横幅 ——
+   草稿不进正式合约列表，必须在这里核对完点「保存」才转正；不想留就点「放弃」整条删掉。 #}
+{% if row and row.ai_draft %}
+<div style="border:1px solid #CBE3D4;background:#F5FBF7;border-left:4px solid #2FA36B;
+            border-radius:10px;padding:13px 16px;margin-bottom:16px">
+  <div style="font-size:14px;font-weight:600;color:#1E7A4E;margin-bottom:6px">
+    🤖 这是 AI 按协议识别出来的草稿，<span style="color:#C0392B">还没有进正式合约</span>
+    <span style="font-weight:400;font-size:12px;color:#7FA890">（{{ row.code }}）</span>
+  </div>
+  <div style="font-size:12.5px;color:#5C554D;line-height:1.85;white-space:pre-wrap">{{ row.ai_note or '' }}</div>
+  <div style="font-size:12.5px;color:#5C554D;line-height:1.85;margin-top:8px">
+    请逐项核对下面四项：<b>① 保司有没有挂对　② 产品名与保障期限　③ 各缴别的 FYC / RYC 数值　
+    ④ 续期服务费比例区间</b>。改好后点页面底部「<b>保存</b>」，它才正式转为合约；
+    如果这份识别得不准，直接放弃重来。
+  </div>
+  <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+    <button type="button" class="crm-btn" onclick="aiDiscardDraft({{ row.id }})"
+            style="border-color:#E6B3A6;color:#A63A22;background:#fff">
+      放弃这份草稿
+    </button>
+    <span style="font-size:12px;color:#9C9288">放弃＝连同它填的缴别与比例一起删除，不可恢复</span>
+  </div>
+</div>
+<script>
+  function aiDiscardDraft(cid) {
+    if (!confirm('确定放弃这份 AI 草稿？它填的缴别费率、续期比例会一起删除，不可恢复。')) return;
+    // 主表单外不能再套一个 form，这里动态建一个提交（浏览器允许 body 下多个 form）
+    var f = document.createElement('form');
+    f.method = 'post';
+    f.action = '/ai/draft/' + cid + '/discard';
+    document.body.appendChild(f);
+    f.submit();
+  }
+</script>
+{% endif %}
+
+<form class="crm-form" id="cfForm" method="post" enctype="multipart/form-data">
+  {# 历史合约仍可能引用了旧规则，用隐藏域保住引用不被清空 #}
+  <input type="hidden" name="persist_rule_id" value="{{ row.persist_rule_id if row else '' }}">
+
+  <div class="crm-sec">一、归属与签约
+    <span>{% if side == 'br' %}选保司 → 选省分公司 → 选产品{% else %}选保司 → 选产品{% endif %}</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>保司 <b>*</b></label>
+      <select name="insurer_id" id="selInsurer" required>
+        <option value="">— 请选择保司 —</option>
+        {% for iv in insurers %}
+        <option value="{{ iv.id }}" {{ 'selected' if row and row.insurer_id == iv.id else '' }}>{{ iv.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">保司信息在「保司档案」中维护；没有的话先到保司档案建档。</div>
+    </div>
+    {% if side == 'br' %}
+    {# 六改：省分公司只在分公司合约协议出现；总公司合约协议不呈现任何分公司层面元素 #}
+    <div class="crm-fld full">
+      <label>省分公司 <b>*</b></label>
+      <select name="branch_id" id="selBranch" required>
+        <option value="">— 请选择省分公司 —</option>
+        {% for b in branches %}
+        <option value="{{ b.id }}" data-ins="{{ b.insurer_id }}"
+                {{ 'selected' if row and row.branch_id == b.id else '' }}>{{ b.name }}{% if b.province %}（{{ b.province }}）{% endif %}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">分公司合约协议必须指定省分公司；选项随「保司」联动刷新。</div>
+    </div>
+    {% endif %}
+    <div class="crm-fld">
+      <label>签约级别 <b>*</b></label>
+      {% if side == 'br' %}
+      <input type="hidden" name="sign_level" value="ff">
+      <input type="text" value="分-分" disabled style="background:#F5F0E8;color:#6B5D4F">
+      <div class="hint">分公司合约协议固定为「分-分」。</div>
+      {% else %}
+      <select name="sign_level" id="selLevel" required>
+        {% for c, n in levels %}
+        <option value="{{ c }}" {{ 'selected' if row and row.sign_level == c else ('selected' if not row and c == 'tt' else '') }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">总-总＝与保司总公司签；总-分＝总公司签（本页只登记总总数据）。</div>
+      {% endif %}
+    </div>
+    <div class="crm-fld">
+      <label>合约状态</label>
+      <select name="status">
+        {% for c, n in statuses %}
+        <option value="{{ c }}" {{ 'selected' if row and row.status == c else ('selected' if not row and c == 'active' else '') }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="crm-sec">二、产品信息
+    <span>选择产品缴别后，下方自动生成正序的费用政策表</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>产品名称 <b>*</b></label>
+      {% if side == 'br' %}
+      {# 六改：分公司只允许从「总总已录产品」下拉筛选，不可手填 #}
+      <select name="product_name" id="prodName" required>
+        <option value="">— 请先选择保司 —</option>
+        {% if row and row.product_name %}
+        <option value="{{ row.product_name }}" selected>{{ row.product_name }}</option>
+        {% endif %}
+      </select>
+      <div class="hint">候选＝该保司在<b>总公司合约协议</b>中已录过的产品（不可手填）；
+        没有的话请先到「总公司合约协议」建档该产品。</div>
+      {% else %}
+      <input type="text" name="product_name" id="prodName" required autocomplete="off"
+             list="prodList" value="{{ (row.product_name or '') if row else '' }}"
+             placeholder="输入或选择该保司已录产品">
+      <datalist id="prodList"></datalist>
+      <div class="hint">候选随「保司」联动（该保司已录过的产品名）；没有的可直接手输。</div>
+      {% endif %}
+    </div>
+    <div class="crm-fld">
+      <label>产品编码</label>
+      <input type="text" name="product_code" id="prodCode" autocomplete="off"
+             value="{{ (row.product_code or '') if row else '' }}"
+             placeholder="留空＝系统自动生成（如 P0001）">
+      <div class="hint">{% if side == 'br' %}选完产品后自动带出总总已录编码；{% endif %}
+        <b>留空将由系统自动生成</b>（P0001 起流水号），保存后可随时手工修改；
+        同一保司下<b>一个代码只属于一个产品</b>，同一产品的多个保障期限共用一个代码。</div>
+    </div>
+    {# 三十五改（2026-10-29）：保障期限 —— 达尔文12号这类同产品多保障期限各有费率政策，
+       **一条合约＝一个保障期限**；下拉可选内置常用项，也可直接手输新值（保存后自动进下拉）。 #}
+    <div class="crm-fld">
+      <label>保障期限</label>
+      <input type="text" name="coverage_term" id="coverageTerm" autocomplete="off"
+             list="coverageList" value="{{ (row.coverage_term or '') if row else '' }}"
+             placeholder="如 保终身 / 保至70岁">
+      <datalist id="coverageList">
+        {% for v in coverage_terms %}<option value="{{ v }}"></option>{% endfor %}
+      </datalist>
+      <div class="hint">可直接手输新值（保存后自动进下拉）。同一产品有多个保障期限时，<b>每个期限各建一条合约</b>，费率分别录。</div>
+    </div>
+    {% if side == 'hq' %}
+    {# 二十七改2：定制类产品（组合产品）开关 —— 常规不勾；勾选后名称/编码即定制产品，下方登记组件 #}
+    <div class="crm-fld full">
+      <label class="chk-inline"><input type="checkbox" name="is_custom" id="isCustom" value="1"
+        {{ 'checked' if row and row.is_custom else '' }}> 定制类产品（组合产品）</label>
+      <div class="hint">勾选后：上方「产品名称 / 产品编码」即作为<b>定制类产品</b>的名称与代码，并在下方登记组合组件
+        （如 主险 + 附加险）；每个组件<b>自己勾缴别、自己录 FYC / RYC</b>，佣金查询与销售费用清单按组件分行。
+        不勾选＝常规单一产品，按正常规则录入。</div>
+    </div>
+    {% endif %}
+    <div class="crm-fld">
+      <label>销售渠道</label>
+      <select name="sale_channel" id="saleChannel">
+        <option value="">— 未指定 —</option>
+        {% for c, n in sale_channels %}<option value="{{ c }}" {{ 'selected' if row and (row.sale_channel or '') == c else '' }}>{{ n }}</option>{% endfor %}
+      </select>
+      <div class="hint">网销产品多为线上专属费率，与线下分开登记，便于按渠道看费用。</div>
+    </div>
+    <div class="crm-fld">
+      <label>险种类型</label>
+      <select name="insurance_type" id="insType">
+        <option value="">— 请选择 —</option>
+        {% for c in types %}<option value="{{ c }}" {{ 'selected' if row and row.insurance_type == c else '' }}>{{ c }}</option>{% endfor %}
+      </select>
+      {% if side == 'br' %}<div class="hint">选完产品后自动带出总总已录险种。</div>{% endif %}
+    </div>
+    <div class="crm-fld">
+      <label>缴费类型</label>
+      <select name="pay_type" id="payType">
+        {% for c, n in pay_types %}<option value="{{ c }}" {{ 'selected' if row and row.pay_type == c else '' }}>{{ n }}</option>{% endfor %}
+      </select>
+    </div>
+    {# 四十六改（2026-10-29）：总-分 / 分-分 的产品级字段跟随总总，选中产品后才显示这条提示 #}
+    <div class="crm-fld full" id="hqSyncTip" style="display:none">
+      <div class="hq-sync">
+        <b>🔒 这六项跟随总总合约：</b>产品编码 / 保障期限 / 销售渠道 / 险种类型 / 缴费类型 / 定制类标识
+        由「总公司合约协议」自动带出并锁定，此处不可修改。
+        需要不同取值，请先到总公司合约里改该产品，分口径会跟着更新。
+      </div>
+    </div>
+    <div class="crm-fld full" id="ppField">
+      <label>产品缴别 <b>*</b>
+        {% if side == 'br' %}<span style="color:#9C9288;font-weight:400">（由总总已录缴别自动带入，不可修改）</span>{% endif %}
+      </label>
+      <div class="pp-wrap" id="ppWrap">
+        {% for p in periods %}
+        <label class="pp" data-p="{{ p }}">
+          <input type="checkbox" name="periods" value="{{ p }}"
+                 {% if side == 'br' %}disabled{% endif %}>{{ p }}</label>
+        {% endfor %}
+      </div>
+      {% if side == 'hq' %}
+      <div class="pp-add">
+        <input type="text" id="newPeriod" placeholder="手工添加缴别，如 交至70岁 / 季缴 / 半年缴">
+        <button type="button" class="pp-add-btn" onclick="addCustomPeriod()">＋ 添加缴别</button>
+        <span class="pp-add-msg" id="ppAddMsg"></span>
+      </div>
+      {% endif %}
+      <div class="hint">
+        {% if side == 'br' %}
+        选择产品后自动带入总总公司已录的缴别（按缴别正序），此处不可手工修改。
+        {% else %}
+        勾选本产品拥有的缴别，下方「产品合约费用政策」会<b>按缴别正序</b>自动生成对应行，你只需补佣金系数即可。
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# 二十七改2：定制类产品·组合组件 —— 勾选「定制类产品」后才显示。
+     二十八改（2026-10-29）：威哥要求「定制产品按组件分别录费率」——
+     每个组件在此勾选自己的缴别，下方「三、」按组件分别生成费用政策表（各组件各一套 FYC / RYC），
+     佣金查询 / 销售费用清单按组件分行显示，不会重复计数。
+     四十七改（2026-10-29）：**分口径（分-分）同样显示组件，但只读** ——
+     组件是产品级结构，只在总总录一次，分分照抄不许改（否则两边结构一散，报表就对不上）。 #}
+  {% set ALLP = (periods|list) + (custom_periods|list) %}
+  <div class="crm-block blk-custom" id="customBlock" style="display:none;margin:0 0 14px">
+    <div class="blk-hd">
+      {% if comp_readonly %}
+      <span class="blk-no">◆</span>组合组件
+      <span class="blk-tag">跟随总公司合约</span>
+      <span class="sp"></span>
+      <span class="blk-note">结构只读 · 只需在每个组件下填<b>分分费率</b></span>
+      {% else %}
+      <span class="blk-no">◆</span>定制类产品 · 组合组件
+      <span class="blk-tag">按组件录费率</span>
+      <span class="sp"></span>
+      <span class="blk-note">每个组件勾选<b>自己</b>的缴别，下方「三、」会按组件分别生成费用政策表</span>
+      {% endif %}
+    </div>
+    {% if side == 'br' %}
+    {# 四十七改：分口径提示条 —— 文案由 JS 按「总总带出几个组件」动态填（新建时首屏还没有组件） #}
+    <div class="hq-sync" id="hqCompTip" style="margin-bottom:10px;display:none"></div>
+    {% endif %}
+    <div id="compBox">
+      {% for cp in components %}
+      {% set ci = loop.index0 %}
+      {% set cps = comp_periods.get(cp.id|string, []) %}
+      <div class="comp-row" data-ck="{{ ci }}">
+        <input type="hidden" name="comp_idx" value="{{ ci }}">
+        <div class="comp-hd">
+          <b class="comp-no">{{ loop.index }}</b>
+          <span class="comp-tag">组件</span>
+          <span class="sp"></span>
+          {% if not comp_readonly %}
+          <button type="button" class="crm-del" onclick="delComp(this)">删除该组件</button>
+          {% endif %}
+        </div>
+        <div class="crm-grid">
+          <div class="crm-fld">
+            <label>组件保司</label>
+            <select name="comp_insurer_{{ ci }}" class="{{ 'ro' if comp_readonly else '' }}">
+              <option value="">— 同主保司 —</option>
+              {% for iv in insurers %}<option value="{{ iv.id }}" {{ 'selected' if cp.insurer_id == iv.id else '' }}>{{ iv.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="crm-fld">
+            <label>组件产品名称</label>
+            <input type="text" name="comp_name_{{ ci }}" value="{{ cp.product_name or '' }}" {{ 'readonly' if comp_readonly else '' }}>
+          </div>
+          <div class="crm-fld">
+            <label>组件产品代码 <button type="button" class="cc-unlock" onclick="compUnlock(this)" style="display:none">改</button></label>
+            {# 三十九改：历史已录过的组件（同保司+同名）由 JS 自动带出代码并锁为只读 #}
+            <input type="text" class="comp-code" name="comp_code_{{ ci }}"
+                   value="{{ cp.product_code or '' }}" placeholder="留空自动生成" {{ 'readonly' if comp_readonly else '' }}>
+            <div class="hint cc-hint" style="display:none">该组件历史已录入，代码固定不可修改</div>
+          </div>
+          <div class="crm-fld">
+            <label>险种</label>
+            <select name="comp_type_{{ ci }}" class="{{ 'ro' if comp_readonly else '' }}">
+              <option value="">—</option>
+              {% for t in types %}<option value="{{ t }}" {{ 'selected' if cp.insurance_type == t else '' }}>{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="crm-fld full">
+            <label>备注</label>
+            <input type="text" name="comp_note_{{ ci }}" value="{{ cp.note or '' }}" placeholder="如 主险 / 附加险" {{ 'readonly' if comp_readonly else '' }}>
+          </div>
+        </div>
+        {# 二十八改：本组件的缴别（决定「三、」在该组件下生成哪些费率行） #}
+        <div class="comp-pp-wrap">
+          <label class="comp-pp-lb">本组件缴别 {% if not comp_readonly %}<b>*</b>{% endif %}</label>
+          <div class="pp-wrap comp-pp">
+            {% for p in ALLP %}
+            <label class="pp{{ ' on' if p in cps else '' }}" data-p="{{ p }}">
+              <input type="checkbox" name="comp_periods_{{ ci }}" value="{{ p }}"
+                     {{ 'checked' if p in cps else '' }} {{ 'disabled' if comp_readonly else '' }}>{{ p }}</label>
+            {% endfor %}
+          </div>
+          {% if not comp_readonly %}
+          <div class="pp-add">
+            <input type="text" class="comp-newp" placeholder="新增缴别，如 交至70岁 / 季缴">
+            <button type="button" class="pp-add-btn" onclick="addCompPeriod(this)">＋ 添加缴别</button>
+            <span class="pp-add-msg"></span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if not comp_readonly %}
+    <button type="button" class="crm-btn sm" onclick="addComp()">＋ 添加组件</button>
+    {% endif %}
+  </div>
+
+  <div class="crm-sec">三、产品合约费用政策
+    <span>基础合约：每个缴别一行，FYC 与 RYC 同表填完；合约有效期全合约填一次；
+      <b>定制类产品按组件分别生成</b></span></div>
+  {# 七改：合约起止日所有缴别共用一条，不再逐缴别重复填写
+     十二改：本节只管「基础合约费用」（FYC / RYC），方案已独立成「四、」一节，不再嵌在缴别卡内 #}
+  <div class="crm-block blk-contract" style="margin-bottom:14px">
+    <div class="blk-hd">
+      <span class="blk-no">①</span>合约有效期
+      <span class="blk-tag">{{ LBL }}</span>
+      <span class="blk-tag">所有缴别共用</span>
+      <span class="sp"></span>
+      <span class="blk-note">这份协议签多长时间 —— 从签约到到期</span>
+    </div>
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>{{ LBL }}合约起始日</label>
+        <input type="date" name="base_start" value="{{ base_start or '' }}">
+      </div>
+      <div class="crm-fld">
+        <label>{{ LBL }}合约终止日</label>
+        <input type="date" name="base_end" value="{{ base_end or '' }}">
+        {# 三十改（2026-10-29）：终止日留空＝长期有效，不出现在「合约到期提醒」里 #}
+        <div class="hint">不填＝<b>长期有效</b>，系统不做到期提醒；填了才会在列表与首页提醒临期/过期。</div>
+      </div>
+    </div>
+  </div>
+  {# ===== 四十改（2026-10-29）：续期服务费比例 —— 整个产品一份 =====
+     威哥：「定制类的产品，续期佣金又增加了一个系数，而且是对于定制产品整体」。
+     口径：实发续期服务费 ＝ 该缴别当年基础费率（RYC-N）× 本表该档比例。
+       例：RYC-2 = 50%、继续率 85% 落在「80 ≤ X < 88」档（比例 60%）→ 实发 50%×60% = 30%。
+     ⚠️ 整个产品（含其下所有缴别、所有组件）**共用这一份**，不在缴别卡里重复录。
+     ⚠️ 金额类计算仍按满档（最高档比例通常是 100%，等价于直接用 RYC-N），全链路口径不变。 #}
+  <div class="crm-block blk-ratio" style="margin-bottom:14px">
+    <div class="blk-hd">
+      <span class="blk-no">②</span>续期服务费比例
+      <span class="blk-tag tag-ratio">整个产品一份</span>
+      <span class="blk-tag tag-ratio">按继续率分档</span>
+      <span class="sp"></span>
+      <span class="blk-note">继续率落在哪一档，实发 ＝ 该年度基础费率（RYC-N）× 该档比例</span>
+    </div>
+    {# 四十三改（2026-10-29）：本块改为**可选项** —— 大多数产品续期就是固定 RYC 费率，
+       没有按继续率再打折的政策；所以默认折叠不显示，勾了才展开录入。
+       勾选状态跟着「是否已有比例数据」回填，老合约打开还是展开的。 #}
+    <div class="rr-sw">
+      <label class="chk-inline"><input type="checkbox" name="has_ratio" id="hasRatio" value="1"
+        {{ 'checked' if (ryc_ratio and ryc_ratio.years) else '' }}
+        onchange="rrToggle(this)"> 本产品有续期服务费比例政策（按继续率分档）</label>
+      <span class="rr-sw-tip">不勾＝续期按该缴别的固定 RYC 费率发放，下方整块不显示（默认为不勾选）</span>
+    </div>
+    <div id="rrBody"{% if not (ryc_ratio and ryc_ratio.years) %} style="display:none"{% endif %}>
+    <div class="rs-years rr-years">
+      <span class="rs-lb">涉及继续率考核的年度</span>
+      {% for n in range(2, 11) %}
+      <label class="rs-yc"><input type="checkbox" class="rr-yr" name="rr_years" value="{{ n }}"
+        onchange="rrToggleYear(this)">RYC-{{ n }}</label>
+      {% endfor %}
+      <span class="rr-hint">一个都不勾 ＝ 本产品不按继续率分档（续期按固定 RYC 发）</span>
+    </div>
+    <input type="hidden" class="rr-rcnt" name="rr_rcnt" value="0">
+    <table class="rs-tb rs-matrix rr-matrix"><thead></thead><tbody class="rr-body"></tbody></table>
+    <button type="button" class="crm-btn sm rr-add" onclick="rrAddRow()">＋ 添加继续率区间</button>
+    <div class="rs-foot rr-foot">
+      <b>区间做行、年度做列</b>：某年度不需要某档就留空。上限留空＝无上限（≥ 下限即该档）。
+      比例填 <b>0~100</b>；不填按 100% 计。同一个区间在所有年度可以给不同比例（如次年 60%、第3年 70%）。
+    </div>
+    </div>{# /#rrBody 四十三改：勾选「本产品有续期服务费比例政策」才展开 #}
+  </div>
+  <div id="tierBox">
+    {% for t in tiers %}
+    {% set ix = loop.index0 %}
+    {% set tck = tier_ck.get(t.id, '') %}
+    <div class="tier-card" data-period="{{ t.pay_period or '' }}" data-ck="{{ tck }}">
+      <div class="tier-hd">
+        <b class="tier-no">缴别 {{ loop.index }}</b>
+        <input type="hidden" name="tier_idx" value="{{ ix }}">
+        {# 二十八改：所属组件（表单序号）—— 定制类产品按组件落费率的关键字段 #}
+        <input type="hidden" name="tier_comp_{{ ix }}" value="{{ tck }}">
+        <span class="tier-comp"></span>
+        {# 二十八改：缴别改为只读展示（改缴别请回到上方勾选框 / 组件内缴别芯片）——
+           下拉框容易出现「卡里改了缴别、勾选框没同步」的错位，直接去掉。 #}
+        <input type="hidden" name="tier_period_{{ ix }}" value="{{ t.pay_period or '' }}">
+        <span class="tier-pd">{{ t.pay_period or '—' }}</span>
+        <span class="sp"></span>
+        <button class="crm-del" type="button" onclick="delTier(this)">删除该缴别</button>
+      </div>
+
+      {# ① 合约块：蓝青 · 实线 · 稳定 #}
+      <div class="crm-block blk-contract">
+        {# 三十三改（2026-10-29）：RYC 只显示到本缴别实际有的年度 ——
+           有些产品续期只发 2 年、有些 3 年，一屏 9 个 RYC 框太花。
+           默认值＝已录数据里最高的那个年度（没有数据就按 3 年：次年 + 第3年）。 #}
+        {% set rc = namespace(n=0) %}
+        {% for n in range(2, 11) %}
+          {% if t|attr('ryc_' ~ n) %}{% set rc.n = n %}{% endif %}
+        {% endfor %}
+        {# 三十五改：已存缴别若 RYC 全空 → 直接落在「无续期」上（如附加险 4 年缴） #}
+        <div class="blk-hd">
+          <span class="blk-no">①</span>产品合约费用政策
+          <span class="blk-tag">{{ LBL }}</span>
+          <span class="blk-tag">FYC + RYC</span>
+          <span class="blk-note">以缴别为单位登记 · 一定时段内保持不变</span>
+          <span class="sp"></span>
+          <span class="ryc-lb">续期佣金发到</span>
+          <select class="ryc-cnt" onchange="rycSet(this)" title="本缴别的续期佣金发到第几年（不发的年度会隐藏；本缴别无续期请选「无续期」）">
+            {% for n in range(2, 11) %}
+            <option value="{{ n }}"{% if n == rc.n %} selected{% endif %}>RYC-{{ n }}</option>
+            {% endfor %}
+            <option value="0"{% if rc.n == 0 %} selected{% endif %}>无续期</option>
+          </select>
+        </div>
+        <div class="crm-grid">
+          <div class="crm-fld">
+            <label>{{ LBL }}FYC（%）</label>
+            <input type="number" step="0.01" class="pct" name="tier_{{ PRE }}_fyc_{{ ix }}"
+                   value="{{ (t|attr(PRE ~ '_fyc')) if (t|attr(PRE ~ '_fyc')) else '' }}">
+          </div>
+          {% for n in range(2, 11) %}
+          <div class="crm-fld" data-ryc="{{ n }}">
+            <label>RYC-{{ n }}（%）</label>
+            <input type="number" step="0.01" class="pct" name="tier_ryc_{{ n }}_{{ ix }}"
+                   value="{{ (t|attr('ryc_' ~ n)) if (t|attr('ryc_' ~ n)) else '' }}">
+          </div>
+          {% endfor %}
+        </div>
+        {# 四十改（2026-10-29）：续期服务费比例已**上移到产品级**（「三、」顶部那一块），
+           整个定制产品共用一份；缴别卡里只维护基础费率 RYC-N（上面那排输入框）。
+           实发 = RYC-N × 该年度该继续率档位的比例。此处不再重复录入，只留一句指引。 #}
+        <div class="rr-tip">
+          续期服务费按<b>继续率</b>分档发放的产品：比例在「三、」顶部
+          <b style="color:#B5532A">「续期服务费比例」</b>统一维护（整个产品一份），
+          这里只填各年度的<b>基础费率 RYC-N</b>；实际发放＝基础费率 × 比例。
+        </div>
+      </div>
+      <div class="tier-sum">
+        <span>{{ LBL }}首年FYC<b class="sum-fyc">0.00%</b></span>
+      </div>
+      <div class="crm-grid" style="margin-top:10px">
+        <div class="crm-fld full">
+          <label>缴别备注</label>
+          <input type="text" name="tier_note_{{ ix }}" value="{{ t.note or '' }}">
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div id="noTierTip" style="font-size:13px;color:#9C9288;padding:10px 0">
+    {% if side == 'br' %}请先在上方选择产品，系统会自动带出总总已录缴别。
+    {% else %}请先在上方勾选本产品的缴别，系统会自动生成下方的费用政策表。{% endif %}
+  </div>
+
+  {# ===== 十二改：保司阶段产品方案政策（独立一节，不再嵌在缴别卡内）=====
+     威哥：「单独开发一个涉及方案的模块，在方案模块中进行方案名称、方案时间、对应奖励的填写，
+     不要跟基础合约这块和在一起」。
+     方案头（名称/费项类型/政策归属/费用形式）一份、全缴别共用；奖励按「方案 × 缴别」填。 #}
+  <div class="crm-sec">四、保司阶段产品方案政策
+    <span>方案名称 / 方案期间 / 奖励 —— 一份方案头，各缴别只填自己那一行；
+      <b>系数类</b>方案填系数表，把「费用形式」选成「现金 / 购物或其他」即变<b>文字类方案</b>（写文字说明，不参与合并）</span></div>
+
+  <div class="crm-block blk-plan" style="margin-bottom:10px">
+    <div class="blk-hd">
+      <span class="blk-no">②</span>保司阶段产品方案期间
+      <span class="blk-tag">{{ LBL }}</span>
+      <span class="blk-tag">所有方案共用</span>
+      <span class="sp"></span>
+      <span class="blk-note">阶段方案政策什么时候生效、什么时候结束</span>
+    </div>
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>{{ LBL }}方案起始日</label>
+        <input type="date" name="plan_base_start" value="{{ plan_base_start or '' }}">
+      </div>
+      <div class="crm-fld">
+        <label>{{ LBL }}方案终止日</label>
+        <input type="date" name="plan_base_end" value="{{ plan_base_end or '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div id="planHeadBox">
+    {% for h in plan_heads %}
+    {% set k = h.k %}
+    <div class="plan-block" data-k="{{ k }}" data-scope="{{ h.scope }}" data-type="{{ 'text' if h.text else 'coef' }}">
+      <div class="pb-hd">
+        <b>方案 <span class="pb-no">—</span></b>
+        <span class="blk-tag scope-tag">{{ '协议外' if h.scope == 'out' else '协议内' }}</span>
+        <span class="blk-tag type-tag">{{ '文字描述 · 不合并' if h.text else '系数类' }}</span>
+        <span class="sp"></span>
+        <button class="crm-del" type="button" onclick="delHead(this)">删除该方案</button>
+      </div>
+      <input type="hidden" name="ph_idx" value="{{ k }}">
+      <div class="crm-grid">
+        <div class="crm-fld">
+          <label>方案名称</label>
+          <input type="text" name="ph_name_{{ k }}" value="{{ h.name }}" placeholder="如 2026开门红">
+        </div>
+        <div class="crm-fld">
+          <label>费项类型</label>
+          <select name="ph_fee_{{ k }}">
+            {% for c, n in fee_types %}<option value="{{ c }}" {{ 'selected' if h.fee == c else '' }}>{{ n }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="crm-fld">
+          <label>政策归属</label>
+          <select name="ph_scope_{{ k }}" class="f-scope">
+            {% for c, n in scopes %}<option value="{{ c }}" {{ 'selected' if h.scope == c else '' }}>{{ n }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="crm-fld">
+          <label>费用形式</label>
+          <select name="ph_form_{{ k }}" class="f-form">
+            {% if h.scope == 'out' %}
+            {% for c in pay_out %}<option value="{{ c }}" {{ 'selected' if h.form == c else '' }}>{{ form_names.get(c, c) }}</option>{% endfor %}
+            {% else %}
+            {% for c in pay_in %}<option value="{{ c }}" {{ 'selected' if h.form == c else '' }}>{{ form_names.get(c, c) }}</option>{% endfor %}
+            {% endif %}
+          </select>
+          <div class="hint">选「现金 / 购物或其他」即切换为文字说明（不参与合并）。</div>
+        </div>
+      </div>
+
+      {# 系数类：按缴别一行填系数（金额/旅游/实物改走下方文字说明） #}
+      <div class="coef-box">
+        <div class="award-hd">奖励系数（按「组件 × 缴别」逐行填写，本合约下每条费率各一行）</div>
+        <table class="crm-table award-tb">
+          <thead>
+            <tr>
+              <th style="width:140px">缴别</th>
+              <th style="text-align:right">{{ LBL }}系数（%）</th>
+              <th style="text-align:right">合计（系数）</th>
+            </tr>
+          </thead>
+          <tbody class="award-body"></tbody>
+        </table>
+        <div class="crm-grid" style="margin-top:10px">
+          <div class="crm-fld full">
+            <label>{{ LBL }}方案·其他约定</label>
+            <input type="text" name="ph_{{ PRE }}_other_{{ k }}" value="{{ h.tt_other if PRE == 'tt' else h.ff_other }}">
+          </div>
+        </div>
+      </div>
+
+      {# 十五改：文字类方案（现金 / 购物或其他）—— 一个文本框，不按缴别、不参与合并 #}
+      <div class="txt-box">
+        <div class="txt-hd">方案说明 —— 现金 / 旅游 / 实物 / 权益，文字填写，<b>不参与系数合计与报表合并</b></div>
+        <textarea name="ph_text_{{ k }}" rows="5"
+                  placeholder="示例：年度保费达成 100 万，奖励现金 5,000 元；达成 200 万，赠国内旅游名额 2 个；开门红期间赠购物卡 1 张。">{{ h.plan_text or '' }}</textarea>
+      </div>
+
+      <div class="crm-grid" style="margin-top:10px">
+        <div class="crm-fld full">
+          <label>方案备注</label>
+          <input type="text" name="ph_note_{{ k }}" value="{{ h.note }}">
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:flex;align-items:flex-start;gap:12px;margin:2px 0 16px">
+    <button class="crm-btn sm" type="button" onclick="addHead(this)">＋ 添加阶段方案</button>
+    <span style="font-size:11.5px;color:#9C9288;line-height:1.7">
+      方案名称 / 费项类型 / 政策归属 / 费用形式 <b>一条方案只填一次</b>（本合约下所有缴别共用）；
+      再点「＋ 添加阶段方案」时，这些内容会<b>自动沿用上一个方案</b>，不用重复填 —— 要不同就直接改。<br>
+      <b>系数类</b>方案在「奖励系数」表里按缴别填系数；<b>其他现金、实物或权益方案</b>把「费用形式」改成
+      「现金 / 购物或其他」，该方案块即变成文字说明框 —— 它同样带方案名称与上面的方案期间，只是<b>不参与合并</b>。
+    </span>
+  </div>
+
+  {# ===== 二十四改（2026-10-28）：继续率奖金率 —— 规则跟着产品合约走 =====
+     威哥口径：继续率不再单独建模块，改成录合约时一并登记该产品的继续率奖金率；
+     结构照保司协议原表：继续率区间 × 缴别 → R13 / R25 / R37 / R49 奖金率。 #}
+  <div class="crm-sec">五、继续率奖金率
+    <span>照保司协议原表登记：<b>继续率区间 × 缴别 → 各周期奖金率</b>；
+      缴别候选跟随「三、」已勾选的缴别，<b>默认全部不勾</b>，本产品哪个缴别涉及继续率就勾哪个；
+      该产品没有继续率奖金政策就整节留空</span></div>
+
+  <div class="crm-block blk-persist" style="margin-bottom:12px">
+    <div class="blk-hd">
+      <span class="blk-no">③</span>继续率奖金率
+      <span class="blk-tag">{{ LBL }}</span>
+      <span class="blk-tag">区间 × 缴别</span>
+      <span class="sp"></span>
+      <span class="blk-note">单位 %，如 0.6 表示 0.6%；区间上下限留空表示不限</span>
+    </div>
+
+    {# 二十六改：① 涉及继续率的缴别 → ② 继续率相关科目（勾了才出现模块）
+       → ③ 区间档位（横列）→ ④ 继续率奖金率 → ⑤ 长期服务奖（与奖金分开单列） #}
+    <div class="pr-tool">
+      <span class="lb">① 涉及继续率的缴别</span>
+      <span id="prPeriodBox" class="pr-pp"></span>
+      <span class="tip">取自「三、」已勾选的缴别；默认全不勾，涉及继续率的缴别请手动勾选</span>
+    </div>
+    <div class="pr-tool">
+      <span class="lb">② 继续率相关科目</span>
+      <span id="prAwardBox" class="pr-pp"></span>
+      <span class="tip">勾了才出现对应模块；都不勾＝该产品无继续率政策</span>
+    </div>
+
+    <input type="hidden" name="pr_periods" id="prPeriods" value="">
+    <input type="hidden" name="pr_awards" id="prAwards" value="">
+
+    <div id="prBody" style="display:none">
+      <div class="pr-tool">
+        <span class="lb">③ 继续率区间档位（横列）</span>
+        <input id="prBreaks" type="text" placeholder="档位线，如 88,92,95">
+        <button class="crm-btn sm" type="button" onclick="prMakeRanges()">生成区间</button>
+        <button class="crm-btn sm dark" type="button" onclick="prAddCol()">＋ 加一档区间</button>
+        <span class="tip">相邻两条线为一段，最后一段上限留空＝以上不限；区间由奖金与长期服务奖共用</span>
+      </div>
+
+      <div id="prRngs" class="pr-rngs"></div>
+
+      <div id="prBonusWrap" style="display:none">
+        <div class="pr-sub">④ 继续率奖金率（行＝缴别，列＝区间 × 周期，单位 %）</div>
+        <div id="prBonusBox" style="overflow-x:auto"></div>
+      </div>
+
+      <div id="prLsWrap" style="display:none">
+        <div class="pr-sub">⑤ 长期服务奖（行＝缴别，列＝区间，单位 %）</div>
+        <div id="prLsBox" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+    <div id="prTip" class="pr-tip">先在「三、」勾选缴别，再勾「① 涉及继续率的缴别」与「② 继续率相关科目」，区间与填写表才会出现。</div>
+  </div>
+
+  <div class="crm-block" style="margin-bottom:12px">
+    <div class="blk-hd">
+      <span class="blk-no">⑥</span>倒扣机制
+      <span class="blk-tag">{{ LBL }}</span>
+      <span class="blk-tag">可选</span>
+      <span class="sp"></span>
+      <span class="blk-note">继续率不达标时倒扣推广费；没有就留空</span>
+    </div>
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>是否有倒扣机制</label>
+        <select name="pr_has_claw">
+          <option value="">无</option>
+          <option value="1"{{ ' selected' if persist_rule and persist_rule.has_clawback else '' }}>有</option>
+        </select>
+      </div>
+      <div class="crm-fld">
+        <label>起扣线（%）</label>
+        <input type="number" step="0.01" name="pr_claw_line"
+               value="{{ (persist_rule.clawback_line or '') if persist_rule else '' }}">
+      </div>
+      <div class="crm-fld">
+        <label>扣费基数</label>
+        <select name="pr_claw_base">
+          {% for v, lb in claw_bases %}
+          <option value="{{ v }}"{{ ' selected' if persist_rule and (persist_rule.clawback_base or 'all') == v else '' }}>{{ lb }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld full">
+        <label>倒扣标准说明</label>
+        <textarea name="pr_claw_std" rows="2">{{ (persist_rule.clawback_std or '') if persist_rule else '' }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="crm-sec">六、附件与备注</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>协议扫描件（可多份）</label>
+      <input type="file" name="attach" multiple accept=".pdf,.ofd,.xml,.jpg,.jpeg,.png,.gif,.bmp,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip">
+      <div class="hint">
+        支持 pdf / ofd / 图片 / Office / zip，单文件 ≤10MB。<b>可以一次选多个</b>，
+        保存后<b>追加</b>到下方列表（不再覆盖已传文件）；同名同大小的重复文件会自动跳过。
+      </div>
+      {# 四十三改（2026-10-29）：上传成功的文件**以列表方式呈现**，每行可下载、可删除。
+         删除用 formaction 打到删除路由（带 next 回本页），不打断主表单的输入。 #}
+      {% if files %}
+      <table class="crm-table att-tb" style="margin-top:10px">
+        <thead>
+          <tr><th style="min-width:220px">已上传文件</th><th style="width:96px">大小</th>
+              <th style="width:110px">上传时间</th><th style="width:120px">操作</th></tr>
+        </thead>
+        <tbody>
+        {% for f in files %}
+          <tr>
+            <td>{{ f.file_name or '—' }}</td>
+            <td class="mono">
+              {%- set _sz = f.file_size or 0 -%}
+              {%- if _sz >= 1048576 -%}{{ '%.1f MB'|format(_sz / 1048576.0) }}
+              {%- elif _sz >= 1024 -%}{{ '%.1f KB'|format(_sz / 1024.0) }}
+              {%- else -%}{{ _sz }} B{%- endif -%}
+            </td>
+            <td style="white-space:nowrap">{{ f.upload_at.strftime('%Y-%m-%d') if f.upload_at else '—' }}</td>
+            <td style="white-space:nowrap">
+              <a class="crm-a" href="{{ url_for('crm.contract_file_download', cid=row.id, fid=f.id) }}">下载</a>
+              <button class="crm-del" type="submit" style="margin-left:8px"
+                      formaction="{{ url_for('crm.contract_file_delete', cid=row.id, fid=f.id) }}"
+                      formmethod="post" formnovalidate data-skip="1"
+                      onclick="return confirm('确定删除附件「{{ f.file_name }}」？删除后不可恢复。')">删除</button>
+              <input type="hidden" name="next" value="{{ request.path }}">
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="hint" style="margin-top:4px">删除是立即生效的（不用点下面的「保存」）。</div>
+      {% elif row and row.file_name %}
+      <div class="hint" style="margin-top:6px">当前已有附件：<b>{{ row.file_name }}</b>（打开详情页可下载）</div>
+      {% endif %}
+    </div>
+    <div class="crm-fld full">
+      <label>备注</label>
+      <textarea name="note">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ list_url }}">取消</a>
+  </div>
+</form>
+
+{# 三十改（2026-10-29）：费用数据录完 → 提交前弹确认框，让用户自己再浏览一遍，确认后才真正入库。
+   内容由 DOM 现读（不是后端二次算），所以看到的就是「即将提交的值」，改哪看哪。 #}
+<div id="cfMask" class="cf-mask">
+  <div class="cf-dlg">
+    <div class="cf-hd">
+      <b>保存前请再核对一遍</b>
+      <span class="cf-sub">以下即将写入系统的内容</span>
+      <span class="cf-x" title="关闭" onclick="cfClose()">×</span>
+    </div>
+    <div class="cf-bd" id="cfBody"></div>
+    <div class="cf-ft">
+      <span class="cf-tip">确认无误点「确认保存」入库；发现不对点「返回修改」，已填内容不会丢。</span>
+      <span class="sp"></span>
+      <button type="button" class="crm-btn" onclick="cfClose()">返回修改</button>
+      <button type="button" class="crm-btn pri" onclick="cfGo()">确认保存</button>
+    </div>
+  </div>
+</div>
+
+<template id="tierTpl">
+  <div class="tier-card">
+    <div class="tier-hd">
+      <b class="tier-no">缴别</b>
+      <input type="hidden" name="tier_idx" value="__IX__">
+      <input type="hidden" name="tier_comp___IX__" value="">
+      <span class="tier-comp"></span>
+      <input type="hidden" name="tier_period___IX__" value="">
+      <span class="tier-pd">—</span>
+      <span class="sp"></span>
+      <button class="crm-del" type="button" onclick="delTier(this)">删除该缴别</button>
+    </div>
+    {# ① 合约块：蓝青 · 实线 · 稳定 #}
+    <div class="crm-block blk-contract">
+      <div class="blk-hd">
+        <span class="blk-no">①</span>产品合约费用政策
+        <span class="blk-tag">{{ LBL }}</span>
+        <span class="blk-tag">FYC + RYC</span>
+        <span class="blk-note">以缴别为单位登记 · 一定时段内保持不变</span>
+        <span class="sp"></span>
+        {# 三十三改：RYC 只显示到实际年数（新建卡默认 3 年） #}
+        <span class="ryc-lb">续期佣金发到</span>
+        <select class="ryc-cnt" onchange="rycSet(this)" title="本缴别的续期佣金发到第几年（不发的年度会隐藏；本缴别无续期请选「无续期」）">
+          {% for n in range(2, 11) %}
+          <option value="{{ n }}"{% if n == 3 %} selected{% endif %}>RYC-{{ n }}</option>
+          {% endfor %}
+          <option value="0">无续期</option>
+        </select>
+      </div>
+      <div class="crm-grid">
+        <div class="crm-fld">
+          <label>{{ LBL }}FYC（%）</label>
+          <input type="number" step="0.01" class="pct" name="tier_{{ PRE }}_fyc___IX__">
+        </div>
+        {% for n in range(2, 11) %}
+        <div class="crm-fld" data-ryc="{{ n }}">
+          <label>RYC-{{ n }}（%）</label>
+          <input type="number" step="0.01" class="pct" name="tier_ryc_{{ n }}___IX__">
+        </div>
+        {% endfor %}
+      </div>
+      {# 四十改：比例已上移到产品级区块，缴别卡只留指引（JS 新建缴别卡时同样） #}
+      <div class="rr-tip">
+        续期服务费按<b>继续率</b>分档发放的产品：比例在「三、」顶部
+        <b style="color:#B5532A">「续期服务费比例」</b>统一维护（整个产品一份），
+        这里只填各年度的<b>基础费率 RYC-N</b>；实际发放＝基础费率 × 比例。
+      </div>
+    </div>
+    <div class="tier-sum">
+      <span>{{ LBL }}首年FYC<b class="sum-fyc">0.00%</b></span>
+    </div>
+    <div class="crm-grid" style="margin-top:10px">
+      <div class="crm-fld full">
+        <label>缴别备注</label>
+        <input type="text" name="tier_note___IX__">
+      </div>
+    </div>
+  </div>
+</template>
+
+{# 二十七改2 / 二十八改：定制类产品·组合组件行模板（JS 克隆用）——
+   组件内部带「本组件缴别」芯片区，「三、」据此按组件生成费率行
+   四十七改：**分口径也要**（选完产品后按总总组件动态生成只读组件行），故不再限 side #}
+<template id="compTpl">
+  <div class="comp-row" data-ck="__I__">
+    <input type="hidden" name="comp_idx" value="__I__">
+    <div class="comp-hd">
+      <b class="comp-no"></b>
+      <span class="comp-tag">组件</span>
+      <span class="sp"></span>
+      <button type="button" class="crm-del" onclick="delComp(this)">删除该组件</button>
+    </div>
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>组件保司</label>
+        <select name="comp_insurer___I__">
+          <option value="">— 同主保司 —</option>
+          {% for iv in insurers %}<option value="{{ iv.id }}">{{ iv.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld">
+        <label>组件产品名称</label>
+        <input type="text" name="comp_name___I__" placeholder="如 复星联合优选K重大疾病保险">
+      </div>
+      <div class="crm-fld">
+        <label>组件产品代码 <button type="button" class="cc-unlock" onclick="compUnlock(this)" style="display:none">改</button></label>
+        {# 三十九改：选中历史已录的组件产品名 → 自动带出代码并只读 #}
+        <input type="text" class="comp-code" name="comp_code___I__" placeholder="留空自动生成">
+        <div class="hint cc-hint" style="display:none">该组件历史已录入，代码固定不可修改</div>
+      </div>
+      <div class="crm-fld">
+        <label>险种</label>
+        <select name="comp_type___I__">
+          <option value="">—</option>
+          {% for t in types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld full">
+        <label>备注</label>
+        <input type="text" name="comp_note___I__" placeholder="如 主险 / 附加险">
+      </div>
+    </div>
+    <div class="comp-pp-wrap">
+      <label class="comp-pp-lb">本组件缴别 <b>*</b></label>
+      <div class="pp-wrap comp-pp">
+        {% for p in (periods|list) + (custom_periods|list) %}
+        <label class="pp" data-p="{{ p }}">
+          <input type="checkbox" name="comp_periods___I__" value="{{ p }}">{{ p }}</label>
+        {% endfor %}
+      </div>
+      <div class="pp-add">
+        <input type="text" class="comp-newp" placeholder="新增缴别，如 交至70岁 / 季缴">
+        <button type="button" class="pp-add-btn" onclick="addCompPeriod(this)">＋ 添加缴别</button>
+        <span class="pp-add-msg"></span>
+      </div>
+    </div>
+  </div>
+</template>
+
+{# 十二改：方案块模板（合约级）。奖励行不写死 —— 由 JS 按「当前勾选的缴别」动态生成，
+   这样「加/减缴别」与「加/减方案」两个方向都能自动对齐，不会出现两边不一致。 #}
+<template id="headTpl">
+  <div class="plan-block" data-k="__K__" data-scope="in" data-type="coef">
+    <div class="pb-hd">
+      <b>方案 <span class="pb-no">—</span></b>
+      <span class="blk-tag scope-tag">协议内</span>
+      <span class="blk-tag type-tag">系数类</span>
+      <span class="sp"></span>
+      <button class="crm-del" type="button" onclick="delHead(this)">删除该方案</button>
+    </div>
+    <input type="hidden" name="ph_idx" value="__K__">
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>方案名称</label>
+        <input type="text" name="ph_name___K__" placeholder="如 2026开门红">
+      </div>
+      <div class="crm-fld">
+        <label>费项类型</label>
+        <select name="ph_fee___K__">
+          {% for c, n in fee_types %}<option value="{{ c }}" {{ 'selected' if c == 'stage' else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld">
+        <label>政策归属</label>
+        <select name="ph_scope___K__" class="f-scope">
+          {% for c, n in scopes %}<option value="{{ c }}">{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld">
+        <label>费用形式</label>
+        <select name="ph_form___K__" class="f-form">
+          {% for c in pay_in %}<option value="{{ c }}">{{ form_names.get(c, c) }}</option>{% endfor %}
+        </select>
+        <div class="hint">选「现金 / 购物或其他」即切换为文字说明（不参与合并）。</div>
+      </div>
+    </div>
+
+    <div class="coef-box">
+      <div class="award-hd">奖励系数（按缴别填写，本合约下各缴别各一行）</div>
+      <table class="crm-table award-tb">
+        <thead>
+          <tr>
+            <th style="width:140px">缴别</th>
+            <th style="text-align:right">{{ LBL }}系数（%）</th>
+            <th style="text-align:right">合计（系数）</th>
+          </tr>
+        </thead>
+        <tbody class="award-body"></tbody>
+      </table>
+      <div class="crm-grid" style="margin-top:10px">
+        <div class="crm-fld full">
+          <label>{{ LBL }}方案·其他约定</label>
+          <input type="text" name="ph_{{ PRE }}_other___K__">
+        </div>
+      </div>
+    </div>
+
+    <div class="txt-box">
+      <div class="txt-hd">方案说明 —— 现金 / 旅游 / 实物 / 权益，文字填写，<b>不参与系数合计与报表合并</b></div>
+      <textarea name="ph_text___K__" rows="5"
+                placeholder="示例：年度保费达成 100 万，奖励现金 5,000 元；达成 200 万，赠国内旅游名额 2 个。"></textarea>
+    </div>
+
+    <div class="crm-grid" style="margin-top:10px">
+      <div class="crm-fld full">
+        <label>方案备注</label>
+        <input type="text" name="ph_note___K__">
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  var TPL = document.getElementById('tierTpl').innerHTML;
+  var HEAD_TPL = document.getElementById('headTpl').innerHTML;
+  // 二十七改2：定制类产品·组合组件行模板（分口径也可用：选完产品按总总组件生成只读行）
+  var COMP_TPL = (document.getElementById('compTpl') || {}).innerHTML || '';
+  var TSEQ = 0, KSEQ = 0, CSEQ = 0;
+
+  var IS_BR = {{ 'true' if side == 'br' else 'false' }};
+  /* 四十七改（2026-10-29）：分口径的组件区**只读**（结构来自总总合约，不许在分分改） */
+  var COMP_RO = {{ 'true' if comp_readonly else 'false' }};
+  var COMP_SRC_CODE = {{ (comp_src.code if comp_src else '')|tojson }};
+  var PRE = '{{ PRE }}';                    // tt（总总） / ff（分分），决定读哪一侧字段
+  var PERIOD_ORDER = {{ periods|tojson }};
+  /* 二十七改：手工添加的自定义缴别（不在 PAY_PERIODS 常量里）。
+     编辑老合约时由服务端 custom_periods 预填；总公司新增时由 addCustomPeriod() 追加。 */
+  var CUSTOM = {{ custom_periods|tojson }};
+  function hasOption(sel, v) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === v) { return true; }
+    }
+    return false;
+  }
+  function makeOpt(p) {
+    var o = document.createElement('option');
+    o.value = p; o.textContent = p; return o;
+  }
+  /* 把 CUSTOM 里的自定义缴别补进某个 tier 卡的下拉（新增卡 / 已渲染卡通用） */
+  function fillCustomOptions(sel) {
+    if (!sel) { return; }
+    CUSTOM.forEach(function (p) {
+      if (!hasOption(sel, p)) { sel.appendChild(makeOpt(p)); }
+    });
+  }
+  /* 在缴别勾选区补一个自定义缴别勾选框；disabled=true 时（分公司，只读） */
+  function ensurePeriodCheckbox(p, checked, disabled) {
+    if (!ppWrap) { return false; }
+    var exists = [].slice.call(ppWrap.querySelectorAll('input[name="periods"]'))
+      .some(function (cb) { return cb.value === p; });
+    if (exists) { return false; }
+    var lab = document.createElement('label');
+    lab.className = 'pp custom';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.name = 'periods'; cb.value = p;
+    if (checked) { cb.checked = true; lab.classList.add('on'); }
+    if (disabled) { cb.disabled = true; lab.classList.add('lock'); }
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(p));
+    ppWrap.appendChild(lab);
+    return true;
+  }
+  /* 分公司：先把 HQ 带出的缴别（可能含自定义）补齐勾选框，再交给 setPeriods */
+  function ensurePeriodUniverse(arr) {
+    (arr || []).forEach(function (p) {
+      if (!p) { return; }
+      if (PERIOD_ORDER.indexOf(p) < 0 && CUSTOM.indexOf(p) < 0) { CUSTOM.push(p); }
+      ensurePeriodCheckbox(p, false, true);
+    });
+  }
+  /* 十二改：已存奖励值 —— {方案序号k: {缴别: {tt_c,tt_a,ff_c,ff_a}}}，
+     奖励行由 JS 按当前勾选缴别动态生成，值从这份数据回填（编辑老合约时不丢）。 */
+  var PLAN_AWARDS = {{ plan_awards_map|tojson }};
+  /* 三十一改：已存的「续期继续率分档」—— key = 组件键|缴别（与方案奖励单元键同口径），
+     值 = {years:[2,3], rows:[{min,max,fees:{'2':..,'3':..}}], full:{...}, cnt, n}（区间矩阵）。
+     用「组件键|缴别」而不是表单序号，这样缴别卡被重建（序号变了）时也能对上号。 */
+  var RS_DATA = {
+    {% for t in tiers %}{{ ((tier_ck.get(t.id, '') ~ '|' ~ (t.pay_period or ''))|tojson) }}: {{ (ryc_steps.get(t.id) or none)|tojson }}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  };
+  /* 四十改：续期服务费比例（整个产品一份）—— 已存矩阵，用于回填 */
+  var RR_DATA = {{ (ryc_ratio or none)|tojson }};
+  var BRANCH_JSON = {{ branch_json|safe }};
+  var PRODUCT_JSON = {{ product_json|safe }};      // {保司id: [产品名]} —— 总总公司口径
+  var HQ_JSON = {{ hq_product_json|safe }};        // {保司id: {产品名: [缴别]}} —— 分公司下拉源
+
+  var selIns  = document.getElementById('selInsurer');
+  var selBr   = document.getElementById('selBranch');
+  var selProd = document.getElementById('prodName');
+  var prodList = document.getElementById('prodList');
+  var prodCode = document.getElementById('prodCode');
+  var insType  = document.getElementById('insType');
+  // 四十六改：跟随总总的产品级字段引用（保障期限 / 销售渠道 / 缴费类型 / 签约级别 / 提示条）
+  var covTerm  = document.getElementById('coverageTerm');
+  var saleCh   = document.getElementById('saleChannel');
+  var payTypeEl = document.getElementById('payType');
+  var selLevel = document.getElementById('selLevel');
+  var hqTip    = document.getElementById('hqSyncTip');
+  var ppWrap  = document.getElementById('ppWrap');
+  var tierBox = document.getElementById('tierBox');
+  var noTip   = document.getElementById('noTierTip');
+  // 二十七改2：定制类产品开关 + 组件容器（仅总公司存在）
+  var isCustom    = document.getElementById('isCustom');
+  var customBlock = document.getElementById('customBlock');
+  var compBox     = document.getElementById('compBox');
+  // 二十八改：整个「产品缴别」字段块 —— 定制类产品走组件内勾缴别，这块整体隐藏
+  var ppField     = document.getElementById('ppField');
+
+  /* ---------- ⓿ 三十九改：组件产品代码「历史带出 + 只读 + 改码同步」 ----------
+     组件（主险/附加险）都是保司现成产品，历史上录过一次代码就固定了：
+       · 选中已有组件名 → 自动填代码并锁为只读（HTML readonly，前端不改）；
+       · 真要改码 → 点 label 上的「改」解锁，保存时后端把全库引用同一组件的记录
+         一键同步成新代码（_sync_comp_code），不用逐个合约进去改。 */
+  var COMP_CODE_MAP = {{ comp_code_json|safe }};
+
+  function ccNk(s) {          // 与后端 crm._nk() 同一把钥匙：去空白/全角括号转半角/小写
+    return (s || '').replace(/（/g, '(').replace(/）/g, ')')
+      .replace(/[\s\u3000]/g, '').toLowerCase();
+  }
+
+  function compRowIid(row) {  // 组件归属保司：组件自己选了就用它，否则跟主保司
+    var s = row.querySelector('select[name^="comp_insurer_"]');
+    var v = s ? (s.value || '') : '';
+    if (v) { return v; }
+    // ⚠️ 主保司下拉的 id 是 selInsurer（不是 insurer_id），别写错，否则永远取不到 → 带不出代码
+    var m = selIns || document.getElementById('selInsurer');
+    return m ? (m.value || '') : '';
+  }
+
+  function compCodeSync(row) {
+    if (!row) { return; }
+    var nmEl = row.querySelector('input[name^="comp_name_"]');
+    var cdEl = row.querySelector('input.comp-code');
+    if (!nmEl || !cdEl) { return; }
+    if (cdEl.getAttribute('data-unlock') === '1') { return; }   // 已解锁，别覆盖用户输入
+    var code = ((COMP_CODE_MAP[compRowIid(row)] || {})[ccNk(nmEl.value)]) || '';
+    var hint = row.querySelector('.cc-hint');
+    var btn  = row.querySelector('.cc-unlock');
+    if (code) {
+      cdEl.value = code;
+      cdEl.readOnly = true;
+      cdEl.classList.add('ro');
+      cdEl.title = '历史已录入的组件，代码固定';
+      if (hint) { hint.style.display = ''; }
+      if (btn)  { btn.style.display = ''; }
+    } else {
+      if (cdEl.readOnly) { cdEl.value = ''; }   // 改名后旧代码不再属于它
+      cdEl.readOnly = false;
+      cdEl.classList.remove('ro');
+      cdEl.title = '';
+      if (hint) { hint.style.display = 'none'; }
+      if (btn)  { btn.style.display = 'none'; }
+    }
+  }
+
+  function compUnlock(btn) {
+    var row = btn.closest('.comp-row');
+    if (!row) { return; }
+    var cdEl = row.querySelector('input.comp-code');
+    var hint = row.querySelector('.cc-hint');
+    if (!cdEl) { return; }
+    cdEl.setAttribute('data-unlock', '1');
+    cdEl.readOnly = false;
+    cdEl.classList.remove('ro');
+    cdEl.focus();
+    if (cdEl.select) { cdEl.select(); }
+    if (hint) {
+      hint.textContent = '改完保存 → 系统把全库引用该组件的记录一并同步成新代码';
+    }
+    btn.style.display = 'none';
+  }
+
+  function compCodeSyncAll() {
+    if (!compBox) { return; }
+    [].slice.call(compBox.querySelectorAll('.comp-row')).forEach(compCodeSync);
+  }
+
+  /* ---------- ① 保司 → 省分公司 / 产品候选 联动 ---------- */
+  function refreshBranches() {
+    if (!selIns || !selBr) { return; }
+    var iid = selIns.value, keep = selBr.value;
+    selBr.innerHTML = '';
+    var o0 = document.createElement('option');
+    o0.value = '';
+    o0.textContent = iid ? '— 请选择省分公司 —' : '— 请先选择保司 —';
+    selBr.appendChild(o0);
+    for (var i = 0; i < BRANCH_JSON.length; i++) {
+      var b = BRANCH_JSON[i];
+      if (iid && String(b.insurer_id) !== String(iid)) { continue; }
+      var o = document.createElement('option');
+      o.value = b.id; o.textContent = b.text;
+      selBr.appendChild(o);
+    }
+    if (keep) { selBr.value = keep; }
+    selBr.disabled = !iid;
+  }
+
+  function refreshProducts() {
+    if (!selIns || !selProd) { return; }
+    var iid = selIns.value;
+    if (IS_BR) {
+      // 分公司：产品名只能从总总已录产品下拉筛选（不可手填）
+      var keep = selProd.value;
+      var map = HQ_JSON[iid] || {};
+      selProd.innerHTML = '';
+      var o0 = document.createElement('option');
+      o0.value = '';
+      o0.textContent = iid ? '— 请选择产品 —' : '— 请先选择保司 —';
+      selProd.appendChild(o0);
+      Object.keys(map).forEach(function (nm) {
+        var o = document.createElement('option');
+        o.value = nm; o.textContent = nm;
+        selProd.appendChild(o);
+      });
+      if (keep && map[keep]) { selProd.value = keep; }
+      selProd.disabled = !iid;
+      // 七改：连带把总总已录的产品编码 / 险种类型 / 缴别一起带出（初始化时只填空，不覆盖已存值）
+      applyProduct(iid, selProd.value, false);
+    } else if (prodList) {
+      // 总公司：手输 + datalist 候选
+      var arr = PRODUCT_JSON[iid] || [];
+      prodList.innerHTML = '';
+      for (var i = 0; i < arr.length; i++) {
+        var o = document.createElement('option');
+        o.value = arr[i];
+        prodList.appendChild(o);
+      }
+    }
+  }
+
+  /* ---------- ② 缴别多选 ↔ 费用政策表联动 ---------- */
+  function ppItems() { return ppWrap ? [].slice.call(ppWrap.querySelectorAll('input[name="periods"]')) : []; }
+
+  function setPeriods(arr) {                 // arr = 要勾选的缴别（正序）
+    var m = {}; arr.forEach(function (p) { m[p] = 1; });
+    ppItems().forEach(function (cb) {
+      cb.checked = !!m[cb.value];
+      cb.parentNode.classList.toggle('on', cb.checked);
+    });
+    syncTiers();
+  }
+
+  /* ---------- 二十八改（2026-10-29）：定制类产品 · 按组件录费率 ----------
+     威哥口径：达尔文12号这类「定制产品」由主险＋附加险组合，各组件费率不同，
+     所以缴别不再全产品勾一份，而是**每个组件勾自己的缴别**，「三、」按组件分别生成费率卡。
+     非定制类产品完全走老逻辑（顶部缴别勾选框驱动），两条路互不干扰。 */
+  /* 四十七改（2026-10-29）：分口径没有「定制类产品」勾选框 —— 是不是定制类由
+     **总总有没有组件**决定：服务端渲染了只读组件（COMP_RO）或有总总带出的组件行，即为定制类。
+     这样分分的费率表才能和总总一样「按组件分行」，而不是平铺成一套。 */
+  var CUSTOM_FOLLOW = false;        // 由 applyProduct() / 服务端 COMP_RO 置位
+  function IS_CUSTOM() {
+    if (isCustom) { return !!isCustom.checked; }
+    return !!(COMP_RO || CUSTOM_FOLLOW) && compRows().length > 0;
+  }
+  function compRows() { return compBox ? [].slice.call(compBox.querySelectorAll('.comp-row')) : []; }
+  function compRowByKey(ck) {
+    var hit = null;
+    compRows().forEach(function (r) { if ((r.getAttribute('data-ck') || '') === ck) { hit = r; } });
+    return hit;
+  }
+  function compNameOf(ck) {
+    var r = compRowByKey(ck);
+    var el = r ? r.querySelector('[name^="comp_name_"]') : null;
+    return el ? (el.value || '').trim() : '';
+  }
+  function compChips(row) {
+    return row ? [].slice.call(row.querySelectorAll('.comp-pp input[type=checkbox]')) : [];
+  }
+  function compCheckedPeriods(row) {                // 该组件勾选的缴别（正序，自定义补末尾）
+    var m = {}, out = [];
+    compChips(row).forEach(function (cb) {
+      if (cb.checked && !m[cb.value]) { m[cb.value] = 1; out.push(cb.value); }
+    });
+    return out.sort(pOrder);
+  }
+  function pOrder(a, b) {
+    var ia = PERIOD_ORDER.indexOf(a), ib = PERIOD_ORDER.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+  }
+  /* 在某个组件行补一个缴别芯片（已存在则直接返回） */
+  function ensureCompChip(row, p) {
+    if (!row) { return null; }
+    var box = row.querySelector('.comp-pp');
+    if (!box) { return null; }
+    var ck = row.getAttribute('data-ck') || '';
+    var cb = [].slice.call(box.querySelectorAll('input[type=checkbox]'))
+      .filter(function (x) { return x.value === p; })[0];
+    if (cb) { return cb; }
+    var lab = document.createElement('label');
+    lab.className = 'pp custom';
+    lab.setAttribute('data-p', p);
+    var inp = document.createElement('input');
+    inp.type = 'checkbox'; inp.name = 'comp_periods_' + ck; inp.value = p;
+    lab.appendChild(inp);
+    lab.appendChild(document.createTextNode(p));
+    box.appendChild(lab);
+    return inp;
+  }
+  /* 四十七改（2026-10-29）：分口径（分-分）—— 组件结构跟随总总，选完产品即生成只读组件行。
+     comps 来自后端 _hq_products() 的 comps：[{name, code, type, note, periods:[...]}]。
+     ① 名称/代码/险种/备注/缴别全部只读；② 组件缴别自动勾上（据此生成费率卡）；
+     ③ 总总没组件（普通产品）→ 组件区清空，回到「按缴别平铺」的老录法。 */
+  function lockCompRow(row) {
+    if (!row) { return; }
+    [].slice.call(row.querySelectorAll('input, select, textarea')).forEach(function (el) {
+      if (el.type === 'hidden') { return; }
+      if (el.tagName === 'SELECT') { el.classList.add('ro'); el.tabIndex = -1; }
+      else { el.readOnly = true; }
+    });
+    [].slice.call(row.querySelectorAll('.crm-del, .pp-add, .cc-unlock'))
+      .forEach(function (b) { b.style.display = 'none'; });
+  }
+  function updateCompTip() {
+    var el = document.getElementById('hqCompTip');
+    if (!el) { return; }
+    var n = compRows().length;
+    if (!n) { el.style.display = 'none'; return; }
+    // 组件在总总没勾缴别 → 这里生不出费率行，得回总总补（否则用户会以为「分分坏了」）
+    var empty = 0;
+    compRows().forEach(function (r) {
+      var on = [].slice.call(r.querySelectorAll('.comp-pp input[type=checkbox]'))
+        .filter(function (c) { return c.checked; });
+      if (!on.length) { empty++; }
+    });
+    el.style.display = '';
+    el.innerHTML = '<b>🔒 这组组件跟随总公司合约：</b>'
+      + (COMP_SRC_CODE ? COMP_SRC_CODE + ' ' : '')
+      + '已登记 ' + n + ' 个组件，名称 / 代码 / 险种 / 缴别均由总总带出，此处不可修改；'
+      + '要改组件请回「总公司合约协议」改那条合约，分分会跟着更新。'
+      + (empty ? '<br>⚠️ 其中 <b>' + empty + '</b> 个组件在总总还没勾缴别，'
+                 + '这里就生不出费率行 —— 请先回总总给该组件勾上缴别。' : '');
+  }
+  function fillCompRows(comps, readonly) {
+    if (!compBox || !COMP_TPL) { return; }
+    while (compBox.firstChild) { compBox.removeChild(compBox.firstChild); }
+    (comps || []).forEach(function (cp) {
+      var wrap = document.createElement('div');
+      wrap.innerHTML = COMP_TPL.replace(/__I__/g, 'c' + (CSEQ++));
+      var row = wrap.firstElementChild;
+      compBox.appendChild(row);
+      var q = function (k) { return row.querySelector('[name^="' + k + '"]'); };
+      var nm = q('comp_name_'), cd = q('comp_code_'), tp = q('comp_type_'), nt = q('comp_note_');
+      if (nm) { nm.value = cp.name || ''; }
+      if (cd) { cd.value = cp.code || ''; }
+      if (nt) { nt.value = cp.note || ''; }
+      if (tp) {
+        var hit = false;
+        [].slice.call(tp.options).forEach(function (o) { if (o.value === (cp.type || '')) { hit = true; } });
+        tp.value = hit ? (cp.type || '') : '';
+      }
+      (cp.periods || []).forEach(function (p) {
+        var cb = ensureCompChip(row, p);
+        if (cb) { cb.checked = true; cb.parentNode.classList.add('on'); }
+      });
+      if (readonly) {
+        [].slice.call(row.querySelectorAll('.comp-pp input[type=checkbox]'))
+          .forEach(function (cb) { cb.disabled = true; });
+        lockCompRow(row);
+      }
+    });
+    renumberComps();
+    updateCompTip();
+    syncTiers();
+  }
+  /* 组件内「＋ 添加缴别」：新缴别芯片补到**每个**组件（方便别的组件也能选），并在本组件直接勾上 */
+  function addCompPeriod(btn) {
+    var row = btn.closest('.comp-row');
+    if (!row) { return; }
+    var inp = row.querySelector('.comp-newp');
+    var msg = row.querySelector('.pp-add-msg');
+    var name = ((inp && inp.value) || '').trim();
+    if (!name) { setMsg(msg, '请输入缴别名称', true); return; }
+    if (PERIOD_ORDER.indexOf(name) >= 0) {
+      setMsg(msg, '「' + name + '」属标准缴别，直接在列表里勾选即可', true);
+      if (inp) { inp.value = ''; }
+      return;
+    }
+    var dup = compChips(row).some(function (x) { return x.value === name; });
+    if (CUSTOM.indexOf(name) < 0) { CUSTOM.push(name); }
+    compRows().forEach(function (r) { ensureCompChip(r, name); });
+    var cb = ensureCompChip(row, name);
+    if (dup) { setMsg(msg, '「' + name + '」已在本组件列表中', true); }
+    else {
+      if (cb) { cb.checked = true; cb.parentNode.classList.add('on'); }
+      setMsg(msg, '已添加：' + name, false);
+    }
+    if (inp) { inp.value = ''; }
+    syncTiers();
+  }
+  /* 当前应存在的费率单元：[{ck 组件键, name 组件名, period 缴别}] —— 非定制类等价于顶部勾选的缴别 */
+  function unitList() {
+    if (!IS_CUSTOM()) {
+      return wantPeriods().map(function (p) { return { ck: '', name: '', period: p }; });
+    }
+    var out = [];
+    compRows().forEach(function (row) {
+      var ck = row.getAttribute('data-ck') || '';
+      var nm = compNameOf(ck);
+      compCheckedPeriods(row).forEach(function (p) {
+        out.push({ ck: ck, name: nm, period: p });
+      });
+    });
+    return out;
+  }
+
+  /* ---------- 二十六改（2026-10-28）：继续率 —— 缴别做行、区间做列 ----------
+     ① 「涉及继续率的缴别」：候选＝「三、」已勾选的缴别；四十八改起**默认全不勾**，
+        涉及继续率的缴别由用户手动勾选（编辑老合约则按已登记档位回填）；
+     ② 「继续率相关科目」：继续率奖金 / 长期服务奖，**勾了才出现对应模块**，都不勾＝无政策；
+     ③ 区间档位（横列）：只定义一次，奖金表与长期服务奖表共用同一套区间；
+     ④ 继续率奖金率：行＝缴别，列＝区间 × 周期（R13/R25/R37/R49）；
+     ⑤ 长期服务奖：**单独一张表**，行＝缴别，列＝区间（不与奖金混在同一组列里）。 */
+  var prPeriodBox = document.getElementById('prPeriodBox');
+  var prAwardBox  = document.getElementById('prAwardBox');
+  var prBody      = document.getElementById('prBody');
+  var prRngs      = document.getElementById('prRngs');
+  var prBonusWrap = document.getElementById('prBonusWrap');
+  var prBonusBox  = document.getElementById('prBonusBox');
+  var prLsWrap    = document.getElementById('prLsWrap');
+  var prLsBox     = document.getElementById('prLsBox');
+  var prTip       = document.getElementById('prTip');
+  var prBreaks    = document.getElementById('prBreaks');
+  var prPeriodsEl = document.getElementById('prPeriods');
+  var prAwardsEl  = document.getElementById('prAwards');
+  var PR_CY  = {{ persist_cycles|map(attribute=0)|list|tojson }};      // 周期原始值（存库用）
+  var PR_CYB = {{ persist_cycles|map(attribute=1)|list|tojson }};     // 周期短标 R13/R25/R37/R49
+  var PR_OPS_L = {{ ops_left|tojson }};
+  var PR_OPS_R = {{ ops_right|tojson }};
+  var PR_SAVED_P = {{ persist_periods|tojson }};                      // 已登记过档位的缴别
+  var PR_SAVED_A = {{ ((persist_rule.award_items if persist_rule else '') or '').split(',')|select|list|tojson }};
+  // [{min,max,minop,maxop,b:{缴别:{周期:值}},ls:{缴别:值}}] —— 一个元素 = 一档继续率区间（横列）
+  var prData = {{ persist_rows|tojson }};
+  var PR_AWARD_OPTS = [['bonus', '继续率奖金'], ['long_service', '长期服务奖']];
+  var PR_INITED = false;
+  var BLANK_ROW = function () {
+    return { min: '', max: '', minop: '>=', maxop: '<', b: {}, ls: {} };
+  };
+
+  function prOps(list, def) {
+    var h = '';
+    list.forEach(function (o) {
+      h += '<option value="' + o[0] + '"' + (o[0] === def ? ' selected' : '') + '>' + o[1] + '</option>';
+    });
+    return h;
+  }
+
+  // 区间文本（与后端 _fmt_range_vals 同一读法：值 符号 指标 符号 值）
+  function prRangeText(r) {
+    var lo = parseFloat(r.min), hi = parseFloat(r.max);
+    var loRev = { '>=': '≤', '>': '<' }[r.minop || '>='] || '≤';
+    var hs = { '<': '<', '<=': '≤' }[r.maxop || '<'] || '<';
+    var a = !isNaN(lo) && lo !== 0, b = !isNaN(hi) && hi !== 0;
+    if (a && b) { return lo.toFixed(1) + '% ' + loRev + ' 继续率 ' + hs + ' ' + hi.toFixed(1) + '%'; }
+    if (a) { return lo.toFixed(1) + '% ' + loRev + ' 继续率'; }
+    if (b) { return '继续率 ' + hs + ' ' + hi.toFixed(1) + '%'; }
+    return '不限';
+  }
+
+  // 从表格抓回当前值（重画前先存住，切换缴别 / 增删区间时不丢已填的数）
+  function prSnap() {
+    var out = prData.map(function (r) {
+      return { min: r.min, max: r.max, minop: r.minop || '>=', maxop: r.maxop || '<',
+               b: JSON.parse(JSON.stringify(r.b || {})),
+               ls: JSON.parse(JSON.stringify(r.ls || {})) };
+    });
+    if (!out.length || !prBody) { return out; }
+    [].slice.call(prBody.querySelectorAll('[data-i][data-f]')).forEach(function (el) {
+      var i = parseInt(el.getAttribute('data-i'), 10);
+      if (!out[i]) { return; }
+      var f = el.getAttribute('data-f');
+      if (f === 'b') {
+        var p = el.getAttribute('data-p');
+        if (!out[i].b[p]) { out[i].b[p] = {}; }
+        out[i].b[p][el.getAttribute('data-c')] = el.value;
+      } else if (f === 'ls') {
+        out[i].ls[el.getAttribute('data-p')] = el.value;
+      } else {
+        out[i][f] = el.value;
+      }
+    });
+    return out;
+  }
+
+  /* ===== ① 涉及继续率的缴别（复选框）===== */
+  function prTierPeriods() {            // 「三、」当前实际缴别（按 PERIOD_ORDER 正序）
+    var out = [];
+    [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+      var s = card.querySelector('[name^="tier_period_"]');
+      var p = s ? s.value : '';
+      if (p && out.indexOf(p) < 0) { out.push(p); }
+    });
+    return out;
+  }
+
+  function prPeriods() {                // 勾选的缴别（表格的行）
+    var out = [];
+    if (prPeriodBox) {
+      [].slice.call(prPeriodBox.querySelectorAll('input[type=checkbox]')).forEach(function (cb) {
+        if (cb.checked) { out.push(cb.value); }
+      });
+    }
+    return out.sort(function (a, b) {
+      var ia = PERIOD_ORDER.indexOf(a), ib = PERIOD_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+  }
+
+  function prBuildBox(initMap) {
+    if (!prPeriodBox) { return; }
+    var old = {}, had = 0;
+    [].slice.call(prPeriodBox.querySelectorAll('input[type=checkbox]')).forEach(function (cb) {
+      old[cb.value] = cb.checked; had++;
+    });
+    var h = '';
+    prTierPeriods().forEach(function (p) {
+      var on;
+      // 四十八改：默认一律不勾（威哥要求），由用户按该产品实际涉及继续率的缴别手动勾选
+      if (had) { on = (p in old) ? old[p] : false; }        // 重画：保留原状态，新增缴别默认不勾
+      else if (initMap) { on = !!initMap[p]; }              // 首次（编辑）：按已登记档位勾
+      else { on = false; }                                  // 首次（新建）：默认全部不勾
+      h += '<label class="pr-ppc' + (on ? ' on' : '') + '"><input type="checkbox" value="' + p + '"' +
+        (on ? ' checked' : '') + ' onchange="prOnPeriod(this)"><span>' + p + '</span></label>';
+    });
+    prPeriodBox.innerHTML = h;
+  }
+
+  function prOnPeriod(cb) {
+    prData = prSnap();
+    cb.parentNode.className = 'pr-ppc' + (cb.checked ? ' on' : '');
+    prRender();
+  }
+
+  /* ===== ② 继续率相关科目（勾了才出现模块）===== */
+  function prAwards() {
+    var out = [];
+    if (prAwardBox) {
+      [].slice.call(prAwardBox.querySelectorAll('input[type=checkbox]')).forEach(function (cb) {
+        if (cb.checked) { out.push(cb.value); }
+      });
+    }
+    return out;
+  }
+
+  function prBuildAwardBox() {
+    if (!prAwardBox) { return; }
+    var on = {};
+    PR_SAVED_A.forEach(function (x) { on[x] = 1; });
+    var h = '';
+    PR_AWARD_OPTS.forEach(function (a) {
+      var c = !!on[a[0]];
+      h += '<label class="pr-ppc' + (c ? ' on' : '') + '"><input type="checkbox" value="' + a[0] + '"' +
+        (c ? ' checked' : '') + ' onchange="prOnAward(this)"><span>' + a[1] + '</span></label>';
+    });
+    prAwardBox.innerHTML = h;
+  }
+
+  function prOnAward(cb) {
+    prData = prSnap();
+    cb.parentNode.className = 'pr-ppc' + (cb.checked ? ' on' : '');
+    prRender();
+  }
+
+  /* ===== ③ 区间档位定义（横列的表头来源，两张表共用）===== */
+  function prRenderRngs() {
+    if (!prRngs) { return; }
+    var h = '';
+    prData.forEach(function (r, i) {
+      h += '<div class="pr-rngrow">' +
+        '<span class="no">区间 ' + (i + 1) + '</span>' +
+        '<input type="hidden" name="pr_idx" value="' + i + '">' +
+        '<input type="number" step="0.01" data-i="' + i + '" data-f="min" name="pr_min_' + i +
+        '" value="' + (r.min === 0 ? '' : (r.min == null ? '' : r.min)) + '" placeholder="下限"' +
+        ' onchange="prHeadSync()">' +
+        '<select data-i="' + i + '" data-f="minop" name="pr_minop_' + i + '" onchange="prHeadSync()">' +
+        prOps(PR_OPS_L, r.minop || '>=') + '</select>' +
+        '<span style="font-size:12px;color:#9C9288">指标</span>' +
+        '<select data-i="' + i + '" data-f="maxop" name="pr_maxop_' + i + '" onchange="prHeadSync()">' +
+        prOps(PR_OPS_R, r.maxop || '<') + '</select>' +
+        '<input type="number" step="0.01" data-i="' + i + '" data-f="max" name="pr_max_' + i +
+        '" value="' + (r.max === 0 ? '' : (r.max == null ? '' : r.max)) + '" placeholder="上限"' +
+        ' onchange="prHeadSync()">' +
+        '<button class="crm-del" type="button" onclick="prDelCol(' + i + ')">删</button>' +
+        '</div>';
+    });
+    prRngs.innerHTML = h;
+  }
+
+  // 改了某个区间的上下限 → 只更新两张表的列头文字（不重画表，输入框不失焦、已填值不丢）
+  function prHeadSync() {
+    prData = prSnap();
+    [].slice.call(document.querySelectorAll('[data-hdr]')).forEach(function (el) {
+      var i = parseInt(el.getAttribute('data-hdr'), 10);
+      if (prData[i]) { el.textContent = prRangeText(prData[i]); }
+    });
+  }
+
+  /* ===== ④ 继续率奖金率：行＝缴别，列＝区间 × 周期 ===== */
+  function prRenderBonus(ps) {
+    if (!prBonusWrap || !prBonusBox) { return; }
+    if (!ps.length) {
+      prBonusWrap.style.display = 'none';
+      prBonusBox.innerHTML = '';
+      return;
+    }
+    prBonusWrap.style.display = '';
+    var n = PR_CY.length;
+    var h = '<table class="crm-table pr-tbl"><thead><tr>' +
+      '<th rowspan="2" style="min-width:92px">缴别</th>';
+    prData.forEach(function (r, i) {
+      h += '<th colspan="' + n + '" class="grp" data-hdr="' + i + '">' + prRangeText(r) + '</th>';
+    });
+    h += '</tr><tr>';
+    prData.forEach(function () {
+      PR_CYB.forEach(function (lb) { h += '<th class="sub">' + lb + '</th>'; });
+    });
+    h += '</tr></thead><tbody>';
+    ps.forEach(function (p, pi) {
+      h += '<tr><td class="pr-pc">' + p + '</td>';
+      prData.forEach(function (r, i) {
+        PR_CY.forEach(function (cy, ci) {
+          var v = (r.b && r.b[p]) ? r.b[p][cy] : null;
+          h += '<td' + (ci === 0 ? ' class="grp"' : '') + '><input type="number" step="0.01" name="pr_p_' +
+            pi + '_' + ci + '_' + i + '" data-i="' + i + '" data-f="b" data-p="' + p + '" data-c="' + cy +
+            '" value="' + (v == null ? '' : v) + '"></td>';
+        });
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    prBonusBox.innerHTML = h;
+  }
+
+  /* ===== ⑤ 长期服务奖：单独一张表，行＝缴别，列＝区间 ===== */
+  function prRenderLs(ps) {
+    if (!prLsWrap || !prLsBox) { return; }
+    if (!ps.length) {
+      prLsWrap.style.display = 'none';
+      prLsBox.innerHTML = '';
+      return;
+    }
+    prLsWrap.style.display = '';
+    var h = '<table class="crm-table pr-tbl"><thead><tr><th style="min-width:92px">缴别</th>';
+    prData.forEach(function (r, i) {
+      h += '<th class="grp" data-hdr="' + i + '">' + prRangeText(r) + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+    ps.forEach(function (p, pi) {
+      h += '<tr><td class="pr-pc">' + p + '</td>';
+      prData.forEach(function (r, i) {
+        var v = (r.ls && r.ls[p] != null) ? r.ls[p] : null;
+        h += '<td><input type="number" step="0.01" name="pr_ls_' + pi + '_' + i +
+          '" data-i="' + i + '" data-f="ls" data-p="' + p + '" value="' + (v == null ? '' : v) + '"></td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    prLsBox.innerHTML = h;
+  }
+
+  function prRender() {
+    var ps = prPeriods(), aw = prAwards();
+    if (prPeriodsEl) { prPeriodsEl.value = ps.join(','); }
+    if (prAwardsEl) { prAwardsEl.value = aw.join(','); }
+    var show = !!(ps.length && aw.length);
+    if (prBody) { prBody.style.display = show ? '' : 'none'; }
+    if (prTip) { prTip.style.display = show ? 'none' : ''; }
+    if (!show) {
+      if (prRngs) { prRngs.innerHTML = ''; }
+      if (prBonusBox) { prBonusBox.innerHTML = ''; }
+      if (prLsBox) { prLsBox.innerHTML = ''; }
+      prRenderBonus([]); prRenderLs([]);
+      return;
+    }
+    if (!prData.length) { prData = [BLANK_ROW()]; }
+    prRenderRngs();
+    prRenderBonus(aw.indexOf('bonus') >= 0 ? ps : []);
+    prRenderLs(aw.indexOf('long_service') >= 0 ? ps : []);
+  }
+
+  function prAddCol() {                 // ＋ 加一档区间（横列）
+    prData = prSnap();
+    prData.push(BLANK_ROW());
+    prRender();
+  }
+
+  function prDelCol(i) {                // 删掉第 i 档区间
+    prData = prSnap();
+    if (prData.length <= 1) { alert('至少保留一档区间；不需要继续率就取消勾选上面的科目'); return; }
+    prData.splice(i, 1);
+    prRender();
+  }
+
+  // 按档位线一键生成区间：88,92,95 → [88,92) [92,95) [95,以上不限)
+  function prMakeRanges() {
+    var raw = (prBreaks.value || '').replace(/[，、；;\s]+/g, ',');
+    var nums = [];
+    raw.split(',').forEach(function (x) {
+      var v = parseFloat(x);
+      if (!isNaN(v) && nums.indexOf(v) < 0) { nums.push(v); }
+    });
+    if (!nums.length) { alert('请先输入档位线，例如 88,92,95'); return; }
+    nums.sort(function (a, b) { return a - b; });
+    var hasVal = false;
+    (prSnap() || []).forEach(function (r) {
+      Object.keys(r.b || {}).forEach(function (p) {
+        Object.keys(r.b[p]).forEach(function (c) { if (r.b[p][c] !== '') { hasVal = true; } });
+      });
+      Object.keys(r.ls || {}).forEach(function (p) { if (r.ls[p] !== '') { hasVal = true; } });
+    });
+    if (hasVal && !confirm('将按新档位线重建区间列，已填的奖金率 / 长期服务奖会被清空，确定继续？')) { return; }
+    prData = nums.map(function (v, i) {
+      return { min: v, max: (i + 1 < nums.length ? nums[i + 1] : ''),
+               minop: '>=', maxop: '<', b: {}, ls: {} };
+    });
+    prRender();
+  }
+
+  // 由 syncTiers 调用：缴别变了就同步复选框与表格
+  function syncPersist() {
+    prData = prSnap();
+    var initMap = null;
+    if (!PR_INITED && PR_SAVED_P.length) {
+      initMap = {};
+      PR_SAVED_P.forEach(function (p) { initMap[p] = 1; });
+    }
+    prBuildBox(initMap);
+    if (!PR_INITED) { prBuildAwardBox(); PR_INITED = true; }
+    prRender();
+  }
+
+  function wantPeriods() {                   // 当前勾选（按 PAY_PERIODS 正序，自定义缴别补在末尾）
+    var m = {};
+    ppItems().forEach(function (cb) { if (cb.checked) { m[cb.value] = 1; } });
+    var out = PERIOD_ORDER.filter(function (p) { return m[p]; });
+    // 二十七改：自定义缴别不在 PERIOD_ORDER 内，单独补上（保持勾选顺序）
+    ppItems().forEach(function (cb) {
+      if (cb.checked && PERIOD_ORDER.indexOf(cb.value) < 0 && out.indexOf(cb.value) < 0) {
+        out.push(cb.value);
+      }
+    });
+    return out;
+  }
+
+  // 按「缴别单元」重建 tier 卡：已有的保留（不动用户已填数据），缺的补，多的删，最后按单元顺序重排
+  // 二十八改：单元 = 组件 × 缴别（非定制类时组件键为空，等价于原来的「缴别」）
+  function syncTiers() {
+    // 定制类但一个组件都还没建 → 不能重建（否则会把已有缴别卡全删掉）
+    if (IS_CUSTOM() && !compRows().length) { return; }
+    var units = unitList(), exist = {}, keep = {};
+    [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+      var ck = IS_CUSTOM() ? (card.getAttribute('data-ck') || '') : '';
+      var s = card.querySelector('[name^="tier_period_"]');
+      var p = s ? s.value : '';
+      if (!p) { return; }
+      var key = ck + '|' + p;
+      if (exist[key]) { tierBox.removeChild(card); return; }   // 同组件同缴别重复 → 直接去重
+      exist[key] = card;
+    });
+    units.forEach(function (u) {
+      var key = u.ck + '|' + u.period;
+      keep[key] = 1;
+      if (!exist[key]) { exist[key] = addTier(u); }
+    });
+    Object.keys(exist).forEach(function (key) {
+      if (!keep[key]) { tierBox.removeChild(exist[key]); delete exist[key]; }
+    });
+    units.forEach(function (u) {
+      var card = exist[u.ck + '|' + u.period];
+      if (card) { tierBox.appendChild(card); }
+    });
+    renumber();
+    Object.keys(exist).forEach(function (k) { calcTier(exist[k]); });
+    if (noTip) { noTip.style.display = units.length ? 'none' : ''; }
+    syncAwardRows();          // 十二改：缴别变了，方案里的奖励行跟着重建（两个方向自动对齐）
+    syncPersist();            // 二十四改：继续率奖金率的缴别块跟着同步（同一个缴别集合）
+    rycInit();                // 三十三改：缴别卡新建后，RYC 只显示到实际年数
+    rsFillNew();              // 三十二改：新加的缴别若上游已填分档 → 自动沿用区间（费率手填）
+  }
+
+  /* ---------- ③ 合计计算 ---------- */
+  function numOf(el) {
+    if (!el) { return 0; }
+    var v = parseFloat(el.value);
+    return isNaN(v) ? 0 : v;
+  }
+  function calcTier(card) {
+    if (!card) { return; }
+    var fyc = numOf(card.querySelector('[name^="tier_' + PRE + '_fyc_"]'));
+    var b = card.querySelector('.sum-fyc');
+    if (b) { b.textContent = fyc.toFixed(2) + '%'; }
+  }
+  /* 八改：政策归属决定费用形式 —— 协议内 → 只有「协议内结算」（锁定）；
+       协议外 → 系数 / 现金 / 购物或其他。
+     十五改：协议外恢复三选 —— 选「系数」= 系数类方案（出系数表）；
+       选「现金 / 购物或其他」= **文字类方案**（只出一个文字说明框，不参与合计与报表合并）。
+       两类方案都在「四、」节里并列，共享方案名称与方案期间。 */
+  var OPTS_IN = [['transfer', '协议内结算']];
+  var OPTS_OUT = [['coef', '系数'], ['cash', '现金'], ['other', '购物或其他']];
+  var TEXT_FORMS = ['cash', 'other'];          // 文字类：不进系数合计、不进报表合并
+
+  /* 十五改：按「费用形式」切换方案块形态 —— 系数类 ↔ 文字类 */
+  function syncForm(blk) {
+    if (!blk) { return; }
+    var f = blk.querySelector('.f-form');
+    if (!f) { return; }
+    var isText = TEXT_FORMS.indexOf(f.value) >= 0;
+    blk.setAttribute('data-type', isText ? 'text' : 'coef');
+    blk.classList.toggle('is-text', isText);
+    var tg = blk.querySelector('.type-tag');
+    if (tg) { tg.textContent = isText ? '文字描述 · 不合并' : '系数类'; }
+    var cb = blk.querySelector('.coef-box');
+    var tb = blk.querySelector('.txt-box');
+    if (cb) { cb.style.display = isText ? 'none' : ''; }
+    if (tb) { tb.style.display = isText ? '' : 'none'; }
+  }
+
+  function syncScope(row) {
+    if (!row) { return; }
+    var sc = row.querySelector('.f-scope');
+    var f = row.querySelector('.f-form');
+    if (!sc || !f) { return; }
+    var scope = sc.value || 'in';
+    // 归属变了 → 重建费用形式选项，并落到该归属的默认值
+    if (row.getAttribute('data-scope') !== scope) {
+      var list = (scope === 'out') ? OPTS_OUT : OPTS_IN;
+      f.innerHTML = '';
+      for (var i = 0; i < list.length; i++) {
+        var op = document.createElement('option');
+        op.value = list[i][0]; op.textContent = list[i][1];
+        f.appendChild(op);
+      }
+      f.value = (list.filter(function (o) { return o[0] === f.value; }).length) ? f.value : list[0][0];
+      row.setAttribute('data-scope', scope);
+    }
+    var tg = row.querySelector('.scope-tag');
+    if (tg) { tg.textContent = (scope === 'out') ? '协议外' : '协议内'; }
+    row.classList.toggle('tier-out', scope === 'out');
+    syncForm(row);          // 费用形式可能刚被重置 → 方案块形态跟着切换
+  }
+
+  /* ---------- ④ 奖励行（方案 × 缴别） ---------- */
+  /* 十二改：一条方案下按缴别各一行，只填奖励系数。
+     十三改：**删除「金额（元）」列** —— 金额 / 旅游 / 实物 / 权益改走「其他现金、实物或权益方案」文本框。
+     不同缴别不能相加，所以不做块级合计，只给每行一个合计。 */
+  function pv(x) { return (x === 0 || !x) ? '' : x; }
+
+  function calcAwardRow(tr) {
+    if (!tr) { return; }
+    var c = numOf(tr.querySelector('[name^="ph_' + PRE + '_coef_"]'));
+    var b = tr.querySelector('.sum-award');
+    if (b) { b.textContent = c.toFixed(2) + '%'; }
+  }
+
+  /* 二十八改：奖励行按「组件 × 缴别」逐行 —— 定制类产品的两个组件可以有同一缴别，
+     字段名与回填键都带组件键（ph_tt_coef_<k>_<组件键>_<缴别>），避免两个组件读到同一个值。 */
+  function syncAwardRows() {
+    var units = unitList();
+    [].slice.call(document.querySelectorAll('.plan-block')).forEach(function (blk) {
+      var body = blk.querySelector('.award-body');
+      if (!body) { return; }
+      var k = blk.getAttribute('data-k');
+      // 先收已填值（含服务端回填基准），重建后再写回，避免「勾个缴别就把填好的数冲掉」
+      var old = {};
+      [].slice.call(body.querySelectorAll('tr')).forEach(function (tr) {
+        var ci = tr.querySelector('[name^="ph_' + PRE + '_coef_"]');
+        old[tr.getAttribute('data-unit')] = { c: ci ? ci.value : '' };
+      });
+      var base = PLAN_AWARDS[k] || {};
+      body.innerHTML = '';
+      units.forEach(function (u) {
+        var ck = u.ck || '0';
+        var ukey = ck + '|' + u.period;
+        var v = old[ukey], b = base[ukey] || {};
+        var cv = (v !== undefined) ? v.c : pv(b.c);
+        var fld = 'ph_' + PRE + '_coef_' + k + '_' + ck + '_' + u.period;
+        var tr = document.createElement('tr');
+        tr.setAttribute('data-unit', ukey);
+        tr.innerHTML =
+          '<td class="ap">' + (u.name ? u.name + ' · ' : '') + u.period + '</td>' +
+          '<td><input type="number" step="0.01" class="pct" name="' + fld + '" value="' + cv + '"></td>' +
+          '<td class="num"><b class="sum-award">0.00%</b></td>';
+        body.appendChild(tr);
+        calcAwardRow(tr);
+      });
+    });
+  }
+
+  /* ---------- ⑤ 方案块增删（合约级） ---------- */
+  /* 十五改：新增方案时**沿用上一个方案的方案名称 / 费项类型 / 政策归属 / 费用形式** ——
+     同一活动的多个阶段连着录时不用重复填；要不同直接改。 */
+  function addHead() {
+    var blocks = document.querySelectorAll('#planHeadBox .plan-block');
+    var prev = blocks.length ? blocks[blocks.length - 1] : null;
+    var k = 'h' + (KSEQ++);
+    var wrap = document.createElement('div');
+    wrap.innerHTML = HEAD_TPL.replace(/__K__/g, k);
+    var blk = wrap.firstElementChild;
+    document.getElementById('planHeadBox').appendChild(blk);
+    if (prev) {
+      // 十五改：新增方案自动沿用上一个方案的「名称 / 费项类型 / 政策归属 / 费用形式」——
+      // 同一活动的多个阶段连着录时不用重复填；要不同直接改。
+      var pName = prev.querySelector('[name^="ph_name_"]');
+      var pFee  = prev.querySelector('[name^="ph_fee_"]');
+      var pScope= prev.querySelector('[name^="ph_scope_"]');
+      var pForm = prev.querySelector('[name^="ph_form_"]');
+      var sEl = blk.querySelector('[name^="ph_scope_"]');
+      var fEl = blk.querySelector('[name^="ph_form_"]');
+      var dName = blk.querySelector('[name^="ph_name_"]');
+      var dFee  = blk.querySelector('[name^="ph_fee_"]');
+      if (pName && dName) { dName.value = pName.value; }
+      if (pFee && dFee)   { dFee.value = pFee.value; }
+      if (sEl && pScope)  { sEl.value = pScope.value; }   // 先带出归属，让 syncScope 重建出正确选项
+      syncScope(blk);                                     // 按归属重建费用形式选项（保留当前值）
+      if (fEl && pForm)  { fEl.value = pForm.value; }     // 选项已齐 → 正确选中上次的「费用形式」
+      syncForm(blk);                                      // 据费用形式切换「系数表 ↔ 文字框」
+    }
+    renumberHeads();
+    syncScope(blk);
+    syncAwardRows();
+    return blk;
+  }
+  function delHead(btn) {
+    var blk = btn.closest('.plan-block');
+    if (blk) { blk.parentNode.removeChild(blk); }
+    renumberHeads();
+  }
+  function renumberHeads() {
+    var blocks = document.querySelectorAll('.plan-block');
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i].querySelector('.pb-no');
+      if (b) { b.textContent = (i + 1); }
+    }
+  }
+  function addTier(unit) {
+    var ix = 'n' + (TSEQ++);
+    var box = document.createElement('div');
+    box.innerHTML = TPL.replace(/__IX__/g, ix);
+    var card = box.firstElementChild;
+    // 二十八改：缴别卡创建时直接写入「所属组件 + 缴别」（只读展示，改缴别请回上方勾选）
+    var u = unit || { ck: '', name: '', period: '' };
+    card.setAttribute('data-ck', u.ck || '');
+    var hc = card.querySelector('[name^="tier_comp_"]');
+    if (hc) { hc.value = u.ck || ''; }
+    var hp = card.querySelector('[name^="tier_period_"]');
+    if (hp) { hp.value = u.period || ''; }
+    tierBox.appendChild(card);
+    renumber(); calcTier(card);
+    return card;
+  }
+  function delTier(btn) {
+    var card = btn.closest('.tier-card');
+    if (card) {
+      // 同时取消对应缴别（或组件缴别）的勾选，避免「删了又自动生回来」
+      var p = (card.querySelector('[name^="tier_period_"]') || {}).value || '';
+      if (p) {
+        if (IS_CUSTOM()) {
+          compChips(compRowByKey(card.getAttribute('data-ck') || '')).forEach(function (cb) {
+            if (cb.value === p) { cb.checked = false; cb.parentNode.classList.remove('on'); }
+          });
+        } else {
+          ppItems().forEach(function (cb) {
+            if (cb.value === p) { cb.checked = false; cb.parentNode.classList.remove('on'); }
+          });
+        }
+      }
+      card.parentNode.removeChild(card);
+    }
+    renumber();
+    if (noTip) { noTip.style.display = tierBox.querySelectorAll('.tier-card').length ? 'none' : ''; }
+  }
+  function renumber() {
+    var cards = tierBox.querySelectorAll('.tier-card');
+    for (var i = 0; i < cards.length; i++) {
+      var h = cards[i].querySelector('.tier-no');
+      if (h) { h.textContent = '缴别 ' + (i + 1); }
+      var pd = cards[i].querySelector('.tier-pd');
+      if (pd) {
+        pd.textContent = (cards[i].querySelector('[name^="tier_period_"]') || {}).value || '—';
+      }
+      var cm = cards[i].querySelector('.tier-comp');
+      if (cm) {
+        var ck = cards[i].getAttribute('data-ck') || '';
+        cm.textContent = (IS_CUSTOM() && ck) ? (compNameOf(ck) || '（未命名组件）') : '';
+      }
+      rsRenumber(cards[i]);      // 二十九改：缴别卡序号变了 → 分档字段名跟着重排
+    }
+    // 二十八改：方案奖励行首列的「组件名 · 缴别」标签跟着刷新（只改文字，不动输入框，不会打断输入）
+    [].slice.call(document.querySelectorAll('.plan-block .award-body tr')).forEach(function (tr) {
+      var u = (tr.getAttribute('data-unit') || '0|').split('|');
+      var ck = u[0] || '0', pd = u.slice(1).join('|');
+      var cal = tr.querySelector('.ap');
+      if (cal) {
+        var nm = (IS_CUSTOM() && ck !== '0') ? compNameOf(ck) : '';
+        cal.textContent = (nm ? nm + ' · ' : '') + pd;
+      }
+    });
+  }
+
+  /* 二十七改：手工添加缴别 —— 总公司用户在上方输入框录入新的缴别名，即时生成一个勾选框 +
+     对应的费用政策行；该缴别不在 PAY_PERIODS 常量里，属自定义缴别，仅在总公司入口提供。 */
+  function addCustomPeriod() {
+    var inp = document.getElementById('newPeriod');
+    var msg = document.getElementById('ppAddMsg');
+    if (!inp) { return; }
+    var name = (inp.value || '').trim();
+    if (!name) { setMsg(msg, '请输入缴别名称', true); return; }
+    if (PERIOD_ORDER.indexOf(name) >= 0) {
+      setMsg(msg, '「' + name + '」已在标准缴别列表中，直接勾选即可', true); inp.value = ''; return;
+    }
+    if (CUSTOM.indexOf(name) >= 0 ||
+        [].slice.call(ppWrap.querySelectorAll('input[name="periods"]')).some(function (cb) { return cb.value === name; })) {
+      setMsg(msg, '「' + name + '」已添加过，无需重复', true); inp.value = ''; return;
+    }
+    CUSTOM.push(name);
+    ensurePeriodCheckbox(name, true, false);   // 总公司：可勾选
+    compRows().forEach(function (row) { ensureCompChip(row, name); });  // 组件里也补上芯片
+    inp.value = '';
+    syncTiers();                              // 生成对应费用政策卡
+    setMsg(msg, '已添加手工缴别：' + name + '，请在下方费用政策表填写系数', false);
+  }
+  function setMsg(el, text, err) {
+    if (!el) { return; }
+    el.textContent = text;
+    el.className = 'pp-add-msg' + (err ? ' err' : '');
+  }
+  /* 初始化：把「不在 PAY_PERIODS 里的自定义缴别」补出勾选框 / 组件芯片，
+     否则编辑老合约时自定义缴别会丢（二十八改起缴别卡只读，不再需要补下拉选项）。 */
+  function initCustomPeriods() {
+    [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+      var dp = card.getAttribute('data-period') ||
+               ((card.querySelector('[name^="tier_period_"]') || {}).value || '');
+      if (dp && PERIOD_ORDER.indexOf(dp) < 0 && CUSTOM.indexOf(dp) < 0) { CUSTOM.push(dp); }
+    });
+    CUSTOM.forEach(function (p) {
+      ensurePeriodCheckbox(p, false, IS_BR);                        // 顶部勾选框（非定制类用）
+      compRows().forEach(function (row) { ensureCompChip(row, p); });  // 组件内缴别芯片
+    });
+  }
+
+  /* ---------- ⑤ 总-分 / 分-分：产品级字段跟随总总（四十六改） ----------
+     威哥口径：总总把产品录完之后，分口径（总-分 / 分-分）只补费率，
+     产品编码 / 保障期限 / 销售渠道 / 险种类型 / 缴费类型 **一律跟总总走、且只读**。
+     实现要点：
+       · 选中产品后从 HQ_JSON 取总总已录值（总总优先），有值才锁定；
+       · 总总没录过这个产品 → 不锁，允许自行填写（否则新产品就没法录了）；
+       · 锁定用 input.readOnly / select 的 .ro（pointer-events:none），
+         绝不用 disabled —— disabled 的控件不会随表单提交，会把值弄丢；
+       · 后端 _contract_form 再做一次强制覆盖，前端只是体验层。 */
+  function needFollow() {                       // 当前录入口径是否需要跟随总总
+    if (IS_BR) { return true; }                 // 分公司合约协议 = 分-分
+    return !!(selLevel && selLevel.value === 'tf');   // 总公司页里选「总-分」也要跟随
+  }
+  function lockField(el, on) {
+    if (!el) { return; }
+    if (el.tagName === 'SELECT') {
+      el.classList.toggle('ro', !!on);
+      el.tabIndex = on ? -1 : 0;
+      if (on) { el.setAttribute('data-lockval', el.value || ''); }
+      else { el.removeAttribute('data-lockval'); }
+    } else {
+      el.readOnly = !!on;
+      el.classList.toggle('ro', !!on);
+    }
+  }
+  function isLocked(el) {
+    return !!(el && el.classList && el.classList.contains('ro'));
+  }
+  // 保障期限候选 = 总总该产品下已建的所有保障期限（多值时让用户从中挑，不锁死）
+  var covDyn = null;
+  function fillCovOptions(arr) {
+    if (!covTerm) { return; }
+    if (!covDyn) {
+      covDyn = document.createElement('datalist');
+      covDyn.id = 'coverageListDyn';
+      document.body.appendChild(covDyn);
+    }
+    covDyn.innerHTML = '';
+    (arr || []).forEach(function (v) {
+      var o = document.createElement('option');
+      o.value = v; covDyn.appendChild(o);
+    });
+    covTerm.setAttribute('list', (arr && arr.length) ? 'coverageListDyn' : 'coverageList');
+  }
+  // 复选框也跟随总总（总-分口径）：只能看、不能点。禁用 disabled 会导致不提交，故用样式锁。
+  function lockCheck(el, on) {
+    if (!el) { return; }
+    el.classList.toggle('ro', !!on);
+    el.tabIndex = on ? -1 : 0;
+  }
+  function autoPeriods(arr) {
+    if (!IS_BR) { return; }
+    // 二十七改：总总可能带出自定义缴别，先把勾选框补齐再交给 setPeriods
+    ensurePeriodUniverse(arr);
+    setPeriods(arr || []);
+  }
+
+  // 按「总总已录产品」带出五项产品级字段 + 缴别；force=true 时先清空再按总总重填
+  function applyProduct(iid, nm, force) {
+    var follow = needFollow();
+    var info = (follow && ((HQ_JSON[iid] || {})[nm])) || null;
+    // 用户主动换保司 / 换产品 → 先清掉跟随字段，避免串上一个产品的值
+    if (force && follow) {
+      if (prodCode) { prodCode.value = ''; }
+      if (covTerm) { covTerm.value = ''; }
+      if (saleCh) { saleCh.value = ''; }
+      if (insType) { insType.value = ''; }
+    }
+    // 只填「总总有值」的项；总总为空绝不置空（否则会把已存值清掉）
+    function fill(el, v, isSelect) {
+      v = (v || '');
+      if (!el || !v) { return; }
+      if (isSelect) {
+        var ok = false;
+        [].slice.call(el.options).forEach(function (o) { if (o.value === v) { ok = true; } });
+        if (ok) { el.value = v; }
+      } else if (force || !el.value) {
+        el.value = v;
+      }
+    }
+    if (info) {
+      fill(prodCode, info.code);
+      fill(covTerm, info.coverage);
+      fill(saleCh, info.channel, true);
+      fill(insType, info.type, true);
+      fill(payTypeEl, info.pay_type, true);
+    }
+    // 保障期限：总总只有一个候选 → 锁定；有多个（如 保终身 / 保至70岁）→ 让用户从总总的候选里挑
+    var covList = (info && info.coverages) || [];
+    fillCovOptions(covList);
+    if (covList.length > 1 && covTerm && !covTerm.value) { covTerm.value = covList[0]; }
+    // 有总总记录 → 五件套全部锁死；没有 → 解锁（新产品 / 只在分口径录过的产品）
+    var lock = !!(follow && info);
+    lockField(prodCode, lock);
+    lockField(covTerm, lock && covList.length <= 1);
+    lockField(saleCh, lock);
+    lockField(insType, lock);
+    lockField(payTypeEl, lock);
+    // 定制类标识：总-分口径也不许自己改（分口径表单根本没这个勾选框）
+    if (isCustom) {
+      if (info) { isCustom.checked = !!info.custom; }
+      lockCheck(isCustom, lock);
+    }
+    if (hqTip) { hqTip.style.display = lock ? '' : 'none'; }
+    // 四十七改（2026-10-29）：分口径的**组件结构同样跟随总总** —— 选完产品就把总总的
+    // 组合组件带出来（只读），费率按组件分行录；总总没有组件＝普通产品，清空组件区走平铺。
+    if (IS_BR && info) {
+      var _cps = info.comps || [];
+      if (_cps.length) {
+        CUSTOM_FOLLOW = true;
+        if (force || !compRows().length) { fillCompRows(_cps, true); }
+        if (customBlock) { customBlock.style.display = ''; }
+        if (ppField) { ppField.style.display = 'none'; }
+        return;                    // 定制类：费率卡由「组件 × 缴别」生成，不走顶部缴别
+      }
+      CUSTOM_FOLLOW = false;
+      if (compRows().length) { fillCompRows([], true); }
+    }
+    // 缴别：只有「新建」或用户主动换产品时才按总总重建；
+    // 编辑老合约时不动已存缴别（否则会把合约已录的缴别覆盖掉、甚至清空费率卡）。
+    var noCard = !(tierBox && tierBox.querySelector('.tier-card'));
+    if (IS_BR && (force || noCard)) { autoPeriods(info ? (info.periods || []) : []); }
+  }
+
+  // 口径 / 保司 / 产品变化统一走这里（force=true：先清空，按总总重建）
+  function syncFollow(force) {
+    applyProduct(selIns ? selIns.value : '', selProd ? selProd.value : '', !!force);
+  }
+
+  /* ---------- 二十七改2 / 二十八改：定制类产品·组合组件增删 ---------- */
+  /* 勾选/取消「定制类产品」时切换录入形态：
+       勾选 → 隐藏顶部「产品缴别」，改为每个组件勾自己的缴别；已有缴别卡整体归到第一个组件；
+       取消 → 全部缴别卡归为「整体」，并把它们的缴别回勾到顶部勾选框。 */
+  function syncCustom() {
+    if (!customBlock) { return; }
+    var on = IS_CUSTOM();
+    customBlock.style.display = on ? '' : 'none';
+    if (ppField) { ppField.style.display = on ? 'none' : ''; }
+    if (on) {
+      // 四十七改：分口径只读 —— 没有组件时不自动新建（用户不能改组件结构，得回总总录）
+      if (!compRows().length && !COMP_RO) { addComp(); }
+      var first = compRows()[0];
+      var ck = first ? (first.getAttribute('data-ck') || '') : '';
+      if (ck) {
+        [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+          if (card.getAttribute('data-ck')) { return; }
+          card.setAttribute('data-ck', ck);
+          var h = card.querySelector('[name^="tier_comp_"]');
+          if (h) { h.value = ck; }
+          var p = (card.querySelector('[name^="tier_period_"]') || {}).value || '';
+          if (p) {
+            var cb = ensureCompChip(first, p);
+            if (cb) { cb.checked = true; cb.parentNode.classList.add('on'); }
+          }
+        });
+      }
+    } else {
+      [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+        card.setAttribute('data-ck', '');
+        var h = card.querySelector('[name^="tier_comp_"]');
+        if (h) { h.value = ''; }
+        var p = (card.querySelector('[name^="tier_period_"]') || {}).value || '';
+        if (p) {
+          ppItems().forEach(function (cb) {
+            if (cb.value === p) { cb.checked = true; cb.parentNode.classList.add('on'); }
+          });
+        }
+      });
+    }
+    syncTiers();
+    renumber();
+    updateCompTip();          // 四十七改：分口径组件提示条（首屏按服务端已渲染的组件显示）
+  }
+  function addComp() {
+    if (!compBox || !COMP_TPL) { return; }
+    var i = 'c' + (CSEQ++);
+    var wrap = document.createElement('div');
+    wrap.innerHTML = COMP_TPL.replace(/__I__/g, i);
+    compBox.appendChild(wrap.firstElementChild);
+    renumberComps();
+    compCodeSync(wrap.firstElementChild);    // 三十九改：新加的空组件先按名字同步一次（空名＝无动作）
+    // 注意：这里**不**调 syncTiers —— 新组件还没有勾缴别，此时重建会把刚归到它名下的
+    // 缴别卡删掉。由调用方（勾缴别 / syncCustom）在合适时机统一重建。
+  }
+  function delComp(btn) {
+    var row = btn.closest('.comp-row');
+    if (!row) { return; }
+    var ck = row.getAttribute('data-ck') || '';
+    // 连带删掉该组件下的费率卡（否则改完组件名，卡还挂着已删除的组件键）
+    [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+      if ((card.getAttribute('data-ck') || '') === ck) { tierBox.removeChild(card); }
+    });
+    row.parentNode.removeChild(row);
+    renumberComps();
+    syncTiers();
+  }
+  function renumberComps() {
+    if (!compBox) { return; }
+    var rows = compBox.querySelectorAll('.comp-row');
+    for (var i = 0; i < rows.length; i++) {
+      var b = rows[i].querySelector('.comp-no');
+      if (b) { b.textContent = (i + 1); }
+    }
+  }
+
+  /* ============ 四十改（2026-10-29）：续期服务费比例（整个产品一份） ============
+     威哥：「定制类的产品，续期佣金又增加了一个系数，而且是对于定制产品整体」。
+     政策原样（达尔文12号）：次年 0≤X<80→0、80≤X<88→60、88≤X≤100→100；
+                            第3年 0≤X<80→0、80≤X<93→70、93≤X≤100→100。
+     这是**乘数**不是费率：实发 = 该缴别当年基础费率（RYC-N）× 比例。
+       50% × 60% = 30%，18% × 70% = 12.6% —— 与保司服务费详情完全吻合。
+     ⚠️ 整个产品（所有缴别、所有组件）共用这一份，所以放在缴别区外面的产品级块里。
+     ⚠️ 字段名 rr_years / rr_rcnt / rr_min_<r> / rr_max_<r> / rr_ratio_<r>_<y>（不带缴别序号）。 */
+  function rrBox() { return document.querySelector('.blk-ratio'); }
+  function rrTbody() { return rrBox() ? rrBox().querySelector('.rr-body') : null; }
+  function rrRows() {
+    var tb = rrTbody();
+    return tb ? [].slice.call(tb.querySelectorAll('tr')) : [];
+  }
+  function rrYears() {                       // 已勾选的年度（升序）
+    var box = rrBox(), out = [];
+    if (!box) { return out; }
+    [].slice.call(box.querySelectorAll('.rr-yr')).forEach(function (c) {
+      if (c.checked) { out.push(parseInt(c.value, 10)); }
+    });
+    return out.sort(function (a, b) { return a - b; });
+  }
+  function rrHead() {                        // 表头 = 继续率区间 + 每个已勾选年度一列
+    var box = rrBox(), th = box ? box.querySelector('.rr-matrix thead') : null;
+    if (!th) { return; }
+    var ys = rrYears();
+    if (!ys.length) { th.innerHTML = ''; return; }
+    var h = '<tr><th style="text-align:left">继续率区间</th>';
+    ys.forEach(function (y) {
+      h += '<th data-y="' + y + '">RYC-' + y +
+           '<span class="rs-fh">' + rsYearName(y) + '</span></th>';
+    });
+    h += '<th class="rs-c3"></th></tr>';
+    th.innerHTML = h;
+  }
+  function rrEmpty() {                       // 空态提示（没有勾年度时）
+    var tb = rrTbody();
+    if (!tb || rrRows().length) { return; }
+    tb.innerHTML = '<tr><td class="rr-empty" colspan="20">' +
+      '先勾选上面的<b>年度</b>，再点「＋ 添加继续率区间」开始录比例；' +
+      '本产品不按继续率分档就整体留空。</td></tr>';
+  }
+  function rrAddRow(min, max, ratios) {      // 新增一个继续率区间行
+    var tb = rrTbody();
+    if (!tb) { return; }
+    if (!rrYears().length) {                 // 一个年度都没勾 → 不建行，先提示
+      rrEmpty();
+      return;
+    }
+    var e = tb.querySelector('.rr-empty');
+    if (e) { tb.innerHTML = ''; }
+    var ys = rrYears();
+    var tr = document.createElement('tr');
+    var h = '<td><div class="rs-rng">' +
+      '<input type="number" step="0.01" class="rr-min" placeholder="0"> % ≤ 继续率 &lt; ' +
+      '<input type="number" step="0.01" class="rr-max" placeholder="无上限"> %</div></td>';
+    ys.forEach(function (y) {
+      var v = (ratios && ratios[y] !== undefined) ? ratios[y] : '';
+      h += '<td data-y="' + y + '"><input type="number" step="0.01" class="rr-ratio"' +
+           ' value="' + v + '"> %</td>';
+    });
+    h += '<td class="rs-c3"><button type="button" class="rr-del" onclick="rrDelRow(this)">删</button></td>';
+    tr.innerHTML = h;
+    tb.appendChild(tr);
+    if (min !== undefined && min !== null) { tr.querySelector('.rr-min').value = min; }
+    if (max !== undefined && max !== null) { tr.querySelector('.rr-max').value = max; }
+    rrRenumber();
+  }
+  function rrDelRow(btn) {
+    var tr = btn && btn.closest ? btn.closest('tr') : null;
+    if (tr && tr.parentNode) { tr.parentNode.removeChild(tr); }
+    rrRenumber();
+    rrEmpty();
+  }
+  function rrRenumber() {                    // 重排 name（后端按下标读）+ 行数
+    var box = rrBox();
+    if (!box) { return; }
+    var rows = rrRows();
+    rows.forEach(function (tr, r) {
+      var mn = tr.querySelector('.rr-min'), mx = tr.querySelector('.rr-max');
+      if (mn) { mn.name = 'rr_min_' + r; }
+      if (mx) { mx.name = 'rr_max_' + r; }
+      [].slice.call(tr.querySelectorAll('td[data-y]')).forEach(function (td) {
+        var i = td.querySelector('.rr-ratio');
+        if (i) { i.name = 'rr_ratio_' + r + '_' + td.getAttribute('data-y'); }
+      });
+    });
+    var cnt = box.querySelector('.rr-rcnt');
+    if (cnt) { cnt.value = rows.length; }
+  }
+  function rrToggleYear(cb) {                // 勾/取消年度 → 表头与各行的列同步
+    var y = cb ? cb.value : '';
+    var lab = cb ? cb.closest('.rs-yc') : null;
+    if (lab) { lab.classList.toggle('on', !!cb.checked); }
+    rrHead();
+    var rows = rrRows();
+    if (!cb.checked) {                       // 取消：把该列整列摘掉
+      rows.forEach(function (tr) {
+        var td = tr.querySelector('td[data-y="' + y + '"]');
+        if (td) { td.parentNode.removeChild(td); }
+      });
+      rrRenumber();
+      rrEmpty();
+      return;
+    }
+    rows.forEach(function (tr) {             // 新增：给每行补一列（放在删除按钮前）
+      var td = document.createElement('td');
+      td.setAttribute('data-y', y);
+      td.innerHTML = '<input type="number" step="0.01" class="rr-ratio"> %';
+      tr.insertBefore(td, tr.querySelector('.rs-c3') || null);
+    });
+    if (rows.length) {
+      // 补列后按年度升序重排（否则新列总在最后，与表头对不上）
+      var ys = rrYears();
+      rows.forEach(function (tr) {
+        var cells = {};
+        [].slice.call(tr.querySelectorAll('td[data-y]')).forEach(function (td) {
+          cells[td.getAttribute('data-y')] = td;
+        });
+        ys.forEach(function (yy) {
+          if (cells[yy]) { tr.insertBefore(cells[yy], tr.querySelector('.rs-c3') || null); }
+        });
+      });
+    }
+    rrRenumber();
+    if (!rows.length) { rrEmpty(); }
+  }
+  function rrInit() {                        // 编辑回填：RR_DATA = {years, rows:[{min,max,ratios}]}
+    var box = rrBox();
+    if (!box) { return; }
+    var d = RR_DATA || {};
+    var ys = d.years || [];
+    [].slice.call(box.querySelectorAll('.rr-yr')).forEach(function (c) {
+      var on = ys.indexOf(parseInt(c.value, 10)) >= 0;
+      c.checked = on;
+      c.closest('.rs-yc').classList.toggle('on', on);
+    });
+    rrHead();
+    var tb = rrTbody();
+    if (tb) { tb.innerHTML = ''; }
+    (d.rows || []).forEach(function (row) {
+      rrAddRow(row.min, row.max, row.ratios || {});
+    });
+    rrRenumber();
+    rrEmpty();
+    // 四十三改：把折叠开关的初始状态同步一次（没勾→整块隐藏且内部控件 disabled，
+    // 这样浏览器根本不提交 rr_* 字段，后端自然当成「本产品没有该政策」）
+    var _sw = document.getElementById('hasRatio');
+    if (_sw) { rrToggle(_sw); }
+  }
+
+  /* 四十三改（2026-10-29）：续期服务费比例改成**可选项** —— 勾了才展开录入。
+     威哥：这类政策不是每个产品都有，默认不显示，有这个内容再点开。 */
+  function rrToggle(cb) {
+    var body = document.getElementById('rrBody');
+    if (!body || !cb) { return; }
+    var on = !!cb.checked;
+    body.style.display = on ? '' : 'none';
+    [].slice.call(body.querySelectorAll('input, select, textarea, button')).forEach(function (el) {
+      el.disabled = !on;
+    });
+    if (on) { rrHead(); rrEmpty(); }
+  }
+
+  /* ================= 二十九改（2026-10-29）：续期继续率分档 =================
+     业务口径：部分产品的续期服务费不是一个固定值，而是按「继续率下限 → 该档费率」分档发放，
+     且**每个年度的阈值不同**（达尔文12号 20年交：次年 0/80/88 三档，第3年 0/80/93 三档）。
+     所以这里按「年度」各建一个块，块内可自由增删档位；某年度的**满档**（下限最大的那档）
+     自动写回该年度的 RYC 输入框并置为只读，保证与后端「满档回写 ryc_N」完全一致。 */
+  var RS_SEQ = 0;
+
+  function rsCardOf(el) { return el && el.closest ? el.closest('.tier-card') : null; }
+  function rsIx(card) {
+    var h = card ? card.querySelector('[name^="tier_idx"]') : null;
+    return h ? h.value : '';
+  }
+  /* 缴别卡的业务键 = 组件键|缴别（与方案奖励单元键同口径，序号变了也对得上） */
+  function rsKey(card) {
+    var ck = card ? card.querySelector('[name^="tier_comp_"]') : null;
+    var pd = card ? card.querySelector('[name^="tier_period_"]') : null;
+    return ((ck ? ck.value : '') || '') + '|' + ((pd ? pd.value : '') || '');
+  }
+  function rsYearName(y) { return (parseInt(y, 10) === 2) ? '次年' : ('第' + y + '年'); }
+
+  /* ============ 三十一改（2026-10-29）：续期继续率分档 ============
+     威哥：「继续率是要有区间的」「0≤继续率＜80 时 RYC2=0、RYC3=0；80≤继续率＜88 时 RYC2=30、RYC3=50」。
+     故录入结构从「按年度分块」改为 **区间做行 × 年度做列** 的矩阵：
+       · 上方勾「涉及继续率的年度」→ 决定矩阵有哪几列（RYC-2 … RYC-10）；
+       · 每行一个区间（下限 ≥ / 上限 <），行内直接填各年度费率；
+       · 每个年度「下限最大的那档」= 满档，自动回写上方 RYC 输入框并置只读。
+     ⚠️ 若某产品各年度阈值不同（如 20 年交：次年 80/88，第3年 80/93），把区间拆细即可。 */
+  function rsYears(card) {
+    var out = [];
+    if (!card) { return out; }
+    [].slice.call(card.querySelectorAll('.rs-yr')).forEach(function (c) {
+      if (c.checked) { out.push(parseInt(c.value, 10)); }
+    });
+    return out.sort(function (a, b) { return a - b; });
+  }
+  function rsRows(card) {
+    return card ? [].slice.call(card.querySelectorAll('.rs-body tr')) : [];
+  }
+  function rsChip(on, card, y) {                  // 勾一个年度芯片（含样式）
+    var c = card ? card.querySelector('.rs-yr[value="' + y + '"]') : null;
+    if (!c) { return; }
+    c.checked = !!on;
+    if (c.parentNode) { c.parentNode.classList.toggle('on', !!on); }
+  }
+  /* 重建表头（列＝勾选的年度） */
+  function rsHead(card) {
+    var th = card ? card.querySelector('.rs-matrix thead') : null;
+    if (!th) { return; }
+    var h = '<tr><th style="text-align:left">继续率区间</th>';
+    rsYears(card).forEach(function (y) {
+      h += '<th data-y="' + y + '">RYC-' + y +
+           '<span class="rs-fh">' + rsYearName(y) + '</span></th>';
+    });
+    h += '<th class="rs-c3"></th></tr>';
+    th.innerHTML = h;
+  }
+  function rsCellHtml(y, val) {
+    return '<td data-y="' + y + '"><input type="number" step="0.01" class="rs-fee"' +
+           ' value="' + (val === undefined || val === null ? '' : val) + '"> %</td>';
+  }
+  function rsAddCol(card, y) {                    // 新增一列（补到每行末尾，保留已填值）
+    rsHead(card);
+    rsRows(card).forEach(function (tr) {
+      var td = document.createElement('td');
+      td.setAttribute('data-y', y);
+      td.innerHTML = '<input type="number" step="0.01" class="rs-fee"> %';
+      var last = tr.querySelector('.rs-c3');
+      tr.insertBefore(td, last || null);
+    });
+    rsRenumber(card);
+  }
+  function rsDelCol(card, y) {                    // 删掉一列（连带该年度的 RYC 解锁）
+    [].slice.call(card.querySelectorAll('[data-y="' + y + '"]')).forEach(function (el) {
+      el.parentNode.removeChild(el);
+    });
+    rsHead(card);
+    rsRenumber(card);
+    rsUnlock(card, y);
+  }
+
+  function rsToggle(cb) {                         // 勾/取消「涉及继续率考核」
+    var card = rsCardOf(cb), wrap = card ? card.querySelector('.rs-wrap') : null;
+    if (!wrap) { return; }
+    if (cb.checked) {
+      card.removeAttribute('data-rs-off');
+      // 三十五改：本来标了「无续期」的，一旦要勾继续率考核 → 自动切回有续期（默认 3 年）
+      if (isNoRyc(card)) { rycApply(card, 3); }
+      // 重新勾选：本来是沿用上游区间的 → 区间仍保持只读（三十四改）
+      rsReadonly(card, !!card.getAttribute('data-rs-src'));
+      wrap.style.display = '';
+      if (!rsRows(card).length) {
+        if (!rsYears(card).length) { rsChip(true, card, 2); rsChip(true, card, 3); rsHead(card); }
+        rsAddRow(wrap.querySelector('.rs-add'));
+      } else {
+        rsRenumber(card);
+      }
+      if (!RS_BUSY) { rsMarkOwn(card); rsPropagateSoon(card); }
+    } else {
+      var body = wrap.querySelector('.rs-body');
+      if (body) { body.innerHTML = ''; }
+      [].slice.call(card.querySelectorAll('.rs-yr')).forEach(function (c) {
+        c.checked = false;
+        if (c.parentNode) { c.parentNode.classList.remove('on'); }
+      });
+      rsHead(card);
+      var rc = wrap.querySelector('.rs-rcnt');
+      if (rc) { rc.value = 0; }
+      var foot = wrap.querySelector('.rs-foot');
+      if (foot) { foot.innerHTML = ''; }
+      wrap.style.display = 'none';
+      // 取消勾选 → 把「由分档自动写入」的 RYC 清空（否则会留下过期的满档值被存进去）
+      [].slice.call(card.querySelectorAll('.pct.rs-auto')).forEach(function (i) { i.value = ''; });
+      rsUnlockAll(card);                          // 取消勾选 → RYC 全部恢复手工填
+      // 三十二改：明确"本缴别不涉及继续率"，以后不再被上游自动填充
+      card.setAttribute('data-rs-off', '1');
+      card.removeAttribute('data-rs-src');
+      rsReadonly(card, false);
+      rsRefreshSync();
+    }
+  }
+
+  function rsToggleYear(cb) {                     // 勾/取消某个年度列
+    var card = rsCardOf(cb);
+    if (!card) { return; }
+    var y = parseInt(cb.value, 10);
+    if (cb.checked) { rsAddCol(card, y); } else { rsDelCol(card, y); }
+    if (!RS_BUSY) {
+      // 三十二改：手工加年度＝本缴别自己录 → 可编辑并往下带；同时把 RYC 显示范围放开
+      rsMarkOwn(card);
+      if (y) { rycApply(card, y); }
+      rsPropagateSoon(card);
+    }
+  }
+
+  function rsAddRow(btn) {                        // 新增一个「继续率区间」行
+    var card = rsCardOf(btn), body = card ? card.querySelector('.rs-body') : null;
+    if (!body) { return null; }
+    var ys = rsYears(card);
+    if (!ys.length) {                             // 一列都没有 → 至少给次年，保证能填
+      rsChip(true, card, 2);
+      rsHead(card);
+      rsRows(card).forEach(function (tr) {
+        var td = document.createElement('td');
+        td.setAttribute('data-y', 2);
+        td.innerHTML = '<input type="number" step="0.01" class="rs-fee"> %';
+        tr.insertBefore(td, tr.querySelector('.rs-c3') || null);
+      });
+      ys = rsYears(card);
+    }
+    var tr = document.createElement('tr');
+    var h = '<td class="rs-c1" style="text-align:left"><span class="rs-rng">继续率 ≥ ' +
+            '<input type="number" step="0.01" class="rs-min"> % 且 &lt; ' +
+            '<input type="number" step="0.01" class="rs-max"> %</span></td>';
+    ys.forEach(function (y) { h += rsCellHtml(y); });
+    h += '<td class="rs-c3"><button type="button" class="crm-del" onclick="rsDelRow(this)">×</button></td>';
+    tr.innerHTML = h;
+    body.appendChild(tr);
+    rsRenumber(card);
+    if (!RS_BUSY) { rsMarkOwn(card); rsPropagateSoon(card); }   // 用户点「+添加区间」
+    return tr;
+  }
+  function rsDelRow(btn) {
+    var tr = btn.closest('tr'), card = rsCardOf(btn);
+    if (tr) { tr.parentNode.removeChild(tr); }
+    rsRenumber(card);
+    if (!RS_BUSY) { rsMarkOwn(card); rsPropagateSoon(card); }
+  }
+
+  /* 重排字段名 + 同步行数，并重算满档 */
+  function rsRenumber(card) {
+    if (!card) { return; }
+    var ix = rsIx(card), rows = rsRows(card);
+    rows.forEach(function (tr, i) {
+      var mn = tr.querySelector('.rs-min'), mx = tr.querySelector('.rs-max');
+      if (mn) { mn.name = 'rs_min_' + ix + '_' + i; }
+      if (mx) { mx.name = 'rs_max_' + ix + '_' + i; }
+      [].slice.call(tr.querySelectorAll('td[data-y]')).forEach(function (td) {
+        var inp = td.querySelector('.rs-fee');
+        if (inp) { inp.name = 'rs_fee_' + ix + '_' + i + '_' + td.getAttribute('data-y'); }
+      });
+    });
+    var rc = card.querySelector('.rs-rcnt');
+    if (rc) { rc.value = rows.length; }
+    rsSyncAll(card);
+  }
+
+  /* 算每个年度的满档（该列里下限最大且填了费率的那行）→ 回写 RYC 并置只读 */
+  function rsSyncAll(card) {
+    if (!card) { return; }
+    var ys = rsYears(card), rows = rsRows(card), out = [], got = {};
+    ys.forEach(function (y) {
+      var best = null;
+      rows.forEach(function (tr) {
+        var td = tr.querySelector('td[data-y="' + y + '"]');
+        if (!td) { return; }
+        var fe = td.querySelector('.rs-fee');
+        var v = fe ? (fe.value || '').trim() : '';
+        if (v === '') { return; }
+        var f = parseFloat(v);
+        if (isNaN(f)) { return; }
+        var mnEl = tr.querySelector('.rs-min');
+        var m = parseFloat(mnEl ? mnEl.value : '');
+        if (isNaN(m)) { m = 0; }
+        if (best === null || m >= best.m) { best = { m: m, f: f }; }
+      });
+      if (best) { got[y] = best.f; }
+    });
+    ys.forEach(function (y) {
+      if (got.hasOwnProperty(y)) { rsLock(card, y, got[y]); out.push('RYC-' + y + ' → ' + got[y].toFixed(2) + '%'); }
+      else { rsUnlock(card, y); }
+    });
+    var foot = card.querySelector('.rs-foot');
+    if (foot) {
+      foot.innerHTML = out.length
+        ? '满档（该年度下限最大的那档）已自动写入上方 RYC 并置只读：' + out.join('　·　')
+        : '每个年度至少填一档费率，才会回写上方 RYC 输入框。';
+    }
+  }
+
+  function rsLock(card, y, val) {
+    var inp = card.querySelector('[name="tier_ryc_' + y + '_' + rsIx(card) + '"]');
+    if (!inp) { return; }
+    if (val !== null && val !== undefined) { inp.value = val.toFixed(2); }
+    inp.readOnly = true;
+    inp.classList.add('rs-auto');
+    inp.title = '由「续期继续率分档」满档自动带出（要继续手工改就先删掉该年度这一列）';
+  }
+  function rsUnlock(card, y) {
+    var inp = card.querySelector('[name="tier_ryc_' + y + '_' + rsIx(card) + '"]');
+    if (!inp) { return; }
+    inp.readOnly = false;
+    inp.classList.remove('rs-auto');
+    inp.title = '';
+  }
+  function rsUnlockAll(card) {
+    for (var n = 2; n <= 10; n++) { rsUnlock(card, n); }
+  }
+
+  /* ============ 三十二改（2026-10-29）：分档「自动沿用后续缴别」（区间只读 / 费率手填）============
+     威哥：趸交没有继续率奖金就不填；10 年交填完区间后，20/30/35 年交这类「待填写」的
+     应当自动同步成同一套区间，不用重复录。**区间写死只读，但各年度的费率必须手工填。**
+     口径（三十四改定稿）：
+       · 沿用/写死的只有「继续率区间」——年度列 + 每行的下限/上限；
+       · 各年度对应的续期服务费率 **一律留给用户手填**，沿用过来时留空、不清已有值；
+       · 源头（第一个填好区间的缴别）区间可改；下游缴别区间只读（灰底、无增删按钮），
+         但费率框正常可输入 → 所以同一套区间在不同缴别可以有不同费率；
+       · 老合约里区间本来就不同的缴别（如达尔文12号 20 年交 vs 35 年交阈值不同）→ 各自独立可编辑；
+       · 下游某缴别若本来就不涉及继续率 → 取消勾选后记 data-rs-off，以后不再被自动填充；
+       · 满档仍按各卡自己的费率回写各自 RYC，互不串。
+     实现要点：只在「用户操作」时改动（程序化回填全程 RS_BUSY），避免互相触发死循环。 */
+  var RS_BUSY = false, RS_TIMER = null;
+
+  function rsCards() {
+    return tierBox ? [].slice.call(tierBox.querySelectorAll('.tier-card')) : [];
+  }
+  /* 缴别卡的显示名（徽标里用）：定制类带组件名，如「优选K·20年交」 */
+  function rsLabel(card) {
+    if (!card) { return ''; }
+    var cn = card.querySelector('.tier-comp');
+    cn = cn ? (cn.textContent || '').trim() : '';
+    var pd = card.getAttribute('data-period') || '';
+    if (!pd) { var s = card.querySelector('.tier-pd'); pd = s ? (s.textContent || '').trim() : ''; }
+    return (cn ? cn + '·' : '') + (pd || '本缴别');
+  }
+  /* 快照：{years:[2,3], rows:[{min,max,fees:{'2':'0','3':'0'}}]} */
+  function rsSnap(card) {
+    var snap = { years: rsYears(card), rows: [] };
+    rsRows(card).forEach(function (tr) {
+      var mn = tr.querySelector('.rs-min'), mx = tr.querySelector('.rs-max');
+      var fees = {}, any = false;
+      [].slice.call(tr.querySelectorAll('td[data-y]')).forEach(function (td) {
+        var inp = td.querySelector('.rs-fee');
+        var v = inp ? (inp.value || '').trim() : '';
+        if (v !== '') { fees[td.getAttribute('data-y')] = v; any = true; }
+      });
+      var m1 = mn ? (mn.value || '').trim() : '';
+      var m2 = mx ? (mx.value || '').trim() : '';
+      if (m1 !== '' || m2 !== '' || any) { snap.rows.push({ min: m1, max: m2, fees: fees }); }
+    });
+    return snap;
+  }
+  function rsHasData(card) { return !!(card && rsSnap(card).rows.length); }
+  function rsSame(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  /* 只比「区间骨架」（年度列 + 每行下限/上限），**不比费率** ——
+     三十四改：费率各缴别各自手填，所以区间相同就算同一套，可以收成只读镜像。 */
+  function rsSameRange(a, b) {
+    if (!a || !b) { return false; }
+    if (JSON.stringify(a.years || []) !== JSON.stringify(b.years || [])) { return false; }
+    var ra = a.rows || [], rb = b.rows || [];
+    if (ra.length !== rb.length) { return false; }
+    for (var i = 0; i < ra.length; i++) {
+      if ((ra[i].min || '') !== (rb[i].min || '')) { return false; }
+      if ((ra[i].max || '') !== (rb[i].max || '')) { return false; }
+    }
+    return true;
+  }
+
+  /* 只读锁定：把「继续率区间」变成看板——下限/上限不可改、年度芯片不可点、增删按钮隐藏；
+     ⚠️ 各年度的费率框（.rs-fee）**永远保持可输入**，这是要手工填的数据。
+     输入框用 readOnly（不是 disabled），保证值照常提交。 */
+  function rsReadonly(card, ro) {
+    if (!card) { return; }
+    var wrap = card.querySelector('.rs-wrap');
+    if (!wrap) { return; }
+    wrap.classList.toggle('rs-ro', !!ro);
+    [].slice.call(wrap.querySelectorAll('input')).forEach(function (i) {
+      if (i.type === 'checkbox') { return; }
+      if (i.classList.contains('rs-fee')) { i.readOnly = false; return; }   // 费率不锁
+      i.readOnly = !!ro;
+    });
+    var push = card.querySelector('.rs-push');
+    if (push) { push.style.display = ro ? 'none' : ''; }
+    card.setAttribute('data-rs-ro', ro ? '1' : '0');
+  }
+
+  /* 把一份区间快照灌进某张缴别卡（整体重建区间行）：
+     · 区间（年度列 + 下限/上限）全量沿用；
+     · **费率不跟随源头**——只保留本卡自己原来填过的值（按「下限|上限」配行，配不上按行号配），
+       新建/空着的卡就是留空让人手填。 */
+  function rsApply(card, snap) {
+    var cb = card ? card.querySelector('.rs-on') : null;
+    var wrap = card ? card.querySelector('.rs-wrap') : null;
+    if (!cb || !wrap) { return; }
+    // 重建前先记住本卡已有的费率，免得用户已经填过的数字被冲掉
+    var oldRows = rsSnap(card).rows, byKey = {}, i;
+    for (i = 0; i < oldRows.length; i++) {
+      byKey[(oldRows[i].min || '') + '|' + (oldRows[i].max || '')] = oldRows[i].fees || {};
+    }
+    if (!cb.checked) { cb.checked = true; wrap.style.display = ''; }
+    [].slice.call(card.querySelectorAll('.rs-yr')).forEach(function (c) {
+      var on = snap.years.indexOf(parseInt(c.value, 10)) >= 0;
+      c.checked = on;
+      if (c.parentNode) { c.parentNode.classList.toggle('on', on); }
+    });
+    rsHead(card);
+    var body = wrap.querySelector('.rs-body');
+    if (body) { body.innerHTML = ''; }
+    snap.rows.forEach(function (row, ri) {
+      var tr = rsAddRow(wrap.querySelector('.rs-add'));
+      if (!tr) { return; }
+      var mn = tr.querySelector('.rs-min'), mx = tr.querySelector('.rs-max');
+      if (mn) { mn.value = row.min; }
+      if (mx) { mx.value = row.max; }
+      // 只用本卡自己的旧费率：先按区间精确配，配不上退回同序号那行
+      var keep = byKey[(row.min || '') + '|' + (row.max || '')];
+      if (!keep && oldRows[ri]) { keep = oldRows[ri].fees || {}; }
+      Object.keys(keep || {}).forEach(function (y) {
+        var td = tr.querySelector('td[data-y="' + y + '"]');
+        var inp = td ? td.querySelector('.rs-fee') : null;
+        if (inp) { inp.value = keep[y]; }
+      });
+    });
+    rsRenumber(card);
+    rsReadonly(card, true);
+    // 沿用过来的年度超出当前显示范围 → 把 RYC 显示年数放开；顺便把用不到的年度列藏起来
+    var mx2 = 0;
+    snap.years.forEach(function (y) { if (y > mx2) { mx2 = y; } });
+    var sel = card.querySelector('.ryc-cnt');
+    var n0 = sel ? (parseInt(sel.value, 10) || 3) : 3;
+    rycApply(card, Math.max(n0, mx2 || 0));
+  }
+
+  /* 从 card 往下发（跳过：手工录过的 / 声明不涉及的 / 只读镜像之外的），返回同步张数 */
+  function rsPropagate(card) {
+    if (RS_BUSY || !card || !document.body.contains(card)) { return 0; }
+    var snap = rsSnap(card);
+    if (!snap.years.length || !snap.rows.length) { return 0; }   // 源头还没填全 → 不动下游
+    var cards = rsCards(), i = cards.indexOf(card);
+    if (i < 0) { return 0; }
+    var name = rsLabel(card), n = 0;
+    RS_BUSY = true;
+    try {
+      for (var k = i + 1; k < cards.length; k++) {
+        var t = cards[k];
+        // 手工录过**且有内容**的 = 它自己是另一套独立政策（更靠后的真源头）→ 停在这里，
+        // 后面的应该跟它、而不是跟当前这张前面的卡（三十五改：避免冲掉后面已录的数据）
+        if (t.getAttribute('data-rs-own') === '1' && rsHasData(t)) { break; }
+        if (t.getAttribute('data-rs-off') === '1') { continue; }   // 已声明不涉及继续率 → 不填
+        if (isNoRyc(t)) { continue; }                              // 三十五改：本缴别无续期 → 不填
+        rsApply(t, snap);
+        t.setAttribute('data-rs-own', '0');
+        t.setAttribute('data-rs-src', name);
+        n++;
+      }
+    } finally { RS_BUSY = false; }
+    rsBlankAhead(card);      // 三十五改：把排在它前面、本来就没有 RYC 的缴别清空屏蔽
+    rsRefreshSync();
+    return n;
+  }
+  /* 打字时合并触发（每敲一个键就重建下游太重） */
+  function rsPropagateSoon(card) {
+    if (RS_BUSY) { return; }
+    if (RS_TIMER) { clearTimeout(RS_TIMER); }
+    RS_TIMER = setTimeout(function () { RS_TIMER = null; rsPropagate(card); }, 160);
+  }
+  function rsMarkOwn(card) {                        // 标记「本缴别手工录过区间」→ 可编辑、不被覆盖
+    if (!card) { return; }
+    card.removeAttribute('data-rs-off');
+    // 三十四改：只读镜像卡上用户改的是「费率」而不是区间 → 不解锁、不脱离沿用关系
+    if (card.getAttribute('data-rs-ro') === '1') { rsRefreshSync(); return; }
+    rsReadonly(card, false);
+    // 还没填内容的不算"手工录过"（只是勾了「涉及继续率」），留着让上游自动填充
+    if (rsHasData(card)) {
+      card.setAttribute('data-rs-own', '1');
+      card.removeAttribute('data-rs-src');
+    }
+    rsRefreshSync();
+  }
+  /* 刷新每张卡头上的状态徽标 */
+  function rsRefreshSync() {
+    var cards = rsCards();
+    cards.forEach(function (card, i) {
+      var box = card.querySelector('.rs-sync'), on = card.querySelector('.rs-on');
+      if (!box) { return; }
+      if (!on || !on.checked) { box.innerHTML = ''; return; }
+      var src = card.getAttribute('data-rs-src') || '';
+      if (card.getAttribute('data-rs-ro') === '1' && src) {
+        box.innerHTML = '<span class="rs-badge auto">↘ 继续率区间沿用「' + src +
+                        '」· 区间只读，<b style="color:#B5532A">费率请手工填写</b></span>' +
+                        '<a class="rs-lk" href="javascript:void(0)" onclick="rsClaim(this)">' +
+                        '解锁本缴别独立录入</a>';
+        return;
+      }
+      if (!rsHasData(card)) { box.innerHTML = ''; return; }   // 还空着（等待填写）→ 不挂徽标
+      var down = 0;
+      for (var k = i + 1; k < cards.length; k++) {
+        if (cards[k].getAttribute('data-rs-ro') === '1') { down++; }
+      }
+      box.innerHTML = down
+        ? '<span class="rs-badge own">本缴别手动录入区间</span>' +
+          '<span class="rs-badge auto">后续 ' + down + ' 个缴别已沿用本区间（费率各自填）</span>'
+        : '<span class="rs-badge own">本缴别手动录入区间</span>';
+    });
+  }
+
+  /* ============ 三十五改（2026-10-29）：无续期缴别 + 「谁填谁是源头」 ============
+     威哥：附加险 4 年缴本身没有续期，却必须先回 4 年缴填一遍继续率，才能在 5 年缴填；
+           应当在任一缴别窗口填了继续率考核后，排在它前面、本来就没有 RYC 的缴别
+           自动把数据屏蔽掉，后面的正常沿用。
+     口径：
+       · 「无续期」由 ① 块右上角下拉选（RYC 全空的已存缴别回填时自动落在这一项）；
+       · 用户在任一张卡动手 → 该卡就是源头（rsClaim 一键把镜像卡升级成源头）；
+       · 源头一确立，把它**前面**那些「无续期」或「从别处沿用来」的卡清空并锁死。 */
+  function isNoRyc(card) {
+    if (!card) { return false; }
+    var sel = card.querySelector('.ryc-cnt');
+    if (!sel) { return false; }
+    var v = parseInt(sel.value, 10);
+    return (!isNaN(v) && v === 0);
+  }
+  /* 清空某张缴别卡的分档数据并置为「本缴别不涉及」 */
+  function rsClearCard(card, why) {
+    if (!card) { return; }
+    var wrap = card.querySelector('.rs-wrap');
+    var cb = card.querySelector('.rs-on');
+    if (cb && cb.checked) { cb.checked = false; }
+    if (wrap) {
+      var body = wrap.querySelector('.rs-body');
+      if (body) { body.innerHTML = ''; }
+      var rc = wrap.querySelector('.rs-rcnt');
+      if (rc) { rc.value = 0; }
+      var foot = wrap.querySelector('.rs-foot');
+      if (foot) { foot.innerHTML = ''; }
+      wrap.style.display = 'none';
+    }
+    [].slice.call(card.querySelectorAll('.rs-yr')).forEach(function (c) {
+      c.checked = false;
+      if (c.parentNode) { c.parentNode.classList.remove('on'); }
+    });
+    rsHead(card);
+    [].slice.call(card.querySelectorAll('.pct.rs-auto')).forEach(function (i) { i.value = ''; });
+    rsUnlockAll(card);
+    card.setAttribute('data-rs-off', '1');
+    card.removeAttribute('data-rs-src');
+    card.removeAttribute('data-rs-own');
+    rsReadonly(card, false);
+  }
+  /* 源头确立后：把它**前面**的缴别里「无续期」或「从别处沿用来」的数据清掉 */
+  function rsBlankAhead(card) {
+    var cards = rsCards(), i = cards.indexOf(card);
+    if (i <= 0) { return 0; }
+    var n = 0;
+    for (var k = 0; k < i; k++) {
+      var t = cards[k];
+      if (!rsHasData(t)) { continue; }
+      if (isNoRyc(t) || t.getAttribute('data-rs-src')) { rsClearCard(t, 'ahead'); n++; }
+    }
+    if (n) { rsToast('已自动屏蔽前面 ' + n + ' 个「无续期 / 沿用残留」缴别的继续率数据'); }
+    return n;
+  }
+  /* 轻提示：2.6 秒自动消失，不打断录入 */
+  function rsToast(msg) {
+    var d = document.getElementById('rsToast');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = 'rsToast';
+      document.body.appendChild(d);
+    }
+    d.textContent = msg;
+    d.className = 'on';
+    if (rsToast._t) { clearTimeout(rsToast._t); }
+    rsToast._t = setTimeout(function () { d.className = ''; }, 2600);
+  }
+  /* 「解锁本缴别独立录入」：把沿用来的镜像卡升级成新的源头 */
+  function rsClaim(el) {
+    var card = rsCardOf(el);
+    if (!card) { return; }
+    card.removeAttribute('data-rs-src');
+    card.removeAttribute('data-rs-off');
+    card.setAttribute('data-rs-own', '1');
+    rsReadonly(card, false);
+    var cb = card.querySelector('.rs-on');
+    if (cb && !cb.checked) { cb.checked = true; }
+    var wrap = card.querySelector('.rs-wrap');
+    if (wrap) { wrap.style.display = ''; }
+    rsRefreshSync();
+    rsPropagate(card);
+    rsBlankAhead(card);
+    rsRefreshSync();
+  }
+  function rsPush(el) {                              // 「⇩ 同步到后续缴别」按钮（只有源头有）
+    var card = rsCardOf(el);
+    if (card && card.getAttribute('data-rs-ro') !== '1') { rsPropagate(card); }
+  }
+  /* 新建 / 回填缴别卡之后调用：下游还空着的，自动补成上一套区间（并置只读）。
+     三十四改：只要本缴别一行都还没录（哪怕是先勾了「涉及继续率」），也把区间沿用过来，
+     用户只需要填费率；一旦自己加了行/填了区间，就算手工录入，不再被覆盖。 */
+  function rsFillNew() {
+    var cards = rsCards(), src = null;
+    cards.forEach(function (card) {
+      if (rsHasData(card)) {
+        // 只有「可编辑的」才当源头；只读镜像本身也是数据，不能顶掉原源头
+        if (card.getAttribute('data-rs-ro') !== '1') { src = card; }
+        return;
+      }
+      card.removeAttribute('data-rs-src');
+      if (!src) { return; }
+      if (card.getAttribute('data-rs-off') === '1') { return; }   // 声明不涉及 → 不填
+      if (isNoRyc(card)) { return; }                              // 三十五改：本缴别无续期 → 不填
+      rsApply(card, rsSnap(src));
+      card.setAttribute('data-rs-own', '0');
+      card.setAttribute('data-rs-src', rsLabel(src));
+    });
+    rsRefreshSync();
+  }
+
+  /* ============ 三十三改（2026-10-29）：RYC 只显示到实际年数 ============
+     威哥：有些产品续期只发 2 年、有些 3 年，一屏 9 个 RYC 框太花。
+     做法：每张缴别卡①块右上角一个「续期佣金发到 RYC-n」下拉，只显示到该年；
+           回填时按已录数据自动带出（最高已填年度，没数据按 3 年＝次年 + 第3年）；
+           续期分档的年度芯片同步收敛（超出范围且没勾的就藏起来，已勾的保留不丢数据）。 */
+  function rycSet(sel) {
+    var card = sel ? sel.closest('.tier-card') : null;
+    if (!card) { return; }
+    var n = parseInt(sel.value, 10);
+    if (isNaN(n)) { n = 3; }
+    rycApply(card, n);
+    // 三十五改：选「无续期」＝本缴别不参与续期 → 清空并屏蔽继续率分档，且不再被上游填充
+    if (n === 0) { rsClearCard(card, 'no_ryc'); }
+    else { card.removeAttribute('data-rs-off'); }
+    rsRefreshSync();
+  }
+  /* 三十四改 / 三十五改：n = 0 表示「无续期」—— 整块 RYC 与继续率考核区都藏起来 */
+  function rycApply(card, n) {
+    if (!card) { return; }
+    if (n !== 0) { n = n || 3; }
+    [].slice.call(card.querySelectorAll('[data-ryc]')).forEach(function (f) {
+      var k = parseInt(f.getAttribute('data-ryc'), 10);
+      f.style.display = (k <= n) ? '' : 'none';
+    });
+    [].slice.call(card.querySelectorAll('.rs-yr')).forEach(function (c) {
+      var k = parseInt(c.value, 10), w = c.parentNode;
+      if (!w) { return; }
+      w.style.display = (k <= n || c.checked) ? '' : 'none';
+    });
+    var tg = card.querySelector('.rs-toggle');
+    if (tg) { tg.style.display = (n === 0) ? 'none' : ''; }
+    var sel = card.querySelector('.ryc-cnt');
+    if (sel && parseInt(sel.value, 10) !== n) { sel.value = String(n); }
+  }
+  function rycInit() {                               // 建卡 / 回填后统一走一遍
+    rsCards().forEach(function (card) {
+      var sel = card.querySelector('.ryc-cnt');
+      if (!sel) { return; }
+      var n = parseInt(sel.value, 10);
+      if (isNaN(n)) { n = 3; }
+      if (n === 0) {
+        // 三十五改：下拉落在「无续期」上 —— 但若这张卡其实有分档数据（老数据 RYC 没录全），
+        // 说明它有继续率，别误判清空，按数据里最高的年度显示即可。
+        if (rsHasData(card)) {
+          var snap = rsSnap(card), mx = 0;
+          (snap.years || []).forEach(function (y) { if (y > mx) { mx = y; } });
+          n = mx || 3;
+        } else {
+          rycApply(card, 0);
+          rsClearCard(card, 'no_ryc');
+          return;
+        }
+      }
+      rycApply(card, n);
+    });
+  }
+
+
+  /* 编辑回填：按 RS_DATA（{years, rows:[{min,max,fees}], full}）重建矩阵 */
+  function rsRestore() {
+    if (!tierBox) { return; }
+    RS_BUSY = true;
+    try {
+      [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+        if (card.getAttribute('data-rs') === '1') { return; }
+        var m = RS_DATA[rsKey(card)];
+        if (!m || !m.rows || !m.rows.length) { return; }
+        var cb = card.querySelector('.rs-on'), wrap = card.querySelector('.rs-wrap');
+        if (!cb || !wrap) { return; }
+        cb.checked = true;
+        wrap.style.display = '';
+        (m.years || []).forEach(function (y) { rsChip(true, card, y); });
+        rsHead(card);
+        (m.rows || []).forEach(function (row) {
+          var tr = rsAddRow(wrap.querySelector('.rs-add'));
+          if (!tr) { return; }
+          var mn = tr.querySelector('.rs-min'), mx = tr.querySelector('.rs-max');
+          if (mn) { mn.value = row.min; }
+          if (mx) { mx.value = (row.max === null || row.max === undefined) ? '' : row.max; }
+          Object.keys(row.fees || {}).forEach(function (y) {
+            var td = tr.querySelector('td[data-y="' + y + '"]');
+            var inp = td ? td.querySelector('.rs-fee') : null;
+            if (inp) { inp.value = row.fees[y]; }
+          });
+        });
+        rsRenumber(card);
+        card.setAttribute('data-rs', '1');
+      });
+    } catch (e) { /* 回填异常不影响表单提交 */ }
+
+    /* 三十二改：回填完之后统一判定「谁是源头、谁是只读镜像」——
+       · 区间（年度列 + 下限/上限）与上一个缴别**相同** → 收成只读镜像（区间沿用来的，费率各自填）；
+       · 区间不同（老合约各缴别本就不同）→ 保留可编辑，绝不被"写死"覆盖；
+       · 后面还空着的 → 自动补成上一个的区间，置只读。 */
+    var cards = rsCards(), src = null, srcSnap = null;
+    cards.forEach(function (card) {
+      if (rsHasData(card)) {
+        var sn = rsSnap(card);
+        if (src && rsSameRange(sn, srcSnap)) {
+          card.setAttribute('data-rs-own', '0');
+          card.setAttribute('data-rs-src', rsLabel(src));
+          card.removeAttribute('data-rs-off');
+          rsReadonly(card, true);
+        } else {
+          card.setAttribute('data-rs-own', '1');
+          card.removeAttribute('data-rs-src');
+          rsReadonly(card, false);
+          src = card; srcSnap = sn;
+        }
+        return;
+      }
+      if (!src) { return; }
+      if (card.getAttribute('data-rs-off') === '1') { return; }
+      var on0 = card.querySelector('.rs-on');
+      if (on0 && on0.checked) { return; }
+      rsApply(card, srcSnap);
+      card.setAttribute('data-rs-own', '0');
+      card.setAttribute('data-rs-src', rsLabel(src));
+    });
+    RS_BUSY = false;                  // 回填全程静默，最后才解锁
+    rycInit();
+    rsRefreshSync();
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  if (selIns) {
+    selIns.addEventListener('change', function () {
+      refreshBranches(); refreshProducts();
+      compCodeSyncAll();      // 三十九改：换主保司 → 组件的「同主保司」归属变了，重查历史代码
+      // 分公司 / 总-分：换保司＝重新开始，按新产品重建编码 / 保障期限 / 渠道 / 险种 / 缴费类型
+      syncFollow(true);
+    });
+  }
+  if (selProd && IS_BR) {
+    selProd.addEventListener('change', function () {
+      // 用户手工换产品 → 强制刷新五项产品级字段 + 缴别
+      syncFollow(true);
+    });
+  }
+  /* 四十六改：总公司页选「总-分」时，同样要跟随总总；切回「总-总」则解锁自填 */
+  if (selLevel) { selLevel.addEventListener('change', function () { syncFollow(false); }); }
+  /* 总公司页产品是手输 + datalist，所以在 change / blur 时查一次总总是否已录该产品 */
+  if (selProd && !IS_BR) {
+    ['change', 'blur'].forEach(function (ev) {
+      selProd.addEventListener(ev, function () { syncFollow(false); });
+    });
+  }
+  /* 四十六改：锁定的下拉框兜底 —— 鼠标点不开（pointer-events:none），
+     但键盘/脚本仍可能改动，改了就退回去 */
+  document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (isLocked(el) && el.tagName === 'SELECT' && el.hasAttribute('data-lockval')) {
+      el.value = el.getAttribute('data-lockval');
+    }
+  }, true);
+  if (ppWrap) {
+    ppWrap.addEventListener('change', function (e) {
+      var cb = e.target;
+      if (cb && cb.name === 'periods') {
+        cb.parentNode.classList.toggle('on', cb.checked);
+        syncTiers();
+      }
+    });
+  }
+  if (isCustom) { isCustom.addEventListener('change', syncCustom); }
+  /* 二十八改：组件区事件 —— 勾缴别重建费率卡、改组件名刷新卡上的组件标签 */
+  if (compBox) {
+    compBox.addEventListener('change', function (e) {
+      var cb = e.target;
+      if (cb && cb.type === 'checkbox' && (cb.name || '').indexOf('comp_periods_') === 0) {
+        cb.parentNode.classList.toggle('on', cb.checked);
+        syncTiers();
+      }
+      // 三十九改：改组件保司 → 按「新保司 + 组件名」重新查历史代码
+      if (cb && (cb.name || '').indexOf('comp_insurer_') === 0) {
+        compCodeSync(cb.closest('.comp-row'));
+      }
+    });
+    compBox.addEventListener('input', function (e) {
+      if ((e.target.name || '').indexOf('comp_name_') === 0) {
+        renumber();
+        compCodeSync(e.target.closest('.comp-row'));   // 三十九改：组件名 → 带出历史代码
+      }
+    });
+  }
+  tierBox.addEventListener('input', function (e) {
+    var nm = e.target.name || '';
+    var card = e.target.closest('.tier-card');
+    if (card && nm.indexOf('tier_') === 0) { calcTier(card); }
+    // 三十一改：改分档的「下限 / 上限 / 各年度费率」→ 立刻重算满档并回写 RYC
+    var el = e.target;
+    if (el && el.classList && (el.classList.contains('rs-min') ||
+        el.classList.contains('rs-max') || el.classList.contains('rs-fee'))) {
+      rsSyncAll(card);
+      // 三十二改：手工改过 → 本缴别可编辑，并把这套区间自动带到后面待填写的缴别（只读）
+      if (!RS_BUSY) { rsMarkOwn(card); rsPropagateSoon(card); }
+    }
+  });
+  tierBox.addEventListener('blur', function (e) {
+    var el = e.target;
+    if (el && el.classList && el.classList.contains('pct') && el.value !== '') {
+      var v = parseFloat(el.value);
+      if (!isNaN(v)) { el.value = v.toFixed(2); }
+      calcTier(el.closest('.tier-card'));
+    }
+  }, true);
+
+  /* 方案块不在 #tierBox 内（已独立成「四、」一节），单独挂事件 */
+  var headBox = document.getElementById('planHeadBox');
+  headBox.addEventListener('input', function (e) {
+    var nm = e.target.name || '';
+    if (nm.indexOf('ph_') === 0 && nm.indexOf('coef') > 0) { calcAwardRow(e.target.closest('tr')); }
+  });
+  headBox.addEventListener('change', function (e) {
+    var nm = e.target.name || '';
+    if (nm.indexOf('ph_scope_') === 0 || nm.indexOf('ph_form_') === 0) {
+      syncScope(e.target.closest('.plan-block'));
+    }
+  });
+  headBox.addEventListener('blur', function (e) {
+    var el = e.target;
+    if (el && el.classList && el.classList.contains('pct') && el.value !== '') {
+      var v = parseFloat(el.value);
+      if (!isNaN(v)) { el.value = v.toFixed(2); }
+      calcAwardRow(el.closest('tr'));
+    }
+  }, true);
+
+  /* ---------- 初始化 ---------- */
+  refreshBranches();
+  // 二十七改：先把已渲染 tier 卡里的自定义缴别补出勾选框 / 组件芯片，否则编辑老合约时
+  // 自定义缴别会丢失；这一步必须在刷新产品之前做。
+  initCustomPeriods();
+  refreshProducts();
+  // 回填：已有缴别 → 勾选；没有则总公司给一张空卡兜底
+  var initP = [];
+  [].slice.call(tierBox.querySelectorAll('.tier-card')).forEach(function (card) {
+    var s = card.querySelector('[name^="tier_period_"]');
+    if (s && s.value) { initP.push(s.value); }
+    calcTier(card);
+  });
+  initP.sort(function (a, b) { return PERIOD_ORDER.indexOf(a) - PERIOD_ORDER.indexOf(b); });
+  // 二十八改：定制类产品的缴别来自组件芯片（服务端已按已存数据勾好），这里只回填顶部勾选框，
+  // 不参与定制类的重建；非定制类照旧由顶部勾选框驱动。
+  setPeriods(initP);
+  syncTiers();
+  /* 四十六改：初始化时统一按总总核对一次产品级字段的「只读」状态。
+     · 总-分 / 分-分：有总总记录 → 锁定五件套（编辑老合约时也锁，口径统一）；
+     · 分-分新建、又没有已存缴别 → 用总总缴别兜底，否则一张费率卡都没有、
+       勾选框又是禁用的，等于无从下手。 */
+  syncFollow(false);
+  if (IS_BR && !initP.length) { syncFollow(true); }
+  // 六改：不再预生成空白缴别卡 —— 先勾选/带入缴别，系统才生成正序的费用政策表
+  if (noTip) { noTip.style.display = tierBox.querySelectorAll('.tier-card').length ? 'none' : ''; }
+  // 二十七改2：按「定制类产品」勾选状态显隐组件块（编辑已勾选的合约时默认展开）
+  syncCustom();
+  // 三十九改：组件代码按「保司 + 组件名」查历史 → 命中就带出并锁只读（编辑页同样生效）
+  compCodeSyncAll();
+  // 十二改：回填方案块（费用形式选项 + 备注可见性 + 协议外高亮 + 方案编号），
+  // 再按当前「组件 × 缴别」生成奖励行 —— 老合约打开时奖励值从 PLAN_AWARDS 回填。
+  [].slice.call(document.querySelectorAll('.plan-block')).forEach(function (blk) { syncScope(blk); });
+  renumberHeads();
+  syncAwardRows();
+  // 二十九改：回填「续期继续率分档」（必须在缴别卡、勾选框都稳定之后再建块，
+  // 否则分档块会被 syncTiers 重建缴别卡时丢掉）
+  rsRestore();
+  // 四十改：回填产品级「续期服务费比例」矩阵（整个产品一份，不受缴别卡重建影响）
+  rrInit();
+
+// ===================== 三十改（2026-10-29）：提交前二次确认 =====================
+// 威哥：费用数据录完后，提交前弹框让用户再浏览一遍，OK 了才入库。
+// 口径：摘要一律**从 DOM 现读**（看到的就是马上要提交的值），不在后端另算一套口径，
+//       否则前端改了、后端算的和用户看到的会对不上。
+(function () {
+  var form = document.getElementById('cfForm');
+  var mask = document.getElementById('cfMask');
+  var body = document.getElementById('cfBody');
+  if (!form || !mask || !body) return;
+  var passed = false;                       // 确认后置 true，再次 submit 直接放行
+
+  function val(sel) {
+    var e = form.querySelector(sel);
+    if (!e) return '';
+    if (e.tagName === 'SELECT') {
+      if (!e.value) return '';              // 未选（占位项）按空处理
+      var o = e.options[e.selectedIndex];
+      return o ? (o.textContent || '').trim() : '';
+    }
+    return (e.value || '').trim();
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function pct(v) { return v === '' ? '—' : esc(v) + '%'; }
+  var EMPTY = '<span class="cf-warn">未填</span>';
+
+  /* 一、归属与产品 */
+  function secOwner() {
+    var rows = [
+      ['保司', val('#selInsurer')],
+      ['签约级别', val('#selLevel') || (document.querySelector('[name="sign_level"]') ? '分-分' : '')],
+      ['合约状态', val('select[name="status"]')],
+      ['产品名称', val('#prodName')],
+      ['产品编码', val('#prodCode')],
+      ['险种类型', val('#insType')],
+      ['缴费类型', val('select[name="pay_type"]')],
+      // 三十七改（2026-10-29）：确认框补「保障期限」（同产品多期限各建一条合约，这里要能核对）
+      ['保障期限', val('#coverageTerm')]
+    ];
+    var br = val('#selBranch');
+    if (br) rows.splice(1, 0, ['省分公司', br]);
+    var custom = form.querySelector('#isCustom');
+    if (custom && custom.checked) {
+      var cs = [];
+      form.querySelectorAll('.comp-row [name^="comp_name_"]').forEach(function (i) {
+        if ((i.value || '').trim()) cs.push((i.value || '').trim());
+      });
+      rows.push(['定制类产品', '是 · ' + (cs.length || 0) + ' 个组件：' + (cs.join(' ＋ ') || '组件名未填')]);
+    }
+    var h = cfSec('归属与产品') + '<table class="cf-tb">';
+    rows.forEach(function (r) {
+      h += '<tr><td class="k">' + r[0] + '</td><td>' + (esc(r[1]) || EMPTY) + '</td></tr>';
+    });
+    return h + '</table>';
+  }
+
+  /* 二、合约有效期 —— 止日留空＝长期，明确告诉用户不会被到期提醒 */
+  function secSpan() {
+    var s = val('[name="base_start"]'), e = val('[name="base_end"]');
+    return cfSec('合约有效期') + '<table class="cf-tb"><tr>' +
+      '<td class="k">起始日</td><td>' + (s ? esc(s) : EMPTY) + '</td>' +
+      '<td class="k">终止日</td><td>' +
+      (e ? esc(e) : '<b class="cf-lg">长期有效</b> <span style="color:#9C9288">（不做到期提醒）</span>') +
+      '</td></tr></table>';
+  }
+
+  /* 四十改：产品级「续期服务费比例」是否真的有内容（有＝本产品续期按继续率分档发放） */
+  function ratioHasData() {
+    var sw = document.getElementById('hasRatio');
+    if (sw && !sw.checked) { return false; }   // 四十三改：未勾＝没有该政策
+    var box = rrBox();
+    return !!(box && box.querySelectorAll('.rr-body td[data-y]').length);
+  }
+
+  /* 三、续期服务费比例（整个产品共用一份） */
+  function secRatio() {
+    var sw = document.getElementById('hasRatio');
+    if (sw && !sw.checked) { return ''; }   // 四十三改：未勾＝本产品没有该政策，弹窗整节不列
+    var box = rrBox();
+    if (!box) { return ''; }
+    var h = cfSec('续期服务费比例（整个产品共用一份）');
+    var ys = rrYears();
+    var rows = rrRows().filter(function (tr) { return tr.querySelector('td[data-y]'); });
+    if (!ys.length || !rows.length) {
+      return h + '<div class="cf-empty">本次未填 —— 本产品续期按固定 RYC 费率发放。</div>';
+    }
+    var body = '';
+    rows.forEach(function (tr) {
+      var mn = ((tr.querySelector('.rr-min') || {}).value || '').trim() || '0';
+      var mx = ((tr.querySelector('.rr-max') || {}).value || '').trim();
+      var rng = mx === '' ? ('继续率 ≥ ' + mn + '%')
+                          : (mn + '% ≤ 继续率 < ' + mx + '%');
+      var cells = '';
+      ys.forEach(function (y) {
+        var i = tr.querySelector('td[data-y="' + y + '"] input');
+        var v = i && (i.value || '').trim();
+        cells += '<td class="num">' + (v === '' ? '—' : esc(v) + '%') + '</td>';
+      });
+      body += '<tr><td>' + esc(rng) + '</td>' + cells + '</tr>';
+    });
+    var th = '<tr><th>继续率区间</th>';
+    ys.forEach(function (y) { th += '<th class="num">RYC-' + y + '</th>'; });
+    th += '</tr>';
+    return h + '<table class="cf-tb">' + th + body + '</table>' +
+           '<div class="cf-empty">实发 ＝ 该年度基础费率 RYC-N × 本档比例</div>';
+  }
+
+  /* 四、各缴别费率 */
+  function secTiers() {
+    var rows = '', n = 0;
+    document.querySelectorAll('#tierBox .tier-card').forEach(function (card) {
+      n++;
+      var pd = (card.querySelector('.tier-pd') || {}).textContent || '';
+      var cp = (card.querySelector('.tier-comp') || {}).textContent || '';
+      var fyc = '', ryc = [];
+      card.querySelectorAll('input[name]').forEach(function (i) {
+        if (/^tier_(tt|ff)_fyc_\d+$/.test(i.name) && (i.value || '').trim()) fyc = i.value.trim();
+        var m = /^tier_ryc_(\d+)_\d+$/.exec(i.name);
+        if (m && (i.value || '').trim()) ryc.push('R' + m[1] + ' ' + i.value.trim() + '%');
+      });
+      var on = card.querySelector('.rs-on');
+      var sum = card.querySelector('.sum-fyc');
+      // 四十改：比例上移到产品级 → 缴别卡不再有「涉及继续率考核」勾选，
+      // 改看产品级比例表是否填了（填了＝本产品续期按继续率分档发放）。
+      rows += '<tr><td>' + esc((cp ? cp + ' · ' : '') + (pd || '—')) + '</td>' +
+              '<td class="num">' + pct(fyc) + '</td>' +
+              '<td>' + (ryc.length ? esc(ryc.join(' / ')) : '—') + '</td>' +
+              '<td>' + ((on && on.checked) || ratioHasData()
+                ? '<span class="crm-tag t-warn">按继续率分档</span>' : '—') + '</td>' +
+              '<td class="num">' + (sum ? esc((sum.textContent || '').trim()) : '—') + '</td></tr>';
+    });
+    if (!n) return cfSec('各缴别费率') +
+                   '<div class="cf-empty">尚未生成任何缴别费率（请回上一步勾选缴别）。</div>';
+    return cfSec('各缴别费率（' + n + ' 个缴别）') + '<table class="cf-tb">' +
+      '<tr><th>组件 · 缴别</th><th>FYC</th><th>续期 RYC</th><th>续期分档</th><th>首年 FYC 合计</th></tr>' +
+      rows + '</table>';
+  }
+
+  /* 四、阶段方案（全空的方案不列，避免干扰） */
+  function secPlans() {
+    var list = [];
+    form.querySelectorAll('input[name="ph_idx"]').forEach(function (h) {
+      var k = h.value;
+      var nm = val('[name="ph_name_' + k + '"]');
+      var fm = val('[name="ph_form_' + k + '"]');
+      var tx = val('[name="ph_text_' + k + '"]');
+      var cnt = 0;
+      form.querySelectorAll('[name^="ph_tt_coef_' + k + '_"],[name^="ph_ff_coef_' + k + '_"],' +
+                            '[name^="ph_tt_amount_' + k + '_"],[name^="ph_ff_amount_' + k + '_"]')
+        .forEach(function (i) { if ((i.value || '').trim()) cnt++; });
+      if (!nm && !tx && !cnt) return;
+      list.push('<tr><td>' + (esc(nm) || '<span class="cf-warn">未命名</span>') + '</td>' +
+                '<td>' + (esc(fm) || '—') + '</td>' +
+                '<td class="num">' + (cnt ? cnt + ' 格' : '—') + '</td>' +
+                '<td>' + (tx ? esc(tx.length > 60 ? tx.slice(0, 60) + '…' : tx) : '—') + '</td></tr>');
+    });
+    var h = cfSec('保司阶段产品方案政策');
+    if (!list.length) return h + '<div class="cf-empty">本次未填方案。</div>';
+    return h + '<table class="cf-tb"><tr><th>方案名称</th><th>费用形式</th><th>奖励已填</th><th>文字说明</th></tr>' +
+           list.join('') + '</table>';
+  }
+
+  /* 四十三改：确认弹窗的节编号改成**动态**的 —— 续期服务费比例是可选项，
+     不勾时整节不出现，后面各节要自动往上顺延（不再是写死的一~五）。 */
+  var CF_NO = 0;
+  function cfSec(t) {
+    var cn = '一二三四五六七八九十';
+    CF_NO += 1;
+    return '<div class="cf-sec">' + (cn.charAt(CF_NO - 1) || (CF_NO + '')) + '、' + t + '</div>';
+  }
+
+  function build() {
+    CF_NO = 0;
+    body.innerHTML = secOwner() + secSpan() + secRatio() + secTiers() + secPlans();
+  }
+
+  window.cfClose = function () { mask.style.display = 'none'; };
+  window.cfGo = function () {
+    passed = true;
+    mask.style.display = 'none';
+    form.submit();          // 原生提交：不触发 submit 事件，不会被再次拦截
+  };
+
+  form.addEventListener('submit', function (ev) {
+    if (passed) return;
+    // 四十三改：附件列表里的「删除」按钮（formaction 打到删除路由）不弹确认框，
+    // 也不做合计核对 —— 直接放行给浏览器提交。
+    var sb = ev.submitter;
+    if (sb && sb.dataset && sb.dataset.skip === '1') { return; }
+    ev.preventDefault();
+    try { build(); } catch (err) { passed = true; form.submit(); return; }  // 摘要出错不许挡住保存
+    mask.style.display = 'flex';
+    body.scrollTop = 0;
+  });
+})();
+</script>
+{% endblock %}

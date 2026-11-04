@@ -1,0 +1,75 @@
+{# =====================================================================
+   全站「提交后提示」统一弹出窗口（十八改 2026-10-02）
+
+   威哥口径：系统里凡是提交后有提示的，一律用**弹出窗口**，不再用顶部横幅。
+   做法：一次改动、全站生效 —— 各业务视图的 flash(...) 一行都不用改，
+   这里把 flash 消息收进一个隐藏容器，再由 JS 搬进居中模态弹窗。
+
+   ⚠️ 文案仍原样留在 DOM 里（只是隐藏），所以既有回归断言 `文案 in html` 依旧成立。
+   ⚠️ 一个页面只能 include 一次：get_flashed_messages() 取完即清空。
+   ===================================================================== #}
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+  <div id="wbFlashSrc" hidden>{% for m in messages %}<div class="wb-flash-item">{{ m }}</div>{% endfor %}</div>
+  {% endif %}
+{% endwith %}
+
+<style>
+  .wb-mask{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(42,42,42,.42);
+           z-index:9600;display:flex;align-items:center;justify-content:center;padding:20px}
+  .wb-modal{background:#fff;border-radius:14px;width:100%;max-width:440px;overflow:hidden;
+            box-shadow:0 20px 56px rgba(42,42,42,.26);animation:wbPop .16s ease-out}
+  @keyframes wbPop{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}
+  .wb-modal .hd{background:linear-gradient(135deg,#C86432,#E6823C);color:#fff;
+                padding:13px 20px;font-size:14px;font-weight:600;letter-spacing:.5px}
+  .wb-modal .bd{padding:6px 20px;font-size:13.5px;color:#2A2A2A;line-height:1.8;
+                max-height:54vh;overflow:auto}
+  .wb-modal .bd .li{padding:9px 0;border-bottom:1px dashed #EFE7DC}
+  .wb-modal .bd .li:last-child{border-bottom:0}
+  .wb-modal .ft{padding:12px 20px 16px;text-align:right}
+  .wb-modal .ft button{background:#C86432;color:#fff;border:0;border-radius:8px;
+                       padding:8px 26px;font-size:13px;cursor:pointer;font-weight:600}
+  .wb-modal .ft button:hover{background:#B4552A}
+</style>
+
+<script>
+(function () {
+  var src = document.getElementById('wbFlashSrc');
+  if (!src) return;
+  var items = [].slice.call(src.querySelectorAll('.wb-flash-item'))
+                .map(function (e) { return (e.textContent || '').trim(); })
+                .filter(Boolean);
+  if (!items.length) return;
+
+  function esc(s) {
+    return s.replace(/[&<>]/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c];
+    });
+  }
+  var mask = document.createElement('div');
+  mask.className = 'wb-mask';
+  mask.innerHTML =
+    '<div class="wb-modal" role="dialog" aria-modal="true">' +
+      '<div class="hd">提示</div>' +
+      '<div class="bd">' +
+        items.map(function (t) { return '<div class="li">' + esc(t) + '</div>'; }).join('') +
+      '</div>' +
+      '<div class="ft"><button type="button" class="wb-ok">' +
+        (items.length > 1 ? '我知道了' : '确定') +
+      '</button></div>' +
+    '</div>';
+
+  function close() {
+    if (mask.parentNode) mask.parentNode.removeChild(mask);
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape' || e.key === 'Enter') close(); }
+  mask.addEventListener('click', function (e) {
+    if (e.target === mask || (e.target.classList && e.target.classList.contains('wb-ok'))) close();
+  });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(mask);
+  var btn = mask.querySelector('.wb-ok');
+  if (btn) btn.focus();
+})();
+</script>

@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}人事卡片录入 · {{ emp.name }} · 海盈通保{% endblock %}
+{% block pagename %}人事卡片录入{% endblock %}
+{% block content %}
+
+{# ============ 人事卡片录入 / 编辑（二期） ============
+   入口：人事卡片页右上角「录入 / 编辑」（需 hr.employee.manage）。
+   七大子集板块逐块增删改；日期的字段按字符串存（如 2007-09 / 2025-09-01）。 #}
+
+<div class="card" style="padding:16px 18px;margin-bottom:16px;display:flex;align-items:center;
+     justify-content:space-between;flex-wrap:wrap;gap:12px;border-top:3px solid var(--brand)">
+  <div>
+    <div style="font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:1px">
+      {{ emp.name }} <span style="font-size:13px;font-weight:400;color:var(--muted)">人事卡片录入</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:5px">
+      员工编号 {{ emp.employee_no or '—' }}｜{{ (emp.org.name if emp.org else '') or '未设部门' }}｜{{ emp.title or '未设职务' }}
+    </div>
+  </div>
+  <a href="{{ url_for('hr.profile_card', eid=emp.id) }}"
+     style="font-size:13px;color:var(--brand-deep);background:#fff;border:1px solid #F3DCC6;
+            text-decoration:none;padding:8px 16px;border-radius:6px">查看人事卡片 →</a>
+</div>
+
+<style>
+  .ce-sect { background:#fff;border-radius:8px;padding:16px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05) }
+  .ce-sect h3 { font-size:14.5px;font-weight:600;margin:0 0 12px;padding-left:9px;border-left:3px solid var(--brand) }
+  .ce-rec { padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;background:#FCFAF7 }
+  .ce-rec.isnew { background:#FBFAF7;border-style:dashed }
+  .ce-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 14px }
+  .ce-grid .lb { font-size:12px;color:var(--muted);margin-bottom:4px }
+  .ce-grid input { width:100%;padding:7px 9px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;background:#fff }
+  .ce-acts { display:flex;gap:8px;justify-content:flex-end;margin-top:10px }
+  .ce-save { background:var(--brand);color:#fff;border:none;padding:7px 18px;border-radius:6px;font-size:13px;cursor:pointer }
+  .ce-del { background:#fff;color:#b91c1c;border:1px solid #F3D9D3;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer }
+</style>
+
+{% for key, name, model, fields in sections %}
+<div class="ce-sect" id="{{ key }}">
+  <h3>{{ name }}
+    <span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px">
+      共 {{ items[key]|length }} 条</span></h3>
+
+  {% for it in items[key] %}
+  <form class="ce-rec" method="post" action="{{ url_for('hr.card_item_save', eid=emp.id, section=key) }}">
+    <input type="hidden" name="item_id" value="{{ it.id }}">
+    <div class="ce-grid">
+      {% for fname, label in fields %}
+      <div><div class="lb">{{ label }}</div>
+        <input name="{{ fname }}" value="{{ it[fname] or '' }}"></div>
+      {% endfor %}
+    </div>
+    <div class="ce-acts">
+      <button type="submit" class="ce-save">保存</button>
+      <button type="submit" class="ce-del"
+              formaction="{{ url_for('hr.card_item_delete', eid=emp.id, section=key, item_id=it.id) }}"
+              onclick="return confirm('确认删除这条「{{ name }}」记录？')">删除</button>
+    </div>
+  </form>
+  {% endfor %}
+
+  {# 新增一行：item_id 留空即新增 #}
+  <form class="ce-rec isnew" method="post" action="{{ url_for('hr.card_item_save', eid=emp.id, section=key) }}">
+    <div class="ce-grid">
+      {% for fname, label in fields %}
+      <div><div class="lb">{{ label }}</div><input name="{{ fname }}"></div>
+      {% endfor %}
+    </div>
+    <div class="ce-acts">
+      <button type="submit" class="ce-save">+ 新增{{ name }}</button>
+    </div>
+  </form>
+</div>
+{% endfor %}
+
+<div style="font-size:12px;color:var(--muted);padding:4px 2px">
+  提示：日期类字段可直接填「2007-09」或「2025-09-01」；不必每条都填满，留空的栏位人事卡片会显示「—」。
+</div>
+
+{% endblock %}

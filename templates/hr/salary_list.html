@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}工资清单 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 4px">工资清单
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（内部员工 · Web 管理端；销售渠道人员的佣金走小程序，不在此列）</small>
+    {% if can_manage %}<a href="{{ url_for('hr.salary_fields') }}" style="font-size:13px;color:#E6823C;text-decoration:none;margin-left:12px">自定义字段配置</a>{% endif %}
+  </h2>
+
+  {# 新增工资表单：仅拥有 hr.salary.manage 权限者可见（前端收敛，服务端闸门兜底） #}
+  {% if can_manage %}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin:12px 0 20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增工资记录</div>
+    <form method="post" action="{{ url_for('hr.salary_new') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">员工 *</div>
+        <select name="employee_id" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}（{{ e.employee_no }}）</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">发放月份 *</div>
+        <input name="month" required placeholder="如 2026-08" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:120px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">基本薪资</div>
+        <input name="base_salary" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">岗位工资</div>
+        <input name="position_salary" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">绩效薪资</div>
+        <input name="performance_salary" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">补贴</div>
+        <input name="subsidy" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">养老保险</div>
+        <input name="pension" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">医疗保险</div>
+        <input name="medical" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">住房公积金</div>
+        <input name="housing_fund" type="number" step="0.01" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">备注</div>
+        <input name="note" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:160px"></div>
+      {% for f in salary_fields %}
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">{{ f.name }}{% if f.is_deduction %}(扣减){% endif %}</div>
+        <input name="custom_{{ f.code }}" type="number" step="0.01" placeholder="0" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      {% endfor %}
+      <button type="submit"
+              style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">添加</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05);overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap">
+      <thead>
+        <tr style="color:#9C9288;text-align:left">
+          <th style="padding:8px">员工</th><th>月份</th><th>基本</th><th>岗位</th>
+          <th>绩效</th><th>补贴</th><th>养老</th><th>医疗</th><th>公积金</th>
+          <th>实发</th><th>备注</th>
+          {% if can_manage %}<th>操作</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for it in items %}
+        {# 实发 = 应发(基本+岗位+绩效+补贴) - 扣减(养老+医疗+公积金) #}
+        {% set net = it.base_salary + it.position_salary + it.performance_salary + it.subsidy - it.pension - it.medical - it.housing_fund %}
+        <tr style="border-top:1px solid #F3EDE3">
+          <td style="padding:8px">{{ it.employee.name if it.employee else '—' }}
+            <br><span style="color:#9C9288;font-size:11px">{{ it.employee.employee_no if it.employee else '' }}</span></td>
+          <td>{{ it.month }}</td>
+          <td>{{ '%.2f'|format(it.base_salary) }}</td>
+          <td>{{ '%.2f'|format(it.position_salary) }}</td>
+          <td>{{ '%.2f'|format(it.performance_salary) }}</td>
+          <td>{{ '%.2f'|format(it.subsidy) }}</td>
+          <td>{{ '%.2f'|format(it.pension) }}</td>
+          <td>{{ '%.2f'|format(it.medical) }}</td>
+          <td>{{ '%.2f'|format(it.housing_fund) }}</td>
+          <td style="color:#166534;font-weight:600">{{ '%.2f'|format(net) }}</td>
+          <td style="white-space:normal;max-width:160px">{{ it.note or '' }}</td>
+          {% if can_manage %}
+          <td>
+            <a href="{{ url_for('hr.salary_edit', sid=it.id) }}"
+               style="font-size:12px;color:#E6823C;text-decoration:none;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px">编辑</a>
+            <form method="post" action="{{ url_for('hr.salary_delete', sid=it.id) }}"
+                  style="display:inline" onsubmit="return confirm('确认删除该工资记录？')">
+              <button type="submit"
+                      style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:3px 10px;border-radius:6px;cursor:pointer">删除</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+      {% else %}
+        <tr><td colspan="{% if can_manage %}12{% else %}11{% endif %}" style="padding:20px;text-align:center;color:#9C9288">暂无工资记录</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}银行存款余额调节表 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 银企对账 · 调节表（{{ ba.name }}）{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">银行存款余额调节表 <span style="font-size:13px;font-weight:400;color:#9C9288">{{ ba.name }}</span></h2>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.bank_adjust', baid=ba.id) }}" style="display:flex;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D"><div style="margin-bottom:4px">会计期间（截至）</div>
+        <input type="month" name="period" value="{{ d.period }}" style="padding:7px 10px;width:150px"></label>
+      <button type="submit" class="btn" style="padding:8px 18px">刷新</button>
+    </form>
+    <a href="{{ url_for('fin.bank_reconcile', baid=ba.id) }}" style="text-decoration:none;padding:8px 18px;border:1px solid #EAE2D6;border-radius:9px;color:#5C554D;font-size:13px">去对账工作台</a>
+  </div>
+
+  {% set ok = d.diff == 0 %}
+  <div style="background:{{ '#E8F5EC' if ok else '#FDECEC' }};border:1px solid {{ '#BFE3C9' if ok else '#F3C9C9' }};
+              border-radius:8px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:{{ '#166534' if ok else '#991b1b' }}">
+    {% if ok %}✓ 调节平衡：企业账面与银行对账单调节后余额一致（差额 ￥0.00）。
+    {% else %}⚠ 调节后差额 ￥{{ '{:,.2f}'.format(d.diff) }}，说明还有未达账或对账有误，请回到对账工作台核查。{% endif %}
+  </div>
+
+  <div class="card" style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">
+      <tbody>
+        <tr style="border-bottom:1px solid #EAE2D6">
+          <td style="padding:11px 14px;width:60%;font-weight:600;color:#2A2A2A">企业账面银行存款余额</td>
+          <td style="padding:11px 14px;text-align:right;font-family:monospace">￥{{ amt(d.book_balance) }}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #F2EBE1;background:#FCFAF7">
+          <td style="padding:11px 14px;color:#5C554D">加：企业已收、银行未收（未达账）</td>
+          <td style="padding:11px 14px;text-align:right;color:#166534;font-family:monospace">＋ {{ amt(d.book_recv_un) }}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #F2EBE1;background:#FCFAF7">
+          <td style="padding:11px 14px;color:#5C554D">减：企业已付、银行未付（未达账）</td>
+          <td style="padding:11px 14px;text-align:right;color:#991b1b;font-family:monospace">－ {{ amt(d.book_pay_un) }}</td>
+        </tr>
+        <tr style="border-bottom:2px solid #EAE2D6;font-weight:700">
+          <td style="padding:12px 14px;color:#2A2A2A">调节后企业账面余额</td>
+          <td style="padding:12px 14px;text-align:right;font-family:monospace">￥{{ amt(d.book_adjusted) }}</td>
+        </tr>
+
+        <tr style="border-bottom:1px solid #EAE2D6">
+          <td style="padding:11px 14px;width:60%;font-weight:600;color:#2A2A2A">银行对账单余额</td>
+          <td style="padding:11px 14px;text-align:right;font-family:monospace">￥{{ amt(d.bank_balance) }}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #F2EBE1;background:#FCFAF7">
+          <td style="padding:11px 14px;color:#5C554D">加：银行已收、企业未收（未达账）</td>
+          <td style="padding:11px 14px;text-align:right;color:#166534;font-family:monospace">＋ {{ amt(d.bank_recv_un) }}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #F2EBE1;background:#FCFAF7">
+          <td style="padding:11px 14px;color:#5C554D">减：银行已付、企业未付（未达账）</td>
+          <td style="padding:11px 14px;text-align:right;color:#991b1b;font-family:monospace">－ {{ amt(d.bank_pay_un) }}</td>
+        </tr>
+        <tr style="border-bottom:2px solid #EAE2D6;font-weight:700">
+          <td style="padding:12px 14px;color:#2A2A2A">调节后银行对账单余额</td>
+          <td style="padding:12px 14px;text-align:right;font-family:monospace">￥{{ amt(d.bank_adjusted) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:14px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">四类未达账：</b>
+    ①企业已收、银行未收；②企业已付、银行未付；③银行已收、企业未收；④银行已付、企业未付。
+    调节表只把未达账项两边补齐，<b style="color:#5C554D">不改动任何账面数</b>，仅用于核对账实是否一致。
+  </div>
+{% endblock %}

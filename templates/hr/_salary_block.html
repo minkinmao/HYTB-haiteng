@@ -1,0 +1,228 @@
+{# ============ 薪资设定区块（建号页 / 修改页共用） ============
+   使用方式：调用前先设 `sb`，字段：
+     sb.base / sb.perf / sb.allow / sb.pct / sb.probation('Y'|'N')
+     sb.prob_start / sb.prob_end / sb.total_show / sb.detail（dict：补贴项名 → 金额）
+   上下文依赖：cfg_json（五险一金配置，hr._social_cfg_json）、allowance_items（启用的补贴项）
+   口径：总薪资 = 基本薪资 + 绩效薪资 + 岗位补贴；测算逻辑与后端 hr._social_summary 完全一致。 #}
+<style>
+  .sblk .lbl{font-size:12px;color:#9C9288;margin-bottom:4px}
+  .sblk .in{width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;box-sizing:border-box}
+  .sblk .in[readonly]{background:#EEF3FB;color:#2C4A78;font-weight:600}
+  .sblk .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;align-items:end}
+  .sblk .mini{background:#fff;border:1px solid #EAE2D6;border-radius:6px;padding:10px 12px;font-size:12.5px;color:#6B5D4F}
+  .sblk .mini b{color:#2A2A2A}
+  .sblk .mini .sum{color:#C86432;font-weight:600}
+</style>
+
+<div class="sblk" style="grid-column:1/-1;background:#FCFAF7;border:1px dashed #E2D8CA;border-radius:8px;padding:14px">
+  <div style="font-size:13px;font-weight:600;color:#6B5D4F;margin-bottom:10px">
+    薪资设定
+    <span style="font-weight:400;color:#9C9288">（总薪资 = 基本薪资 + 绩效薪资 + 岗位补贴，系统自动合计）</span>
+  </div>
+
+  {# ---------- 薪资构成 ---------- #}
+  <div class="grid">
+    <div><div class="lbl">基本薪资</div>
+      <input name="regular_base" id="sb_base" type="number" step="0.01" min="0"
+             value="{{ sb.base }}" class="in" oninput="calcTotal()"></div>
+    <div><div class="lbl">绩效薪资</div>
+      <input name="regular_perf" id="sb_perf" type="number" step="0.01" min="0"
+             value="{{ sb.perf }}" class="in" oninput="calcTotal()"></div>
+    <div><div class="lbl">岗位补贴
+        <a href="{{ url_for('hr.allowance_config') }}" style="font-size:11px;color:#E6823C;text-decoration:none;margin-left:2px">设置项 ↗</a></div>
+      <input name="regular_allow" id="sb_allow" type="number" step="0.01" min="0"
+             value="{{ sb.allow }}" class="in" oninput="calcTotal()"
+             {% if allowance_items %}readonly{% endif %}
+             title="{{ '由「补贴明细」逐项自动合计（要调整请展开明细改各项金额）' if allowance_items else '后台尚未配置补贴项，可手工填写' }}"></div>
+    <div><div class="lbl">总薪资（自动）</div>
+      <input id="sb_total" readonly value="{{ sb.total_show }}" class="in"></div>
+  </div>
+
+  {# ---------- 岗位补贴明细（后台配置的字段端口，如 通讯费/交通费）---------- #}
+  <div style="margin-top:10px">
+    <button type="button" onclick="toggleAllow()"
+            style="font-size:12px;color:#4A6BB0;background:#fff;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px;cursor:pointer">
+      补贴明细 ▾</button>
+    <div id="sb_allow_box" style="display:none;margin-top:8px;padding:10px;background:#fff;border:1px solid #E2D8CA;border-radius:6px">
+      {% if allowance_items %}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 14px">
+        {% for it in allowance_items %}
+        <div>
+          <div class="lbl">{{ it.name }}</div>
+          <input type="hidden" name="allowance_name" value="{{ it.name }}">
+          <input name="allowance_amount" type="number" step="0.01" min="0"
+                 value="{{ sb.detail.get(it.name, it.default_amount or 0) }}"
+                 class="in" oninput="calcAllow()">
+        </div>
+        {% endfor %}
+      </div>
+      <div style="font-size:12px;color:#9C9288;margin-top:8px">
+        明细合计 <b id="sb_allow_sum" style="color:#C86432">0.00</b> 元（自动填入上方「岗位补贴」）｜
+        补贴项由 HR 在
+        <a href="{{ url_for('hr.allowance_config') }}" style="color:#E6823C;text-decoration:none">「岗位补贴项」设置</a>
+        里维护，停用的项不再出现
+      </div>
+      {% else %}
+      <div style="font-size:12px;color:#9C9288">后台尚未配置补贴项（如 通讯费 / 交通费 / 餐补），可到
+        <a href="{{ url_for('hr.allowance_config') }}" style="color:#E6823C;text-decoration:none">「岗位补贴项」设置</a>
+        里添加；添加后此处会逐项列出并自动合计。</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---------- 试用期（选「否」时试用薪资比例不可填）---------- #}
+  <div class="grid" style="margin-top:12px">
+    <div><div class="lbl">是否试用期</div>
+      <select name="probation" id="probation" class="in" onchange="onProbChange()">
+        <option value="N" {{ 'selected' if sb.probation != 'Y' }}>否</option>
+        <option value="Y" {{ 'selected' if sb.probation == 'Y' }}>是</option>
+      </select></div>
+    <div id="prob_s" style="display:none"><div class="lbl">试用起始</div>
+      <input type="date" name="probation_start" class="in" value="{{ sb.prob_start }}"></div>
+    <div id="prob_e" style="display:none"><div class="lbl">试用结束（≤6月）</div>
+      <input type="date" name="probation_end" class="in" value="{{ sb.prob_end }}"></div>
+    <div><div class="lbl">试用薪资比例(%)</div>
+      <input name="probation_salary_pct" id="sb_pct" type="number" step="0.1" min="0" max="100"
+             value="{{ sb.pct }}" class="in"></div>
+  </div>
+
+  {# ---------- 人力成本测算（双向）---------- #}
+  <div style="margin-top:14px;border-top:1px dashed #EAE2D6;padding-top:12px">
+    <div style="font-size:13px;font-weight:600;color:#6B5D4F;margin-bottom:8px">
+      人力成本测算 <span style="font-weight:400;color:#9C9288;font-size:12px">（辅助工具，不影响上方录入）</span>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-size:12.5px;color:#6B5D4F">
+      <label style="cursor:pointer"><input type="radio" name="calc_mode" value="bySalary" checked
+        onchange="runCalc()"> 按「总薪资」→ 算五险一金与总人力成本</label>
+      <label style="cursor:pointer"><input type="radio" name="calc_mode" value="byCost"
+        onchange="runCalc()"> 按「总人力成本」→ 反推总薪资与五险一金</label>
+    </div>
+    <div class="grid">
+      <div><div class="lbl" id="calc_lbl">总薪资（元）</div>
+        <input id="calc_input" type="number" step="0.01" min="0" class="in" oninput="runCalc()"
+               value="{{ sb.total_show }}"></div>
+      <div><div class="lbl">总人力成本（元·自动）</div>
+        <input id="calc_cost" readonly class="in"></div>
+      <div style="display:flex;align-items:flex-end">
+        <button type="button" onclick="applyCalc()"
+                style="font-size:12px;color:#fff;background:#E6823C;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">
+          把测算的总薪资填到基本薪资</button>
+      </div>
+    </div>
+    <div id="calc_out" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px"></div>
+  </div>
+</div>
+
+<script>
+  // 五险一金配置（后端 _social_cfg_json 注入，前端口径与后端 _social_summary 保持一致）
+  var SB_CFG = {{ cfg_json | tojson }};
+  var SB_PERSON = SB_CFG.person || {};
+  var SB_CORP = SB_CFG.corp || {};
+
+  // 缴费基数 = 金额夹在 [baseMin, baseMax] 之间（上限 0 视为未设）
+  function sbClamp(v){
+    var lo = +SB_CFG.baseMin || 0, hi = +SB_CFG.baseMax || 0;
+    if (hi <= 0) hi = Infinity;
+    return Math.max(lo, Math.min(v, hi));
+  }
+  // 按比例表算明细（逐项四舍五入到分，再合计——与后端一致）
+  function sbSocial(base, dict){
+    var det = {}, sum = 0;
+    for (var k in dict){ var v = Math.round(base * dict[k]) / 100; det[k] = v; sum += v; }
+    return {det: det, sum: Math.round(sum * 100) / 100};
+  }
+  function sbNum(el){ var v = parseFloat(el && el.value); return isNaN(v) ? 0 : v; }
+  function sbFmt(v){ return (Math.round(v * 100) / 100).toFixed(2); }
+
+  // 总薪资 = 基本 + 绩效 + 岗位补贴
+  function calcTotal(){
+    var t = sbNum(document.getElementById('sb_base')) + sbNum(document.getElementById('sb_perf'))
+          + sbNum(document.getElementById('sb_allow'));
+    document.getElementById('sb_total').value = t ? sbFmt(t) : '';
+    var m = document.querySelector('input[name=calc_mode][value=bySalary]');
+    if (m && m.checked) document.getElementById('calc_input').value = t ? sbFmt(t) : '';
+    runCalc();
+  }
+  // 补贴明细合计 → 自动填入「岗位补贴」
+  function calcAllow(){
+    var box = document.getElementById('sb_allow_box');
+    if (!box) return;
+    var els = box.querySelectorAll('input[name=allowance_amount]'), s = 0;
+    for (var i = 0; i < els.length; i++) s += sbNum(els[i]);
+    var out = document.getElementById('sb_allow_sum');
+    if (out) out.textContent = sbFmt(s);
+    document.getElementById('sb_allow').value = sbFmt(s);
+    calcTotal();
+  }
+  function toggleAllow(){
+    var b = document.getElementById('sb_allow_box');
+    if (b) b.style.display = (b.style.display === 'block') ? 'none' : 'block';
+  }
+  // 试用期联动：选「否」时试用薪资比例不可填（置灰 + 清空）
+  function onProbChange(){
+    var v = document.getElementById('probation').value;
+    var isY = (v === 'Y');
+    document.getElementById('prob_s').style.display = isY ? 'block' : 'none';
+    document.getElementById('prob_e').style.display = isY ? 'block' : 'none';
+    var pct = document.getElementById('sb_pct');
+    pct.disabled = !isY;
+    pct.style.background = isY ? '#fff' : '#F1ECE4';
+    pct.style.color = isY ? '#2A2A2A' : '#9C9288';
+    if (!isY) pct.value = '';
+  }
+  // 测算：两种模式共用同一套口径
+  function runCalc(){
+    var modeEl = document.querySelector('input[name=calc_mode]:checked');
+    var mode = modeEl ? modeEl.value : 'bySalary';
+    document.getElementById('calc_lbl').textContent = (mode === 'byCost') ? '总人力成本（元）' : '总薪资（元）';
+    var x = sbNum(document.getElementById('calc_input'));
+    var salary, corp, personal, cost;
+    if (mode === 'byCost'){
+      // 反推：区间内 cost = s(1+r)；越界时单位部分按上下限固定
+      var r = 0; for (var k in SB_CORP) r += SB_CORP[k]; r = r / 100;
+      var lo = +SB_CFG.baseMin || 0, hi = +SB_CFG.baseMax || 0;
+      if (hi <= 0) hi = Infinity;
+      var s = 0;
+      if (x <= 0){ s = 0; }
+      else if (r <= 0){ s = x; }
+      else {
+        s = x / (1 + r);
+        if (s < lo) s = Math.max(0, x - lo * r);
+        else if (s > hi) s = x - hi * r;
+      }
+      salary = Math.round(s * 100) / 100;
+    } else {
+      salary = Math.round(x * 100) / 100;
+    }
+    var base = sbClamp(salary);
+    corp = sbSocial(base, SB_CORP);
+    personal = sbSocial(base, SB_PERSON);
+    cost = Math.round((salary + corp.sum) * 100) / 100;
+    document.getElementById('calc_cost').value = x > 0 ? sbFmt(cost) : '';
+    var html = '';
+    html += '<div class="mini">总薪资（税前应发）<br><b style="font-size:16px">' + sbFmt(salary) + '</b> 元'
+          + '<br><span style="color:#9C9288">缴费基数 ' + sbFmt(base) + '</span></div>';
+    html += '<div class="mini">个人五险一金合计 <span class="sum">' + sbFmt(personal.sum) + '</span> 元<br>';
+    for (var k in personal.det) html += '<span style="color:#9C9288">' + k + ' ' + sbFmt(personal.det[k]) + '　</span>';
+    html += '</div>';
+    html += '<div class="mini">单位五险一金合计 <span class="sum">' + sbFmt(corp.sum) + '</span> 元<br>';
+    for (var k2 in corp.det) html += '<span style="color:#9C9288">' + k2 + ' ' + sbFmt(corp.det[k2]) + '　</span>';
+    html += '</div>';
+    html += '<div class="mini">总人力成本（总薪资+单位五险一金）<br><b style="font-size:16px;color:#C86432">'
+          + sbFmt(cost) + '</b> 元</div>';
+    document.getElementById('calc_out').innerHTML = html;
+  }
+  // 把测算出的总薪资填到「基本薪资」（其余构成清零，由 HR 再分配）
+  function applyCalc(){
+    var v = document.getElementById('calc_input').value;
+    if (!v) return;
+    document.getElementById('sb_base').value = v;
+    calcTotal();
+  }
+  // 初始化：明细合计 → 总薪资 → 试用期联动 → 测算
+  (function(){
+    calcAllow();
+    onProbChange();
+    runCalc();
+  })();
+</script>

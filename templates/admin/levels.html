@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}IT后台 · 职级权限流{% endblock %}
+{% block content %}
+
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
+  <h2 style="margin:0 0 6px;font-size:16px">职级权限流配置</h2>
+  <p style="margin:0 0 16px;font-size:13px;color:#9C9288">
+    勾选即把权限加入该职级的"权限流"，保存后即时生效。仅 S 级可操作。
+  </p>
+
+  {% for lv in levels %}
+  <form method="post" action="{{ url_for('admin.set_level_permissions', code=lv.code) }}"
+        style="border:1px solid #F1EAE0;border-radius:8px;padding:14px;margin-bottom:14px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px">
+      {{ lv.code }} 级 · {{ lv.name }}
+      <span style="font-weight:400;font-size:12px;color:#9C9288">（{{ lv.titles }}）</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+      {% for p in perms %}
+      <label style="font-size:13px;color:#5C554D;cursor:pointer">
+        <input type="checkbox" name="perm_ids" value="{{ p.id }}"
+               {% if p in lv.permissions %}checked{% endif %}>
+        {{ p.name }} <span style="color:#9C9288">({{ p.code }})</span>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit"
+            style="margin-top:12px;background:#E6823C;color:#fff;border:none;padding:7px 18px;border-radius:6px;font-size:13px;cursor:pointer">
+      保存「{{ lv.code }}」权限流
+    </button>
+  </form>
+  {% endfor %}
+</div>
+
+{% endblock %}

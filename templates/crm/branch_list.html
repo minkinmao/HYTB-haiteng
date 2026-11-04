@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 保司档案 · 省分公司{% endblock %}
+{% block pagename %}核心业务管理系统 · 保司档案 · 省分公司{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">保司档案 · 省分公司
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（保司省级分公司分支机构 · 跨保司全量）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  一家总公司旗下可以有多家省级分公司。登记顺序：<b>先建总公司（保司档案）→ 再建省分公司</b>；
+  分公司合约协议必须从这里已建档的分公司中选取。
+  <br>十六改：保司列统一按<b>简称</b>展示；同一保司下的省分公司<b>全称 / 简称唯一</b>，重复会被拦下。
+</div>
+
+<div class="crm-tabs">
+  <a class="crm-tab" href="{{ url_for('crm.insurers') }}">保险公司</a>
+  <a class="crm-tab on" href="{{ url_for('crm.branch_list') }}">省分公司</a>
+  <a class="crm-tab" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">分公司总数</div><div class="v">{{ kpi.total }}</div></div>
+  <div class="crm-kpi"><div class="k">覆盖保司</div><div class="v">{{ kpi.insurers }}</div></div>
+  <div class="crm-kpi"><div class="k">覆盖分支机构</div><div class="v">{{ kpi.provinces }}</div></div>
+  <div class="crm-kpi"><div class="k">已有签约协议</div><div class="v">{{ kpi.signed }}</div></div>
+</div>
+
+<form class="crm-tool" method="get">
+  <label>保司</label>
+  <select name="insurer_id" id="fltIns">
+    <option value="">全部保司</option>
+    {% for iv in insurers %}
+    <option value="{{ iv.id }}" {{ 'selected' if iid == iv.id|string else '' }}>{{ iv.name }}</option>
+    {% endfor %}
+  </select>
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="分公司全称 / 简称 / 分支机构 / 负责人">
+  <button class="crm-btn pri" type="submit">查询</button>
+  <a class="crm-btn" href="{{ url_for('crm.branch_list') }}">重置</a>
+  <span class="crm-spacer"></span>
+  {% if can_manage %}
+  <button class="crm-btn dark" type="button" onclick="addBranch()">＋ 新增分公司</button>
+  {% endif %}
+</form>
+
+{# 四十二改：省分公司也支持一键抓取 —— 分公司全称在监管站是精确命中，填好全称就能自动补 #}
+{% if can_manage %}
+<div class="crm-tool" style="margin-top:8px">
+  <form method="post" action="{{ url_for('crm.branch_fetch_all') }}" style="display:inline"
+        onsubmit="return confirm('批量抓取「缺许可证号 / 批准日期 / 信用代码」的省分公司？\n\n默认只补空字段，已填好的不覆盖；一次最多 5 家、每条间隔 3 秒。')">
+    <input type="hidden" name="insurer_id" value="{{ iid }}">
+    <label>一键抓取</label>
+    <label style="font-size:12.5px;color:#6B5D4F;white-space:nowrap">
+      <input type="checkbox" name="overwrite" value="1"> 覆盖已有值（谨慎）
+    </label>
+    <button class="crm-btn pri" type="submit">批量抓取缺项</button>
+  </form>
+  <a class="crm-btn" href="{{ url_for('crm.insurer_source') }}">数据源配置</a>
+  <span style="font-size:12px;color:#9C9288">
+    分公司全称在监管站<b>精确命中</b>（比总公司还准），填好全称点一下即自动补许可证号 / 批准日期；
+    {% if iid %}当前只抓筛选出来的这家保司{% else %}不筛选＝全部分公司{% endif %}；一次 5 家、每条间隔 3 秒。
+  </span>
+</div>
+{% endif %}
+
+<div class="crm-card">
+  {% if rows %}
+  <table class="crm-table">
+    <thead>
+      <tr>
+        <th style="min-width:150px">所属总公司</th><th style="white-space:nowrap">分支机构</th>
+        <th style="min-width:180px">分公司全称</th><th>简称</th>
+        <th style="white-space:nowrap">许可证号</th>
+        <th style="white-space:nowrap">负责人</th><th style="white-space:nowrap">联系电话</th>
+        <th style="min-width:120px">联络人</th><th style="white-space:nowrap">签约协议</th>
+        <th style="white-space:nowrap">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for b in rows %}
+      <tr>
+        <td>
+          {% if b.insurer_id %}
+          {# 十六改：所属总公司统一按**简称**展示（简称缺失回落全称），列表不再塞全称 #}
+          <a class="crm-a" href="{{ url_for('crm.insurer_detail', iid=b.insurer_id) }}">{{ ishort.get(b.insurer_id) or b.insurer_name or '—' }}</a>
+          {% else %}{{ ishort.get(b.insurer_id) or b.insurer_name or '—' }}{% endif %}
+        </td>
+        <td>{{ b.province or '—' }}</td>
+        <td>{{ b.name }}</td>
+        <td>{{ b.short_name or '—' }}</td>
+        <td class="mono" style="white-space:nowrap">
+          {{ b.license_no or '—' }}
+          {% if b.license_date %}<div class="crm-sub">批准 {{ b.license_date }}</div>{% endif %}
+        </td>
+        <td>{{ b.principal or '—' }}</td>
+        <td class="mono">{{ b.phone or '—' }}</td>
+        <td>
+          {% set lms = linkmen.get(b.id, []) %}
+          {% if lms %}
+            {% for lm in lms %}
+            <div style="font-size:12.5px;line-height:1.5">
+              {{ lm.name }}{% if lm.title %}（{{ lm.title }}）{% endif %}
+              {% if lm.phone %} · {{ lm.phone }}{% endif %}
+            </div>
+            {% endfor %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% set u = used.get(b.id, 0) %}
+          {% if u %}<a class="crm-a" href="{{ url_for('crm.branch_contracts', branch_id=b.id) }}">{{ u }} 份</a>
+          {% else %}<span class="crm-tag t-gray">未签约</span>{% endif %}
+        </td>
+        <td>
+          {% if can_manage %}
+          {# 四十二改：单条抓取＋天眼查直达（抓不到时手工抄） #}
+          <form method="post" action="{{ url_for('crm.branch_fetch', bid=b.id) }}" style="display:inline"
+                onsubmit="return confirm('按分公司全称抓取并回填？\n\n默认只补空字段。')">
+            <input type="hidden" name="back_flag" value="list">
+            <button class="crm-lnk" type="submit" style="margin-left:0"
+                    title="按分公司全称自动抓许可证号 / 批准日期">抓取</button>
+          </form>
+          <a class="crm-a" style="margin-left:8px" target="_blank" rel="noopener"
+             href="{{ tyc_url(b.name) }}" title="去天眼查查这家分公司">天眼查</a>
+          <a class="crm-a" style="margin-left:8px" href="{{ url_for('crm.branch_edit', bid=b.id, back_flag='list') }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.branch_delete', bid=b.id) }}" style="display:inline"
+                onsubmit="return confirm('确定删除分公司「{{ b.name }}」？其下的联络人会一并删除。')">
+            <input type="hidden" name="back_flag" value="list">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}
+          <a class="crm-a" target="_blank" rel="noopener" href="{{ tyc_url(b.name) }}">天眼查</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无省分公司档案。{% if can_manage %}点工具栏「＋ 新增分公司」开始登记。{% endif %}</div>
+  {% endif %}
+</div>
+
+<script>
+  // 新增分公司要先选定所属总公司（一家总公司旗下可有多家省级分公司）
+  function addBranch() {
+    var sel = document.getElementById('fltIns');
+    var iid = sel && sel.value ? sel.value : '';
+    if (!iid) {
+      alert('请先在上面的「保司」下拉里选择所属总公司，再点新增分公司。');
+      if (sel) { sel.focus(); }
+      return;
+    }
+    window.location.href = '/crm/insurers/' + iid + '/branches/new?back_flag=list';
+  }
+</script>
+{% endblock %}

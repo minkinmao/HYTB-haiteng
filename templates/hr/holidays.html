@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}法定节假日管理 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">法定节假日管理
+    <small style="font-size:12px;color:#9C9288;font-weight:400">（每年年初导入国务院下发的年度假期安排）</small>
+  </h2>
+  <div style="font-size:12px;color:#9C9288;margin-bottom:14px">人事管理员在此导入/维护法定节假日。节假日会同步标注到「差勤管理 - 月度出勤查询」的日历上（法定放假=蓝、调休补班=橙）；周六、周日系统自动按「休息日」标注，无需录入。</div>
+
+  {# 导入区 #}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">批量导入（CSV）</div>
+    <form method="post" action="{{ url_for('hr.holiday_import') }}" enctype="multipart/form-data"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">CSV 文件 *</div>
+        <input type="file" name="file" accept=".csv" required style="font-size:13px"></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">导入</button>
+    </form>
+    <div style="margin-top:8px;font-size:12px;color:#9C9288">
+      列顺序：<b>日期,名称,类型,备注</b>（首行可带表头）。类型填「放假/休」或留空=法定放假，「补班/班/调休」=调休补班；日期支持 2026-10-01 / 2026/10/01 格式。
+    </div>
+  </div>
+
+  {# 手动新增 #}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">手动新增</div>
+    <form method="post" action="{{ url_for('hr.holiday_new') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">日期 *</div>
+        <input type="date" name="holiday_date" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">名称 *</div>
+        <input name="name" placeholder="如 国庆节" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">类型</div>
+        <select name="day_type" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="rest">放假（法定休）</option>
+          <option value="work">调休补班</option>
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">备注</div>
+        <input name="note" placeholder="可选" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px"></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">添加</button>
+    </form>
+  </div>
+
+  {# 节假日列表 #}
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;padding:10px 0 4px">已导入节假日（共 {{ items|length }} 条）</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="text-align:left;color:#9C9288;border-bottom:1px solid #F3EDE3">
+          <th style="padding:10px 8px">日期</th>
+          <th style="padding:10px 8px">名称</th>
+          <th style="padding:10px 8px">类型</th>
+          <th style="padding:10px 8px">星期</th>
+          <th style="padding:10px 8px">备注</th>
+          <th style="padding:10px 8px">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in items %}
+        <tr style="border-bottom:1px solid #F3EDE3">
+          <td style="padding:10px 8px">{{ h.holiday_date.strftime('%Y-%m-%d') }}</td>
+          <td style="padding:10px 8px;font-weight:600">{{ h.name }}</td>
+          <td style="padding:10px 8px">
+            {% if h.day_type == 'work' %}
+            <span style="font-size:12px;padding:2px 8px;border-radius:10px;background:#FDF3E4;color:#8A5A18">调休补班</span>
+            {% else %}
+            <span style="font-size:12px;padding:2px 8px;border-radius:10px;background:#E7EDFA;color:#4A6BB0">法定放假</span>
+            {% endif %}
+          </td>
+          <td style="padding:10px 8px">{{ ['一','二','三','四','五','六','日'][h.holiday_date.weekday()] }}</td>
+          <td style="padding:10px 8px">{{ h.note or '' }}</td>
+          <td style="padding:10px 8px">
+            <form method="post" action="{{ url_for('hr.holiday_delete', hid=h.id) }}" onsubmit="return confirm('确认删除「{{ h.name }} {{ h.holiday_date }}」？')">
+              <button type="submit" style="font-size:12px;color:#b91c1c;background:#fff;border:1px solid #E2D8CA;padding:4px 10px;border-radius:6px;cursor:pointer">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:24px 0;text-align:center;color:#9C9288">暂无节假日，可通过上方 CSV 批量导入或手动新增</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

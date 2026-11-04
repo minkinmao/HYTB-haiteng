@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}发票录入 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 发票{{ '编辑' if is_edit else '新增' }}{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">{{ '编辑' if is_edit else '新增' }}发票
+    <span style="font-size:13px;font-weight:400;color:#9C9288">
+      {% if direction=='in' %}进项（收到的发票）{% else %}销项（开出的发票）{% endif %}
+    </span></h2>
+
+  <form method="post" action="{{ url_for('fin.invoice_save') }}" class="card" style="padding:18px 20px">
+    <input type="hidden" name="iid" value="{{ inv.id if inv else '' }}">
+    {% if inv %}<input type="hidden" name="direction" value="{{ inv.direction }}">{% endif %}
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px">
+      <label style="font-size:12.5px;color:#5C554D;min-width:200px">
+        <div style="margin-bottom:4px">方向</div>
+        {% if inv %}
+        <div style="padding:8px 0;font-size:14px;color:#2A2A2A">{{ '进项（收票）' if inv.direction=='in' else '销项（开票）' }}</div>
+        {% else %}
+        <select name="direction" id="direction" style="padding:8px 10px;width:100%">
+          <option value="in" {% if direction=='in' %}selected{% endif %}>进项（收票）</option>
+          <option value="out" {% if direction=='out' %}selected{% endif %}>销项（开票）</option>
+        </select>
+        {% endif %}
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:160px">
+        <div style="margin-bottom:4px">发票类型</div>
+        <select name="invoice_type" style="padding:8px 10px;width:100%">
+          {% for v,t in [('数电票','数电票'),('电子专票','电子专票'),('电子普票','电子普票'),('纸质专票','纸质专票'),('纸质普票','纸质普票'),('机动车','机动车销售统一发票'),('其他','其他')] %}
+          <option value="{{ v }}" {% if (inv and inv.invoice_type==v) or (not inv and v=='数电票') %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">发票代码</div>
+        <input name="invoice_code" value="{{ inv.invoice_code or '' }}" style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">发票号码 *</div>
+        <input name="invoice_no" value="{{ inv.invoice_no or '' }}" style="padding:8px 10px;width:100%">
+      </label>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px">
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">开票日期</div>
+        <input type="date" name="invoice_date" id="invoice_date"
+               value="{{ inv.invoice_date.strftime('%Y-%m-%d') if inv and inv.invoice_date else (blank.invoice_date if blank else '') }}"
+               style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">税款所属期</div>
+        <input name="period" id="period" value="{{ inv.period or '' }}" placeholder="默认=开票月" style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:2;min-width:200px">
+        <div style="margin-bottom:4px" id="party_label">
+          {% if direction=='in' %}销售方（开票方）{% else %}购买方（收票方）{% endif %}
+        </div>
+        <input name="seller_name" id="seller_name" value="{{ inv.seller_name or '' }}" placeholder="销售方名称" style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:2;min-width:200px">
+        <div style="margin-bottom:4px" id="buyer_label">
+          {% if direction=='in' %}本单位（收票方）{% else %}购买方名称{% endif %}
+        </div>
+        <input name="buyer_name" id="buyer_name" value="{{ inv.buyer_name or '' }}" placeholder="购买方名称" style="padding:8px 10px;width:100%">
+      </label>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">不含税金额</div>
+        <input type="number" step="0.01" name="amount" id="amount"
+               value="{{ '%.2f' % inv.amount if inv else '' }}" style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:120px">
+        <div style="margin-bottom:4px">税率(%)</div>
+        <input type="number" step="0.01" name="tax_rate" id="tax_rate"
+               value="{{ '%.0f' % (inv.tax_rate * 100) if inv else (blank.tax_rate if blank else 6) }}"
+               style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">税额（可手填）</div>
+        <input type="number" step="0.01" name="tax" id="tax"
+               value="{{ '%.2f' % inv.tax if inv else '' }}" style="padding:8px 10px;width:100%">
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:140px">
+        <div style="margin-bottom:4px">价税合计（自动）</div>
+        <input name="total_view" id="total_view" value="{{ '%.2f' % inv.total if inv else '' }}" readonly
+               style="padding:8px 10px;width:100%;background:#F5F0E8;color:#6B5D4F">
+      </label>
+    </div>
+
+    <div id="cert_block" style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;{% if direction!='in' %}display:none{% endif %}">
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:160px">
+        <div style="margin-bottom:4px">认证状态</div>
+        <select name="cert_status" id="cert_status" style="padding:8px 10px;width:100%">
+          <option value="uncert" {% if inv and inv.cert_status=='uncert' %}selected{% endif %}>未认证</option>
+          <option value="certed" {% if inv and inv.cert_status=='certed' %}selected{% endif %}>已认证</option>
+          <option value="nodeduct" {% if inv and inv.cert_status=='nodeduct' %}selected{% endif %}>不予抵扣</option>
+        </select>
+      </label>
+      <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:160px">
+        <div style="margin-bottom:4px">认证所属期</div>
+        <input name="cert_period" id="cert_period" value="{{ inv.cert_period or '' }}" placeholder="默认=税款所属期" style="padding:8px 10px;width:100%">
+      </label>
+      <div style="font-size:12px;color:#9C9288;padding-bottom:8px;flex-basis:100%">
+        进项在<b>认证所属期</b>参与抵扣（不是开票期）；选「已认证」后会在增值税测算里计入已认证进项。
+      </div>
+    </div>
+
+    <label style="font-size:12.5px;color:#5C554D;display:block;margin-top:14px">
+      <div style="margin-bottom:4px">备注</div>
+      <input name="remark" value="{{ inv.remark or '' }}" style="padding:8px 10px;width:100%">
+    </label>
+
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button type="submit" class="btn" style="padding:9px 26px;background:#C86432;color:#fff">保存</button>
+      <a href="{{ url_for('fin.invoices', dir=direction) }}" class="btn" style="padding:9px 22px">取消</a>
+    </div>
+  </form>
+
+  <script>
+    // 实时算税额和价税合计（用户没手填税额时按 金额×税率 算）
+    function recalc(){
+      var amt = parseFloat(document.getElementById('amount').value) || 0;
+      var rate = (parseFloat(document.getElementById('tax_rate').value) || 0) / 100;
+      var taxInput = document.getElementById('tax').value;
+      var tax = taxInput ? (parseFloat(taxInput) || 0) : Math.round(amt * rate * 100) / 100;
+      if (!taxInput) document.getElementById('tax').value = tax.toFixed(2);
+      document.getElementById('total_view').value = (amt + tax).toFixed(2);
+    }
+    ['amount','tax_rate','tax'].forEach(function(id){
+      document.getElementById(id).addEventListener('input', recalc);
+    });
+    // 方向切换时改标签 + 切换认证块
+    var dir = document.getElementById('direction');
+    if (dir){
+      dir.addEventListener('change', function(){
+        var isIn = dir.value === 'in';
+        document.getElementById('party_label').textContent = isIn ? '销售方（开票方）' : '购买方（收票方）';
+        document.getElementById('buyer_label').textContent = isIn ? '本单位（收票方）' : '购买方名称';
+        document.getElementById('cert_block').style.display = isIn ? 'flex' : 'none';
+      });
+    }
+    recalc();
+  </script>
+{% endblock %}

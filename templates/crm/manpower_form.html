@@ -1,0 +1,443 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ '编辑' if row else '新增' }}人力档案{% endblock %}
+{% block pagename %}核心业务管理系统 · 人力数据清单{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑' if row else '新增' }}人力档案
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（业务团队费用设置的取数底表）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  <b style="color:#C86432">姓名必填</b>；<b>系统工号</b>（海盈通保）由系统自动生成 <b>SA-001</b> 格式、全系统唯一；
+  <b>代理人工号</b>（海腾上号工号）<b>选填</b>，填了就必须唯一。
+  <b>组织架构归属</b>按 省公司 → 分支 → 分区 → 营业部 → 营业组 <b>逐级筛选</b>（每级都带编码标识），
+  <b>省公司 / 分支 / 所属团队由归属自动带出，不再重复录入</b>。
+  <b>职级随团队类型联动</b>：基本法团队＝部经理 / 主管 / 营销员，渠道团队＝渠道总 / 团队长 / 营销员。
+  填了身份证号后，<b>性别</b>与<b>出生年月</b>会自动带出（已填的不覆盖）。离职时间留空 = 在职。
+</div>
+
+<form class="crm-form" method="post" enctype="multipart/form-data">
+  {% if not orgs %}
+  <div style="background:#FBE3DD;border:1px solid #E9BDB2;border-radius:10px;padding:12px 16px;
+              font-size:13px;color:#991b1b;margin-bottom:16px">
+    ⚠️ 还没有建「人力架构」——录人之前要先建架构（省公司 → 分支 → 分区 → 营业部 → 营业组）。
+    <a class="crm-a" href="{{ url_for('crm.org_struct') }}" style="font-weight:600">去建人力架构 →</a>
+  </div>
+  {% endif %}
+
+  <div class="crm-sec">一、组织架构归属与基本信息 <span>姓名必填 · 归属一律下拉选择</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <label>组织架构归属 <b>*</b></label>
+      <div class="org-cas">
+        <select id="oProv"><option value="">省公司</option></select>
+        <span class="sep">›</span>
+        <select id="oBranch"><option value="">分支</option></select>
+        <span class="sep">›</span>
+        <select id="oZone"><option value="">分区</option></select>
+        <span class="sep">›</span>
+        <select id="oDept"><option value="">营业部</option></select>
+        <span class="sep">›</span>
+        <select id="oGroup" name="org_id" required><option value="">营业组 *</option></select>
+      </div>
+      <span class="hint">逐级筛选到<b>营业组</b>即完成归属；省公司 / 分支 / 所属团队由所选营业组<b>自动带出</b>（不重复填）。
+        架构要先在「<a class="crm-a" href="{{ url_for('crm.org_struct') }}">人力架构</a>」页建好</span>
+      <div id="orgPicked" class="org-picked" style="display:none"></div>
+    </div>
+    <div class="crm-fld">
+      <label>系统工号 <span class="hint">（海盈通保，系统自动生成）</span></label>
+      {% if row %}
+      <input type="text" readonly value="{{ row.sys_no or '' }}">
+      {% else %}
+      <input type="text" readonly value="保存后自动生成（SA-001 格式）">
+      {% endif %}
+    </div>
+    <div class="crm-fld">
+      <label>代理人工号 <span class="hint">（海腾上号工号，选填）</span></label>
+      <input type="text" name="agent_no" value="{{ (row.agent_no or '') if row else '' }}"
+             placeholder="如 A0001；没有上号可留空">
+    </div>
+    <div class="crm-fld">
+      <label>姓名 <b>*</b></label>
+      <input type="text" name="name" required value="{{ (row.name or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>所属经代公司</label>
+      <select name="agency" id="fAgency">
+        <option value="">— 请选择 —</option>
+        {% for a in agencies %}
+        <option value="{{ a }}" {{ 'selected' if row and row.agency == a else '' }}>{{ a }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint">取自「<a class="crm-a" href="{{ url_for('crm.agencies') }}" target="_blank">合作经代</a>」
+        基础信息（<a class="crm-a" href="{{ url_for('crm.agencies') }}" target="_blank">去维护 →</a>）</span>
+    </div>
+    <div class="crm-fld">
+      <label>身份证号码</label>
+      <input type="text" name="idcard" id="fIdcard" maxlength="18"
+             value="{{ (row.idcard or '') if row else '' }}" placeholder="18 位，填后自动带出性别与出生年月">
+    </div>
+    <div class="crm-fld">
+      <label>性别</label>
+      <select name="gender" id="fGender">
+        <option value="">— 请选择 —</option>
+        {% for c, n in genders %}
+        <option value="{{ c }}" {{ 'selected' if row and row.gender == c else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>出生年月</label>
+      <input type="date" name="birth_date" id="fBirth" value="{{ (row.birth_date or '') if row else '' }}">
+    </div>
+  </div>
+
+  <div class="crm-sec">二、职级与团队 <span>决定走哪套费用政策</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>团队类型 <b>*</b></label>
+      <select name="team_type" id="fTeamType">
+        {% for c, n in team_types %}
+        <option value="{{ c }}" {{ 'selected' if (row and row.team_type == c) or (not row and c == 'channel') else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint">基本法团队＝统一标准化政策；渠道团队＝可按层级分别下发</span>
+    </div>
+    <div class="crm-fld">
+      <label>职级 <b>*</b></label>
+      <select name="rank" id="fRank"></select>
+      <span class="hint" id="rkHint"></span>
+    </div>
+    <div class="crm-fld">
+      <label>销售资质等级 <span class="hint">（监管「持证+分级」）</span></label>
+      <select name="sale_level" id="fLevel">
+        <option value="">— 未评级 —</option>
+        {% for lv in levels %}
+        <option value="{{ lv }}" title="{{ grade_scope.get(lv, '') }}"
+                {{ 'selected' if row and row.sale_level == lv else '' }}>{{ lv }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint" id="lvHint">{{ grade_scope.get(row.sale_level, '') if row else '一级最高（可售 P1-P5）；四级入门（仅可售 P1-P2）' }}</span>
+    </div>
+  </div>
+
+  <div class="crm-sec">三、入离职与推荐关系 <span>日期可点日历选</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>入司时间</label>
+      <input type="date" name="hire_date" value="{{ (row.hire_date or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>离职时间</label>
+      <input type="date" name="leave_date" value="{{ (row.leave_date or '') if row else '' }}">
+      <span class="hint">留空 = 在职</span>
+    </div>
+    <div class="crm-fld">
+      <label>推荐人姓名</label>
+      <input type="text" name="ref_name" id="fRefName" list="lstRef"
+             value="{{ (row.ref_name or '') if row else '' }}" placeholder="填姓名后工号自动识别">
+      <datalist id="lstRef">{% for r in ref_map %}<option value="{{ r.name }}">{% endfor %}</datalist>
+      <span class="hint">从名单里选、或直接打姓名，工号与职级自动带出</span>
+    </div>
+    <div class="crm-fld">
+      <label>推荐人工号 <span class="hint">（自动带出）</span></label>
+      <input type="text" name="ref_no" id="fRefNo" value="{{ (row.ref_no or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>推荐人职级 <span class="hint">（自动带出）</span></label>
+      <select name="ref_rank" id="fRefRank">
+        <option value="">— 请选择 —</option>
+        {% for c, n in ranks %}
+        <option value="{{ n }}" {{ 'selected' if row and row.ref_rank == n else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="crm-sec">四、银行卡与渠道协议</div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>开户行</label>
+      <select name="bank_name" id="fBank">
+        <option value="">— 请选择 —</option>
+        {% for b in banks %}
+        <option value="{{ b }}" {{ 'selected' if row and row.bank_name == b else '' }}>{{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="crm-fld">
+      <label>开户支行</label>
+      <input type="text" name="bank_branch" value="{{ (row.bank_branch or '') if row else '' }}"
+             placeholder="如 广州天河支行">
+    </div>
+    <div class="crm-fld">
+      <label>银行卡号</label>
+      <input type="text" name="bank_card" value="{{ (row.bank_card or '') if row else '' }}">
+    </div>
+    <div class="crm-fld">
+      <label>是否签署渠道协议</label>
+      <select name="signed" id="fSigned">
+        {% for c, n in yesno %}
+        <option value="{{ c }}" {{ 'selected' if (row and row.signed == c) or (not row and c == 'no') else '' }}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint">选「是」→ 下面要附<b>协议电子版</b>；选「否」→ 不用附</span>
+    </div>
+    <div class="crm-fld" id="boxSignDate">
+      <label>签署日期</label>
+      <input type="date" name="sign_date" value="{{ (row.sign_date or '') if row else '' }}">
+    </div>
+  </div>
+
+  <div class="crm-sec">五、电子版附件 <span>非强制 · 身份证要正反面两张 · PDF / 图片，单个 ≤10MB</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld" id="boxSignFile">
+      <label>渠道协议电子版 <span class="hint">（选「已签」时建议上传）</span></label>
+      {% if row and row.sign_file %}
+      <div style="font-size:12px;margin-bottom:6px">
+        已上传：<a class="crm-a" href="{{ url_for('crm.manpower_file', mid=row.id, kind='sign_file') }}">{{ row.sign_file_name or row.sign_file }}</a>
+        <label style="margin-left:10px;color:#991b1b"><input type="checkbox" name="del_sign_file" value="1"> 删除</label>
+      </div>
+      {% endif %}
+      <input type="file" name="sign_file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.gif">
+    </div>
+    <div class="crm-fld">
+      <label>身份证电子版 · <b>正面</b> <span class="hint">（选填）</span></label>
+      {% if row and row.idcard_file %}
+      <div style="font-size:12px;margin-bottom:6px">
+        已上传：<a class="crm-a" href="{{ url_for('crm.manpower_file', mid=row.id, kind='idcard_file') }}">{{ row.idcard_file_name or row.idcard_file }}</a>
+        <label style="margin-left:10px;color:#991b1b"><input type="checkbox" name="del_idcard_file" value="1"> 删除</label>
+      </div>
+      {% endif %}
+      <input type="file" name="idcard_file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.gif">
+    </div>
+    <div class="crm-fld">
+      <label>身份证电子版 · <b>反面</b> <span class="hint">（选填）</span></label>
+      {% if row and row.idcard_file2 %}
+      <div style="font-size:12px;margin-bottom:6px">
+        已上传：<a class="crm-a" href="{{ url_for('crm.manpower_file', mid=row.id, kind='idcard_file2') }}">{{ row.idcard_file2_name or row.idcard_file2 }}</a>
+        <label style="margin-left:10px;color:#991b1b"><input type="checkbox" name="del_idcard_file2" value="1"> 删除</label>
+      </div>
+      {% endif %}
+      <input type="file" name="idcard_file2" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.gif">
+    </div>
+    <div class="crm-fld">
+      <label>银行卡电子版 <span class="hint">（选填）</span></label>
+      {% if row and row.bank_file %}
+      <div style="font-size:12px;margin-bottom:6px">
+        已上传：<a class="crm-a" href="{{ url_for('crm.manpower_file', mid=row.id, kind='bank_file') }}">{{ row.bank_file_name or row.bank_file }}</a>
+        <label style="margin-left:10px;color:#991b1b"><input type="checkbox" name="del_bank_file" value="1"> 删除</label>
+      </div>
+      {% endif %}
+      <input type="file" name="bank_file" accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.gif">
+    </div>
+    <div class="crm-fld full">
+      <label>备注</label>
+      <textarea name="note" placeholder="选填">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.manpower') }}">取消</a>
+  </div>
+</form>
+
+<style>
+  /* 五级级联：横向一排，窄屏自动换行（⚠️ must override base 的 select{width:100%}） */
+  .org-cas{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .org-cas select{flex:0 1 168px;width:auto;min-width:0;background:#fff;
+                  border:1px solid #EAE2D6;border-radius:9px;
+                  padding:8px 9px;font-size:13px;color:#2A2A2A}
+  .org-cas .sep{flex:0 0 auto;color:#B9AC9C;font-weight:600;font-size:14px}
+  /* 选完归属后的确认条：把五级 + 编码一次性显示清楚 */
+  .org-picked{margin-top:8px;font-size:12.5px;color:#7A6A58;background:#FBF6F1;
+              border:1px dashed #E0D3C2;border-radius:8px;padding:7px 10px}
+  .org-picked b{color:#9C4E2C}
+</style>
+
+<script>
+// ⭐ 组织架构归属：省公司 → 分支 → 分区 → 营业部 → 营业组（五级级联）
+//    · 只有最后一级（营业组）带 id → 提交 name="org_id"；前四级只是筛选路径
+//    · 十九改++：**分区 / 营业部 / 营业组都带编码标识**，下拉里显示「名称（编码）」
+(function () {
+  var T = {{ org_tree|tojson }}, C = {{ cur_org|tojson }};
+  var sP = document.getElementById('oProv'), sB = document.getElementById('oBranch'),
+      sZ = document.getElementById('oZone'), sD = document.getElementById('oDept'),
+      sG = document.getElementById('oGroup');
+  if (!sP || !sG) return;
+
+  // 统一按 [{v: value, n: 名称, c: 编码}] 填下拉；有编码就显示「名称（编码）」
+  function setOpts(sel, list, ph, val) {
+    sel.innerHTML = '';
+    var o0 = document.createElement('option');
+    o0.value = ''; o0.textContent = ph; sel.appendChild(o0);
+    (list || []).forEach(function (x) {
+      var op = document.createElement('option');
+      op.value = String(x.v);
+      op.textContent = x.n + (x.c ? '（' + x.c + '）' : '');
+      sel.appendChild(op);
+    });
+    sel.value = (val === undefined || val === null) ? '' : String(val);
+  }
+  function strList(obj) { return Object.keys(obj || {}).map(function (k) { return {v: k, n: k, c: ''}; }); }
+  function zones() {
+    var o = T[sP.value] && T[sP.value][sB.value] ? T[sP.value][sB.value] : {};
+    return Object.keys(o).map(function (k) { return {v: k, n: k, c: (o[k].c || '')}; });
+  }
+  function depts() {
+    var o = T[sP.value] && T[sP.value][sB.value] && T[sP.value][sB.value][sZ.value]
+          ? T[sP.value][sB.value][sZ.value].d : {};
+    return Object.keys(o).map(function (k) { return {v: k, n: k, c: (o[k].c || '')}; });
+  }
+  function groups() {
+    var z = T[sP.value] && T[sP.value][sB.value] && T[sP.value][sB.value][sZ.value]
+          ? T[sP.value][sB.value][sZ.value].d : {};
+    var g = (z[sD.value] && z[sD.value].g) ? z[sD.value].g : [];
+    return g.map(function (x) { return {v: x.id, n: x.name, c: x.code}; });
+  }
+  // 选完把五级路径（含编码）显示出来，省得来回点确认
+  function showPicked() {
+    var box = document.getElementById('orgPicked');
+    if (!box) return;
+    if (!sG.value) { box.style.display = 'none'; return; }
+    var op = sG.options[sG.selectedIndex];
+    box.style.display = '';
+    box.innerHTML = '已选归属：<b>' + [sP.value, sB.value, sZ.value, sD.value].join(' / ') +
+                    ' / ' + op.textContent + '</b>';
+  }
+
+  sP.addEventListener('change', function () {
+    setOpts(sB, strList(T[sP.value]), '分支');
+    setOpts(sZ, [], '分区'); setOpts(sD, [], '营业部'); setOpts(sG, [], '营业组 *');
+    showPicked();
+  });
+  sB.addEventListener('change', function () {
+    setOpts(sZ, zones(), '分区');
+    setOpts(sD, [], '营业部'); setOpts(sG, [], '营业组 *');
+    showPicked();
+  });
+  sZ.addEventListener('change', function () {
+    setOpts(sD, depts(), '营业部');
+    setOpts(sG, [], '营业组 *');
+    showPicked();
+  });
+  sD.addEventListener('change', function () {
+    setOpts(sG, groups(), '营业组 *');
+    showPicked();
+  });
+  sG.addEventListener('change', showPicked);
+
+  // 编辑回填：按已存归属逐级选中，下一级自动填出来
+  setOpts(sP, Object.keys(T).map(function (k) { return {v: k, n: k, c: ''}; }), '省公司', C.province);
+  setOpts(sB, strList(T[sP.value]), '分支', C.branch);
+  setOpts(sZ, zones(), '分区', C.zone);
+  setOpts(sD, depts(), '营业部', C.dept);
+  setOpts(sG, groups(), '营业组 *', C.group_id);
+  showPicked();
+})();
+
+// ⭐ 职级**随团队类型联动**（十九改++）：
+//   基本法团队 → 部经理 / 主管 / 营销员；渠道团队 → 渠道总 / 团队长 / 营销员
+var RANKS = {{ ranks_of_type|tojson }};
+var CROSS_RANK = {'channel_boss': 'dept_manager', 'dept_manager': 'channel_boss',
+                  'team_leader': 'supervisor', 'supervisor': 'team_leader'};
+(function () {
+  var tt = document.getElementById('fTeamType'), rk = document.getElementById('fRank'),
+      hint = document.getElementById('rkHint');
+  if (!tt || !rk) return;
+  var CUR = {{ ((row.rank or '') if row else '')|tojson }};
+  function has(list, v) {
+    for (var i = 0; i < list.length; i++) { if (list[i][0] === v) return true; }
+    return false;
+  }
+  function sync() {
+    var list = RANKS[tt.value] || RANKS['channel'];
+    var cur = rk.value || CUR;
+    if (!has(list, cur)) {                       // 跨类型按同义职级折算，折不了退回营销员
+      var x = CROSS_RANK[cur];
+      cur = (x && has(list, x)) ? x : 'agent';
+    }
+    rk.innerHTML = '';
+    list.forEach(function (p) {
+      var op = document.createElement('option');
+      op.value = p[0]; op.textContent = p[1];
+      if (p[0] === cur) op.selected = true;
+      rk.appendChild(op);
+    });
+    if (hint) {
+      hint.textContent = (tt.value === 'basic')
+        ? '基本法团队：部经理 / 主管 / 营销员（统一标准化费用政策）'
+        : '渠道团队：渠道总 / 团队长 / 营销员（可按层级分别下发费用政策）';
+    }
+  }
+  tt.addEventListener('change', sync);
+  sync();
+})();
+
+// 销售资质等级 → 显示该等级可售的产品范围
+(function () {
+  var lv = document.getElementById('fLevel'), hint = document.getElementById('lvHint');
+  if (!lv || !hint) return;
+  lv.addEventListener('change', function () {
+    var op = lv.options[lv.selectedIndex];
+    hint.textContent = (op && op.getAttribute('title')) ||
+      '一级最高（可售 P1-P5）；四级入门（仅可售 P1-P2）';
+  });
+})();
+
+// 推荐人姓名 → 自动带出 推荐人工号 / 推荐人职级（只填空着的，不覆盖已填）
+var REF_MAP = {{ ref_map|tojson }};
+(function () {
+  var nm = document.getElementById('fRefName');
+  if (!nm) return;
+  function fill() {
+    var key = (nm.value || '').trim();
+    if (!key) return;
+    for (var i = 0; i < REF_MAP.length; i++) {
+      if (REF_MAP[i].name === key) {
+        var no = document.getElementById('fRefNo'), rk = document.getElementById('fRefRank');
+        if (no && !no.value) no.value = REF_MAP[i].no || '';
+        if (rk && !rk.value && REF_MAP[i].rank) {
+          for (var j = 0; j < rk.options.length; j++) {
+            if (rk.options[j].value === REF_MAP[i].rank) { rk.selectedIndex = j; break; }
+          }
+        }
+        return;
+      }
+    }
+  }
+  nm.addEventListener('change', fill);
+  nm.addEventListener('blur', fill);
+})();
+
+// 是否签署渠道协议 = 否 → 收起「签署日期 + 协议电子版」（不强制、也不误导）
+(function () {
+  var sg = document.getElementById('fSigned'),
+      boxD = document.getElementById('boxSignDate'),
+      boxF = document.getElementById('boxSignFile');
+  if (!sg) return;
+  function sync() {
+    var on = (sg.value === 'yes');
+    if (boxD) boxD.style.display = on ? '' : 'none';
+    if (boxF) boxF.style.display = on ? '' : 'none';
+  }
+  sg.addEventListener('change', sync);
+  sync();
+})();
+
+// 身份证号 → 自动带出性别 / 出生年月（只填空着的，不覆盖已填）
+(function () {
+  var id = document.getElementById('fIdcard');
+  if (!id) return;
+  id.addEventListener('blur', function () {
+    var s = (id.value || '').replace(/\s/g, '');
+    if (s.length !== 18) return;
+    var gd = document.getElementById('fGender');
+    var bt = document.getElementById('fBirth');
+    if (gd && !gd.value) gd.value = (parseInt(s.charAt(16), 10) % 2 === 1) ? 'male' : 'female';
+    if (bt && !bt.value) bt.value = s.substr(6, 4) + '-' + s.substr(10, 2) + '-' + s.substr(12, 2);
+  });
+})();
+</script>
+{% endblock %}

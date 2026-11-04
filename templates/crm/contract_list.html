@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ sname }}{% endblock %}
+{% block pagename %}核心业务管理系统 · {{ sname }}{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ sname }}
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（保司产品合约台账 · 内部协议备份）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  {% if side == 'all' %}
+    <b>产品合约</b>＝总公司合约协议（总-总 / 总-分）+ 分公司合约协议（分-分）合并视图，供统一查询与导出。
+    一条记录 = 一个保司的一个产品，<b>缴别与费用政策按缴别分行登记</b>，合计一律为百分比系数。
+    要看<b>总总FYC / 分分FYC / RYC / 方案加佣 / 佣金总计</b>，请切到「佣金查询」页签。
+  {% elif side == 'hq' %}
+    与保司<b>总公司</b>签订的合约协议，含「总-总」「总-分」两种签约级别（总-分时再指明对应省分公司）。
+  {% else %}
+    与保司<b>省分公司</b>签订的合约协议（签约级别固定「分-分」），必须指定省分公司。
+  {% endif %}
+  我司无保险牌照，签约主体为海腾，本系统仅作协议备份与政策留痕。
+</div>
+
+{# 四十四改（2026-10-29）：AI 机器人识别出来的草稿单独提示 ——
+   草稿不进下面的列表和 KPI（避免混进正式数据），只在这里露头，点进去审核或放弃。 #}
+{% if drafts %}
+<div class="crm-card" style="padding:12px 16px;margin-bottom:14px;border-left:3px solid #2FA36B;background:#F5FBF7">
+  <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#1E7A4E">
+    🤖 AI 识别草稿待审核
+    <span style="font-weight:400;color:#7FA890">（共 {{ drafts|length }} 条 · 核对保存后才算正式合约，不计入上面的统计）</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for d in drafts %}
+    <a href="{{ url_for('crm.hq_contract_edit' if d.sign_level in ('tt','tf') else 'crm.branch_contract_edit', cid=d.id) }}"
+       style="text-decoration:none;font-size:12.5px;padding:5px 11px;border-radius:14px;
+              background:#fff;border:1px solid #C4E3D0;color:#1E7A4E">
+      {{ d.insurer_short or d.insurer_name or '未挂保司' }}·{{ d.product_name or '未命名' }}
+      <span style="color:#9C9288">{{ d.code }}</span> 去审核 →
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="crm-tabs">
+  <a class="crm-tab {{ 'on' if side == 'all' else '' }}" href="{{ url_for('crm.contracts') }}">产品合约</a>
+  <a class="crm-tab {{ 'on' if side == 'hq' else '' }}" href="{{ url_for('crm.hq_contracts') }}">总公司合约协议</a>
+  <a class="crm-tab {{ 'on' if side == 'br' else '' }}" href="{{ url_for('crm.branch_contracts') }}">分公司合约协议</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab" href="{{ url_for('crm.commission_query') }}">佣金查询</a>
+  <a class="crm-tab" href="{{ url_for('crm.docs') }}">产品资料库</a>
+  <a class="crm-tab" href="{{ url_for('crm.rule_list') }}">继续率考核规则</a>
+  {# 十六改：唯一性规则设置入口（同一保司+产品+缴别 只能录一次，开关在这里改） #}
+  <a class="crm-tab" href="{{ url_for('crm.unique_rules') }}">唯一性规则</a>
+</div>
+
+<div class="crm-kpis">
+  <div class="crm-kpi"><div class="k">{% if side == 'all' %}合约总数{% else %}本口径合约{% endif %}</div><div class="v">{{ kpi.total }}</div></div>
+  <div class="crm-kpi"><div class="k">生效中</div><div class="v">{{ kpi.active }}</div></div>
+  <div class="crm-kpi"><div class="k">总公司合约协议</div><div class="v">{{ kpi.hq }}</div></div>
+  <div class="crm-kpi"><div class="k">分公司合约协议</div><div class="v">{{ kpi.br }}</div></div>
+  <div class="crm-kpi"><div class="k">协议外政策</div><div class="v">{{ kpi.out }}</div></div>
+  {# 十七改：合约到期提醒（红黄灯）——点击即筛出临期 / 已过期 #}
+  <div class="crm-kpi"><div class="k">临期（30天内）</div><div class="v" style="color:{% if ekpi.expiring %}#BA7517{% else %}inherit{% endif %}">{{ ekpi.expiring }}</div></div>
+  <div class="crm-kpi"><div class="k">已过期</div><div class="v" style="color:{% if ekpi.expired %}#C0392B{% else %}inherit{% endif %}">{{ ekpi.expired }}</div></div>
+</div>
+
+{% if expiry %}
+<div class="crm-card" style="padding:12px 16px;margin-bottom:14px;border-left:3px solid #C86432;background:#FFF9F2">
+  <div style="font-size:13px;font-weight:600;margin-bottom:8px">
+    合约到期提醒 <span style="font-weight:400;color:#9C9288">（共 {{ expiry|length }} 条临期 / 已过期，按到期日排序）</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for x in expiry %}
+    <a class="crm-tag {{ 't-danger' if x.state in ('expired','danger') else 't-warn' }}"
+       style="text-decoration:none"
+       href="{{ url_for('crm.contract_detail', cid=x.c.id) }}"
+       title="{{ x.short }} · {{ x.name }}">
+      {{ x.short }}·{{ x.name }}
+      {% if x.state == 'expired' %}已过期 {{ -x.days }} 天{% else %}{{ x.days }} 天后到期{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if levels|length > 1 %}
+<div class="crm-tabs">
+  <a class="crm-tab {{ 'on' if not tab else '' }}" href="{{ request.path }}">全部签约级别</a>
+  {% for c, n in levels %}
+  <a class="crm-tab {{ 'on' if tab == c else '' }}" href="{{ request.path }}?level={{ c }}">{{ n }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<form class="crm-tool" method="get">
+  <input type="hidden" name="level" value="{{ tab }}">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="产品名称 / 产品编码 / 保司">
+  <label>保司</label>
+  <select name="insurer_id">
+    <option value="">全部</option>
+    {% for iv in insurers %}
+    <option value="{{ iv.id }}" {{ 'selected' if iid == iv.id|string else '' }}>{{ iv.name }}</option>
+    {% endfor %}
+  </select>
+  <label>省分公司</label>
+  <select name="branch_id">
+    <option value="">全部</option>
+    {% for b in branch_opts %}
+    <option value="{{ b.id }}" {{ 'selected' if bid == b.id|string else '' }}>{{ b.name }}</option>
+    {% endfor %}
+  </select>
+  <label>险种</label>
+  <select name="type">
+    <option value="">全部</option>
+    {% for c in types %}<option value="{{ c }}" {{ 'selected' if c == it else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  {# 十七改：到期状态筛选 #}
+  <label>到期状态</label>
+  <select name="st">
+    <option value="">全部</option>
+    <option value="expiring" {{ 'selected' if est == 'expiring' else '' }}>临期（30天内）</option>
+    <option value="expired" {{ 'selected' if est == 'expired' else '' }}>已过期</option>
+  </select>
+  <button class="crm-btn pri" type="submit">查询</button>
+  <a class="crm-btn" href="{{ request.path }}">重置</a>
+  <span class="crm-spacer"></span>
+  <a class="crm-btn" href="{{ url_for('crm.contract_export', side=side, kw=kw, insurer_id=iid, branch_id=bid, level=tab, type=it, st=est) }}">导出 Excel</a>
+  {% if can_manage %}
+    {% if side == 'all' %}
+    <a class="crm-btn dark" href="{{ url_for('crm.hq_contract_new') }}">＋ 总公司合约协议</a>
+    <a class="crm-btn dark" href="{{ url_for('crm.branch_contract_new') }}">＋ 分公司合约协议</a>
+    {% else %}
+    <a class="crm-btn dark" href="{{ url_for('crm.hq_contract_new') if side == 'hq' else url_for('crm.branch_contract_new') }}">＋ 新建{{ sname }}</a>
+    {% endif %}
+  {% endif %}
+</form>
+
+<div class="crm-card">
+  {% if rows %}
+  {# 十六改微调：外包一层横向滚动容器——保司改用简称后列宽重新分配，
+     给关键列加 nowrap，窄屏时改为横向滚动而不是把字挤成竖排 #}
+  <div style="overflow-x:auto">
+  <table class="crm-table">
+    <thead>
+      <tr>
+        <th>编号</th>
+        {% if side == 'all' %}<th>合约口径</th>{% endif %}
+        <th>保司</th>
+        <th style="min-width:132px">省分公司</th>
+        <th>签约级别</th><th style="min-width:132px">产品名称</th><th style="white-space:nowrap">险种</th><th style="white-space:nowrap">渠道</th>
+        <th style="white-space:nowrap">缴费类型</th><th style="white-space:nowrap">合约 / 方案</th>
+        {# 十七改：合约有效期止 + 红黄灯到期标签 #}
+        <th style="white-space:nowrap">有效期止</th>
+        <th style="white-space:nowrap">状态</th><th style="white-space:nowrap">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      {% set sd = sids.get(r.id, 'hq') %}
+      {% set detail_url = url_for('crm.contract_detail', cid=r.id) %}
+      {% set edit_url = url_for('crm.hq_contract_edit', cid=r.id) if sd == 'hq' else url_for('crm.branch_contract_edit', cid=r.id) %}
+      <tr>
+        <td class="mono">{{ r.code }}</td>
+        {% if side == 'all' %}
+        <td>
+          <span class="crm-tag {{ 't-brand' if sd == 'hq' else 't-info' }}">{{ dname.get(sd, sd) }}</span>
+        </td>
+        {% endif %}
+        <td style="white-space:nowrap">
+          {# 十六改微调：列表里保司**只显示简称**（原第二行灰色全称已删，视觉更干净） #}
+          <div class="crm-nm">
+            {% if r.insurer_id %}<a class="crm-a" href="{{ url_for('crm.insurer_detail', iid=r.insurer_id) }}">{{ r.insurer_short or r.insurer_name }}</a>
+            {% else %}{{ r.insurer_short or r.insurer_name or '—' }}{% endif %}
+          </div>
+        </td>
+        {# 十六改：省分公司同样按**简称**展示（简称缺失回落全称） #}
+        <td style="white-space:nowrap">{{ bshort.get(r.branch_id) or r.branch_name or '—' }}</td>
+        <td><span class="crm-tag t-gray">{{ dname.get(r.sign_level, r.sign_level or '—') }}</span></td>
+        <td>
+          <div class="crm-nm"><a class="crm-a" href="{{ detail_url }}">{{ r.product_name }}</a>
+            {% if r.is_custom %}<span class="crm-tag t-plan" style="font-size:10.5px;margin-left:5px">定制类</span>{% endif %}
+            {% if r.coverage_term %}<span class="crm-tag t-gray" style="font-size:10.5px;margin-left:5px">{{ r.coverage_term }}</span>{% endif %}</div>
+          {% if r.product_code %}<div class="crm-sub">{{ r.product_code }}</div>{% endif %}
+        </td>
+        <td style="white-space:nowrap">{{ r.insurance_type or '—' }}</td>
+        {# 四十三改：销售渠道 —— 网销用蓝标签、线下用灰标签，未指定留 — #}
+        <td style="white-space:nowrap">{% if r.sale_channel %}<span class="crm-tag {{ 't-info' if r.sale_channel == 'online' else 't-gray' }}" style="font-size:10.5px">{{ sale_names.get(r.sale_channel, r.sale_channel) }}</span>{% else %}—{% endif %}</td>
+        <td class="mono">{{ dname.get(r.pay_type, r.pay_type or '—') }}</td>
+        <td style="white-space:nowrap">
+          {# 十改：合约（蓝）与方案（橙）配色区分，不再并成同一色标签 #}
+          {% set st = stats.get(r.id, {'n': 0, 'plans': 0, 'out': 0}) %}
+          <span class="crm-tag t-contract" title="合约：已登记的缴别数">{{ st.n }} 缴别</span>
+          <span style="color:#E0D4C4;margin:0 3px">|</span>
+          <span class="crm-tag t-plan" title="方案：保司阶段产品方案政策条数">{{ st.plans }} 方案</span>
+          {% if st.out %}<span class="crm-tag t-danger" style="margin-left:4px">协议外 {{ st.out }}</span>{% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          {% set sp = spans.get(r.id, ('', '')) %}
+          {% set es = estates.get(r.id, ('none', None)) %}
+          {% if sp[1] %}
+          <div class="mono" style="font-size:12px;color:#5F584F">{{ sp[1] }}</div>
+          <div style="margin-top:3px">
+            {% if es[0] == 'expired' %}<span class="crm-tag t-danger">已过期 {{ -es[1] }} 天</span>
+            {% elif es[0] == 'danger' %}<span class="crm-tag t-danger">{{ es[1] }} 天后到期</span>
+            {% elif es[0] == 'warn' %}<span class="crm-tag t-warn">{{ es[1] }} 天后到期</span>
+            {% elif es[0] == 'ok' %}<span class="crm-tag t-ok">{{ es[1] }} 天后到期</span>
+            {% endif %}
+          </div>
+          {% elif sp[0] %}
+          {# 三十改（2026-10-29）：只填起始日、不填终止日 ＝ 长期有效，不参与到期提醒 #}
+          <div class="mono" style="font-size:12px;color:#5F584F">{{ sp[0] }} 起</div>
+          <div style="margin-top:3px"><span class="crm-tag t-ok">长期</span></div>
+          {% else %}<span style="color:#B9B0A6">未设</span>{% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          {% set sc = {'draft': 't-gray', 'active': 't-ok', 'ended': 't-danger'} %}
+          <span class="crm-tag {{ sc.get(r.status, 't-gray') }}">{{ dname.get(r.status, r.status or '—') }}</span>
+        </td>
+        <td style="white-space:nowrap">
+          <a class="crm-a" href="{{ detail_url }}">详情</a>
+          {% if can_manage %}
+          <a class="crm-a" style="margin-left:8px" href="{{ edit_url }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.contract_delete', cid=r.id) }}" style="display:inline"
+                onsubmit="return confirm('确定删除合约「{{ r.product_name }}」（{{ r.code }}）？关联资料与附件会一并删除。')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无{{ sname }}记录。{% if can_manage %}点工具栏「＋ 新建{{ sname }}」开始登记。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

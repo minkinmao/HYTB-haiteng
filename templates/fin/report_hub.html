@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}报表中心 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 报表中心{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">报表中心 <span style="font-size:13px;font-weight:400;color:#9C9288">Report</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    三张表都是<b style="color:#5C554D">实时算出来的</b>，不另存一份数据——凭证一改，报表立刻跟着变，
+    永远不会"账表对不上"。取数只认<b style="color:#5C554D">已记账</b>凭证（草稿 / 已审核 / 已作废都不算）。
+  </div>
+
+  {# 未建账提示 #}
+  {% if not cfg.opening_done %}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid #E6823C">
+    <div style="font-size:13.5px;color:#8A5A18">
+      <b>还没完成期初建账</b>，报表没有起点余额（一切从 0 起算），数字会失真。
+    </div>
+    <a href="{{ url_for('fin.opening') }}" style="font-size:13px;color:#C86432">去「期初建账」录入期初余额并确认建账 →</a>
+  </div>
+  {% endif %}
+
+  {# 期间切换 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.report_hub') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">切换期间</button>
+      <span style="font-size:12.5px;color:#9C9288;padding-bottom:10px">
+        本期已记账凭证 <b style="color:#6B5D4F">{{ m_bs.vch_count }}</b> 张
+        {% if start %}｜账套启用期间：{{ start }}{% endif %}
+      </span>
+    </form>
+  </div>
+
+  {# 报表级自检：一进页面先回答「账平不平、赚没赚、现金净增多少」 #}
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">报表自检</div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">
+      {% set ok = m_bs.balanced %}
+      <div style="flex:1;min-width:280px;background:{{ '#E8F5EC' if ok else '#FDECEC' }};
+                  border:1px solid {{ '#BFE3C9' if ok else '#F3C9C9' }};border-radius:8px;padding:12px 14px">
+        <div style="font-size:12px;color:#9C9288">资产负债表 · 资产 ＝ 负债 + 所有者权益</div>
+        <div style="font-size:14px;color:{{ '#166534' if ok else '#991b1b' }};margin-top:4px">
+          <b>{{ '✓ 平衡' if ok else '✗ 不平衡' }}</b>
+          ｜ 资产 ￥{{ '{:,.2f}'.format(m_bs.assets) }} ＝ 权益方 ￥{{ '{:,.2f}'.format(m_bs.liab_equity) }}
+          {% if not ok %}｜ 差额 ￥{{ '{:,.2f}'.format(m_bs.diff) }}{% endif %}
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px;background:#FCFAF7;border:1px solid #EAE2D6;border-radius:8px;padding:12px 14px">
+        <div style="font-size:12px;color:#9C9288">利润表 · 本期净利润</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px;
+                    color:{{ '#CC2B2B' if m_pl.net_profit >= 0 else '#1E8E4E' }}">
+          ￥{{ '{:,.2f}'.format(m_pl.net_profit) }}
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px;background:#FCFAF7;border:1px solid #EAE2D6;border-radius:8px;padding:12px 14px">
+        <div style="font-size:12px;color:#9C9288">现金流量表 · 本期净增加额</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px;
+                    color:{{ '#CC2B2B' if m_cf.net >= 0 else '#1E8E4E' }}">
+          ￥{{ '{:,.2f}'.format(m_cf.net) }}
+        </div>
+      </div>
+    </div>
+    {% if not ok %}
+    <div style="margin-top:10px;font-size:12.5px;color:#991b1b;line-height:1.8">
+      资产负债表不平，说明有数据绕过了借贷平衡校验写进了库（正常录凭证不可能出现）。
+      先看「科目余额表」的试算平衡自检，再逐张核对有问题的凭证。
+    </div>
+    {% endif %}
+  </div>
+
+  {# 三张报表入口 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+    {% set reports = [
+      ('fin.report_bs', 'BS', '资产负债表', '会小企01表。资产 = 负债 + 所有者权益，不平会高亮报警。'
+        '年初余额 + 期末余额两列，左右两栏对照看。'),
+      ('fin.report_pl', 'PL', '利润表', '会小企02表。营业收入一路算到净利润，'
+        '本期金额 + 本年累计金额两列。'),
+      ('fin.report_cf', 'CF', '现金流量表（简版）', '经营 / 投资 / 筹资三分类 + 现金净增加额。'
+        '按凭证的对方科目自动归类，总额一定等于「期末货币资金 − 期初」。'),
+    ] %}
+    {% for ep, en, nm, tip in reports %}
+    <a href="{{ url_for(ep, period=period) }}"
+       style="flex:1;min-width:250px;display:block;background:#fff;border-radius:8px;padding:16px 18px;
+              box-shadow:0 1px 3px rgba(42,42,42,.05);border-left:3px solid #E6823C;text-decoration:none">
+      <div style="font-size:14.5px;font-weight:600;color:#2A2A2A">
+        <span style="color:#E6823C">{{ en }}</span> · {{ nm }}
+        <span style="font-size:12px;color:#C86432;font-weight:400">查看 →</span>
+      </div>
+      <div style="font-size:12.5px;color:#9C9288;margin-top:5px;line-height:1.7">{{ tip }}</div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {# 报表导出 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <div style="font-size:13.5px;font-weight:600;margin-bottom:8px">导出 Excel</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      {% for kind, nm in [('bs', '资产负债表'), ('pl', '利润表'), ('cf', '现金流量表')] %}
+      <a href="{{ url_for('fin.report_export', kind=kind, period=period) }}"
+         style="font-size:13px;color:#C86432;border:1px solid #E9D9C6;border-radius:8px;
+                padding:7px 16px;text-decoration:none;background:#FCFAF7">
+        导出 {{ nm }} .xlsx
+      </a>
+      {% endfor %}
+    </div>
+    <div style="margin-top:8px;font-size:12.5px;color:#9C9288">
+      导出的表带会计期间与自检结论，可直接归档（会计档案要求凭证账簿至少留存 30 年）。
+    </div>
+  </div>
+
+  {# 自定义报表 #}
+  <div class="card" style="padding:16px 18px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:14px;font-weight:600">自定义报表</div>
+        <div style="font-size:12.5px;color:#9C9288;margin-top:3px">
+          内置三张表的行公式可以直接改：改完保存时系统会自动另存为新报表，内置的保持原样。
+        </div>
+      </div>
+      {% if can_design %}
+      <form method="post" action="{{ url_for('fin.report_new') }}" style="display:flex;gap:8px">
+        <input type="text" name="name" placeholder="新报表名称" style="padding:7px 10px;width:180px">
+        <button type="submit" class="btn" style="padding:8px 18px">＋ 新建报表</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if custom %}
+    <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+      {% for t in custom %}
+      <a href="{{ url_for('fin.report_custom', tid=t.id, period=period) }}"
+         style="font-size:13px;color:#5C554D;border:1px solid #EAE2D6;border-radius:8px;
+                padding:7px 14px;text-decoration:none;background:#FCFAF7">
+        {{ t.name }} <span style="color:#C86432">→</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="margin-top:10px;font-size:12.5px;color:#C0B6A8">还没有自定义报表。</div>
+    {% endif %}
+  </div>
+
+  {# 公式说明 #}
+  <div class="card" style="padding:16px 18px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px">取数公式说明</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for fn, cn in func_cn.items() %}
+      <div style="font-size:12.5px;background:#FCFAF7;border:1px solid #EAE2D6;border-radius:6px;padding:6px 12px">
+        <b style="color:#C86432">{{ fn }}(编码)</b> <span style="color:#6B5D4F">{{ cn }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:10px;font-size:12.5px;color:#9C9288;line-height:1.9">
+      公式支持 <b>+ −</b> 与括号，例如：<code>QM(1001)+QM(1002)</code>；
+      <br><b style="color:#6B5D4F">两条口径要守住</b>：
+      ① 科目编码<b>只写一级科目</b>——明细科目已由系统汇总到一级，再写明细会重复计算；
+      ② 损益类科目（收入 / 成本费用）取数按<b>余额方向取正</b>，所以收入是加项、成本费用是减项。
+    </div>
+    <div style="margin-top:8px;font-size:12.5px;color:#9C9288">
+      期末结转与结账（把损益类结转到本年利润、锁定期间）已开放，入口在「账务管理 → Close · 期末结转与结账」。
+    </div>
+  </div>
+{% endblock %}

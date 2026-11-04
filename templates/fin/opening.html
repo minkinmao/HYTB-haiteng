@@ -1,0 +1,253 @@
+{% extends 'base.html' %}
+{% block title %}期初建账 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 期初建账{% endblock %}
+{% block content %}
+  <style>
+    /* 期初录入：金额输入框统一右对齐等宽，方便逐列核对 */
+    .amt{width:112px;padding:6px 8px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;
+         text-align:right;font-family:Consolas,monospace;color:#2A2A2A}
+    .amt:focus{outline:none;border-color:#E6823C;background:#FFFBF5}
+    .op-tb{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;table-layout:auto}
+    .op-tb th{background:#FCFAF7;color:#8A7F72;font-weight:500;font-size:12px;text-align:left;
+              padding:9px 8px;border-bottom:1px solid #EAE2D6;white-space:nowrap}
+    .op-tb td{padding:4px 8px;border-bottom:1px solid #F6F1E9;vertical-align:middle}
+    .op-tb tr:hover td{background:#FFFDFA}
+    .op-tb td.num, .op-tb th.num{text-align:right}
+    .op-code{font-family:Consolas,monospace;font-size:12.5px;color:#8A7F72}
+    .tg{font-size:11px;padding:2px 7px;border-radius:20px;white-space:nowrap;display:inline-block}
+    .st-done{background:#E8F5E9;color:#166534}
+    .st-todo{background:#FDF3E4;color:#8A5A18}
+    .st-bal{background:#E8F5E9;color:#166534}
+    .st-unbal{background:#FDECEC;color:#991b1b}
+    .btn{border:none;border-radius:8px;padding:9px 20px;font-size:13.5px;cursor:pointer}
+    .btn-main{background:#E6823C;color:#fff}
+    .btn-line{background:#fff;border:1px solid #E2D8CA;color:#5C554D}
+    .btn-warn{background:#fff;border:1px solid #F0C9C9;color:#b91c1c}
+    .kpi{flex:1;min-width:150px;background:#fff;border-radius:8px;padding:13px 16px;
+         box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid #DDD5C8}
+    .kpi .lb{font-size:12px;color:#9C9288}
+    .kpi .vl{font-size:20px;font-weight:700;margin-top:4px;font-family:Consolas,monospace}
+    .sub-tb{width:100%;border-collapse:collapse;font-size:13px;max-width:620px}
+    .sub-tb th,.sub-tb td{padding:8px 10px;border-bottom:1px solid #F3EDE3}
+    .sub-tb th{font-size:12px;color:#8A7F72;font-weight:500;text-align:right;background:#FCFAF7}
+    .sub-tb th:first-child,.sub-tb td:first-child{text-align:left}
+    .sub-tb td.num{text-align:right;font-family:Consolas,monospace}
+    @media (max-width:900px){.amt{width:92px}}
+  </style>
+
+  <h2 style="font-size:18px;margin:0 0 6px">期初建账 <span style="font-size:13px;font-weight:400;color:#9C9288">Opening Balances</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:14px">
+    把各科目在<b style="color:#C86432">启用期间</b>的期初余额搬进系统，试算平衡通过后确认建账，账套才算正式启用。
+    只有<b style="color:#C86432">明细科目</b>能录余额，汇总科目由下级自动汇总。
+  </div>
+
+  {# ===== 账套口径 + 建账状态 ===== #}
+  <div style="background:#fff;border-radius:8px;padding:14px 20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;font-size:13px;color:#5C554D">
+      <div>核算主体：<b style="color:#2A2A2A">{{ cfg.company_name or '—' }}</b></div>
+      <div>会计制度：<b style="color:#2A2A2A">{{ '小企业会计准则' if cfg.standard == 'small' else '企业会计准则' }}</b></div>
+      <div>启用期间：<b style="color:#2A2A2A">{{ cfg.start_period or '未设置' }}</b></div>
+      <div>本位币：<b style="color:#2A2A2A">{{ cfg.currency or 'CNY' }}</b></div>
+      <div>
+        建账状态：
+        {% if cfg.opening_done %}
+          <span class="tg st-done">已建账</span>
+          <span style="font-size:12px;color:#9C9288">{{ cfg.opening_done_at.strftime('%Y-%m-%d %H:%M') if cfg.opening_done_at else '' }} · {{ cfg.opening_done_by or '' }}</span>
+        {% else %}
+          <span class="tg st-todo">未建账</span>
+        {% endif %}
+      </div>
+      <a href="{{ url_for('fin.config') }}" style="margin-left:auto;font-size:12.5px;color:#C86432;text-decoration:none">账套设置 →</a>
+    </div>
+  </div>
+
+  {# ===== 试算平衡卡片（前端实时重算，服务端先给初值） ===== #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px">
+    <div class="kpi" style="border-top-color:#166534">
+      <div class="lb">期初借方合计</div>
+      <div class="vl" id="sum-d" style="color:#166534">{{ '%.2f'|format(summary.debit) }}</div>
+    </div>
+    <div class="kpi" style="border-top-color:#991b1b">
+      <div class="lb">期初贷方合计</div>
+      <div class="vl" id="sum-c" style="color:#991b1b">{{ '%.2f'|format(summary.credit) }}</div>
+    </div>
+    <div class="kpi" style="border-top-color:#C9902A">
+      <div class="lb">借贷差额（借 − 贷）</div>
+      <div class="vl" id="sum-diff" style="color:#C9902A">{{ '%.2f'|format(summary.diff) }}</div>
+    </div>
+    <div class="kpi" style="border-top-color:#6B5D4F">
+      <div class="lb">试算结果</div>
+      <div class="vl" id="sum-state" style="font-size:16px;padding-top:3px">
+        {% if summary.balanced %}<span class="tg st-bal">已平衡 ✓</span>
+        {% else %}<span class="tg st-unbal">未平衡</span>{% endif %}
+      </div>
+      <div style="font-size:11.5px;color:#9C9288;margin-top:4px">已录科目 {{ filled }} / 明细科目 {{ total_acc }}</div>
+    </div>
+  </div>
+
+  <div style="background:#FCFAF7;border:1px solid #EAE2D6;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:12.5px;color:#6B5D4F">
+    <b>本年累计发生额（选填）</b>：若账套是年中启用（如 9 月启用），这里填 1 月至启用前一月的累计借贷发生额，利润表才能取到全年数。
+    合计：借 <span id="sum-yd" style="font-family:Consolas,monospace">{{ '%.2f'|format(summary.ytd_debit) }}</span>
+    / 贷 <span id="sum-yc" style="font-family:Consolas,monospace">{{ '%.2f'|format(summary.ytd_credit) }}</span>
+    　<span style="color:#9C9288">（此项不参与试算平衡）</span>
+  </div>
+
+  {# ===== 录入表单 ===== #}
+  <form method="post" action="{{ url_for('fin.opening_save') }}">
+    <input type="hidden" name="only" value="{{ 'filled' if only else '' }}">
+
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+      <span style="font-size:13px;color:#5C554D">显示：</span>
+      <a href="{{ url_for('fin.opening') }}"
+         style="font-size:12.5px;padding:6px 14px;border-radius:7px;text-decoration:none;
+                {% if not only %}background:#E6823C;color:#fff{% else %}background:#fff;color:#5C554D;border:1px solid #E2D8CA{% endif %}">全部科目</a>
+      <a href="{{ url_for('fin.opening', only='filled') }}"
+         style="font-size:12.5px;padding:6px 14px;border-radius:7px;text-decoration:none;
+                {% if only %}background:#E6823C;color:#fff{% else %}background:#fff;color:#5C554D;border:1px solid #E2D8CA{% endif %}">仅看已填</a>
+      <span style="font-size:12px;color:#9C9288">共 {{ rows|length }} 行</span>
+      <span id="dir-warn" style="font-size:12px;color:#b45309;display:none">⚠ 有科目余额方向与科目设置相反，请核对</span>
+    </div>
+
+    <div style="background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(42,42,42,.05);overflow-x:auto">
+      <table class="op-tb">
+        <thead>
+          <tr>
+            <th style="width:96px">科目编码</th>
+            <th>科目名称</th>
+            <th style="width:78px">类别</th>
+            <th style="width:46px">方向</th>
+            <th class="num" style="width:126px">期初借方余额</th>
+            <th class="num" style="width:126px">期初贷方余额</th>
+            <th class="num" style="width:126px">本年累计借方</th>
+            <th class="num" style="width:126px">本年累计贷方</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr data-dir="{{ r.acc.direction }}">
+            <td class="op-code">{{ r.acc.code }}</td>
+            <td class="op-name" style="padding-left:{{ 8 + (r.acc.level - 1) * 16 }}px">
+              {{ r.acc.name }}
+              {% if not r.acc.enabled %}<span class="tg" style="background:#F1EDE6;color:#9C9288">已停用</span>{% endif %}
+              <span class="dir-flag" style="display:none;font-size:11px;color:#b45309">方向异常</span>
+            </td>
+            <td style="color:#8A7F72;font-size:12px">{{ r.acc.category_cn }}</td>
+            <td style="color:#8A7F72;font-size:12px">{{ r.acc.direction_cn }}</td>
+            <td class="num"><input class="amt" data-k="d" type="text" inputmode="decimal"
+                 name="debit_{{ r.acc.code }}" value="{{ '%.2f'|format(r.d) if r.d else '' }}" placeholder="0.00"></td>
+            <td class="num"><input class="amt" data-k="c" type="text" inputmode="decimal"
+                 name="credit_{{ r.acc.code }}" value="{{ '%.2f'|format(r.c) if r.c else '' }}" placeholder="0.00"></td>
+            <td class="num"><input class="amt" data-k="yd" type="text" inputmode="decimal"
+                 name="ytd_debit_{{ r.acc.code }}" value="{{ '%.2f'|format(r.op.ytd_debit) if r.op and r.op.ytd_debit else '' }}" placeholder="0.00"></td>
+            <td class="num"><input class="amt" data-k="yc" type="text" inputmode="decimal"
+                 name="ytd_credit_{{ r.acc.code }}" value="{{ '%.2f'|format(r.op.ytd_credit) if r.op and r.op.ytd_credit else '' }}" placeholder="0.00"></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" style="padding:22px;text-align:center;color:#9C9288;font-size:13px">
+            没有可录期初的明细科目，请先到「会计科目」里建立科目</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+      <button type="submit" class="btn btn-main">保存期初余额</button>
+      <span style="font-size:12px;color:#9C9288">保存不要求必须平衡，可以分次录入；确认建账时才强制平衡</span>
+    </div>
+  </form>
+
+  {# ===== 建账操作（独立表单，不能与上面的录入表单嵌套） ===== #}
+  <div style="background:#fff;border-radius:8px;padding:16px 20px;margin-top:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:6px">建账操作</div>
+    <div style="font-size:12.5px;color:#9C9288;margin-bottom:12px">
+      确认建账后账套才进入可录凭证状态；若要继续调整期初，可撤销建账再改。
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <form method="post" action="{{ url_for('fin.opening_close') }}"
+            onsubmit="return confirm('确认建账？确认后账套进入可录凭证状态。')">
+        <button type="submit" class="btn btn-main" {% if cfg.opening_done %}disabled style="opacity:.5;cursor:not-allowed"{% endif %}>
+          {% if cfg.opening_done %}已建账{% else %}确认建账{% endif %}
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('fin.opening_reopen') }}"
+            onsubmit="return confirm('撤销建账状态并继续调整期初？')">
+        <button type="submit" class="btn btn-line">撤销建账</button>
+      </form>
+      <form method="post" action="{{ url_for('fin.opening_clear') }}"
+            onsubmit="return confirm('确定清空全部期初余额？此操作不可恢复（用于清掉试录或演示数据）。')">
+        <button type="submit" class="btn btn-warn">清空期初</button>
+      </form>
+    </div>
+  </div>
+
+  {# ===== 分类别小计：财务核对用 ===== #}
+  <div style="background:#fff;border-radius:8px;padding:16px 20px;margin-top:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">分类别合计</div>
+    <table class="sub-tb">
+      <thead><tr><th>科目类别</th><th>期初借方</th><th>期初贷方</th><th>借贷差额</th></tr></thead>
+      <tbody>
+        {% for t in cat_totals %}
+        <tr>
+          <td>{{ t.name }}</td>
+          <td class="num">{{ '%.2f'|format(t.debit) }}</td>
+          <td class="num">{{ '%.2f'|format(t.credit) }}</td>
+          <td class="num" style="color:{{ '#991b1b' if ((t.debit - t.credit) > 0.004 or (t.credit - t.debit) > 0.004) else '#9C9288' }}">
+            {{ '%.2f'|format(t.debit - t.credit) }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="font-weight:700;background:#FCFAF7">
+          <td>合计</td>
+          <td class="num">{{ '%.2f'|format(summary.debit) }}</td>
+          <td class="num">{{ '%.2f'|format(summary.credit) }}</td>
+          <td class="num">{{ '%.2f'|format(summary.diff) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // 录入时前端实时重算合计与平衡状态，不用等保存就能看出平不平
+    function _num(el) {
+      var v = parseFloat((el.value || '').replace(/[,\s]/g, ''));
+      return isNaN(v) ? 0 : v;
+    }
+    function _money(v) {
+      return v.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function recalc() {
+      var d = 0, c = 0, yd = 0, yc = 0, warn = false;
+      document.querySelectorAll('input.amt').forEach(function (el) {
+        var v = _num(el), k = el.dataset.k;
+        if (k === 'd') d += v; else if (k === 'c') c += v;
+        else if (k === 'yd') yd += v; else yc += v;
+      });
+      // 方向异常提示：科目方向为贷却填了借方（或反之）
+      document.querySelectorAll('.op-tb tbody tr').forEach(function (tr) {
+        var dir = tr.dataset.dir, bad = false;
+        tr.querySelectorAll('input.amt').forEach(function (el) {
+          var v = _num(el);
+          if (v > 0 && ((dir === 'credit' && el.dataset.k === 'd') ||
+                        (dir === 'debit' && el.dataset.k === 'c'))) bad = true;
+        });
+        var flag = tr.querySelector('.dir-flag');
+        if (flag) flag.style.display = bad ? 'inline' : 'none';
+        if (bad) warn = true;
+      });
+      document.getElementById('dir-warn').style.display = warn ? 'inline' : 'none';
+
+      var diff = Math.round((d - c) * 100) / 100;
+      document.getElementById('sum-d').textContent = _money(d);
+      document.getElementById('sum-c').textContent = _money(c);
+      document.getElementById('sum-diff').textContent = _money(diff);
+      document.getElementById('sum-yd').textContent = _money(yd);
+      document.getElementById('sum-yc').textContent = _money(yc);
+      document.getElementById('sum-state').innerHTML = Math.abs(diff) < 0.005
+        ? '<span class="tg st-bal">已平衡 ✓</span>'
+        : '<span class="tg st-unbal">未平衡</span>';
+    }
+    document.querySelectorAll('input.amt').forEach(function (el) {
+      el.addEventListener('input', recalc);
+    });
+    recalc();
+  </script>
+{% endblock %}

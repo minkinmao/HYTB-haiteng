@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %}PROPOSAL · 计划书{% endblock %}
+{% block pagename %}PROPOSAL · 计划书 · 计划书列表{% endblock %}
+{% block content %}
+
+<style>
+.pb-wrap{max-width:1680px}
+.pb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 22px;max-width:820px}
+.pb-grid .fld{display:flex;flex-direction:column;gap:4px}
+.pb-grid label{font-size:12px;color:var(--ink-2)}
+.pb-grid input[type=text],.pb-grid input[type=number],.pb-grid select,.pb-grid textarea{
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;background:#fff}
+.pb-grid textarea{resize:vertical;min-height:52px}
+.pb-req{color:var(--brand-deep)}
+.pb-btn{background:var(--brand-deep);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;cursor:pointer}
+.pb-btn.ghost{background:#fff;color:var(--brand-deep);border:1px solid var(--brand-deep)}
+.pb-btn:disabled{opacity:.5;cursor:not-allowed}
+.pb-prev{margin-top:16px;border:1px dashed #E0C9A8;background:#FFFDF8;padding:14px;border-radius:10px;display:none}
+.pb-prev h4{margin:0 0 8px;font-size:14px;color:var(--ink)}
+.pb-prev table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+.pb-prev th,.pb-prev td{border:1px solid var(--line);padding:4px 6px;text-align:center}
+.pb-prev th{background:var(--brand-soft);color:var(--ink-2)}
+.pb-warn{color:#C00;font-size:12px}
+.pb-ok{color:#2e7d32;font-size:12px}
+.pb-list{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;table-layout:auto}
+.pb-list th,.pb-list td{border:1px solid var(--line);padding:8px 10px;vertical-align:middle}
+.pb-list th{background:var(--brand-soft);color:var(--ink-2);text-align:left;font-weight:600}
+.pb-list td{text-align:left}
+.pb-list .ctr{text-align:center}
+.pb-no{font-family:var(--serif);color:var(--brand-deep);font-weight:600}
+.pb-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:0 1px 2px rgba(42,42,42,.04);margin-bottom:22px}
+.pb-card h3{margin:0 0 14px;font-size:16px}
+.pb-sub{font-size:12px;color:var(--muted);margin:-8px 0 12px}
+</style>
+
+<div class="pb-wrap">
+  <div class="pb-card">
+    <h3>新建计划书 · 手工录入保单要素</h3>
+    <p class="pb-sub">录入保司 / 产品 / 性别 / 年龄 / 交费 / 保费，系统自动调已导入的费率与现金价值因子实时测算，确认后保存。</p>
+    <form id="pb-form" method="POST" action="{{ url_for('crm.proposal_new') }}">
+      <div class="pb-grid">
+        <div class="fld"><label>保司名称<span class="pb-req">*</span></label>
+          <select id="pb-insurer" name="insurer"></select></div>
+        <div class="fld"><label>产品名称<span class="pb-req">*</span></label>
+          <select id="pb-product" name="product"></select></div>
+        <div class="fld"><label>客户姓名</label>
+          <input type="text" name="client_name" placeholder="如 张先生"></div>
+        <div class="fld"><label>性别</label>
+          <select name="sex"><option value="M">男</option><option value="F">女</option></select></div>
+        <div class="fld"><label>投保年龄</label>
+          <input type="number" name="age" id="pb-age" value="40" min="0" max="80"></div>
+        <div class="fld"><label>交费方式</label>
+          <select name="pay_term" id="pb-pay">
+            <option value="0">趸交</option>
+            <option value="3">3年交</option>
+            <option value="5" selected>5年交</option>
+            <option value="6">6年交</option>
+            <option value="10">10年交</option>
+            <option value="4">4年交</option>
+            <option value="15">15年交</option>
+            <option value="20">20年交</option>
+          </select></div>
+        <div class="fld"><label>年交保费（元）<span class="pb-req">*</span></label>
+          <input type="number" name="premium" id="pb-premium" value="100000" min="0" step="1000"></div>
+        <div class="fld"><label>演示类型</label>
+          <select name="illustration_mode">
+            <option value="标准">标准</option>
+            <option value="红利累积生息">红利累积生息</option>
+            <option value="现金分红">现金分红</option>
+          </select></div>
+        <div class="fld"><label>红利领取方式 <span style="color:#999">（分红型产品生效，条款3.1）</span></label>
+          <select name="div_mode" id="pb-divmode">
+            <option value="accum">累积生息（年复利）</option>
+            <option value="cash">现金分红（现金领取）</option>
+            <option value="pua">购买交清增额保险</option>
+          </select></div>
+        <div class="fld"><label>累积生息年利率（%）<span style="color:#999">（保司公布，默认1.75）</span></label>
+          <input type="number" name="accum_rate" id="pb-rate" value="1.75" min="0" max="10" step="0.01"></div>
+        <div class="fld" style="grid-column:1 / -1"><label>备注</label>
+          <textarea name="notes" placeholder="客户偏好、交单节点等"></textarea></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:12px;align-items:center">
+        <button type="button" class="pb-btn" id="btn-preview">测算预览</button>
+        <button type="submit" class="pb-btn ghost" id="btn-save" disabled>保存计划书</button>
+        <span id="pb-msg" style="font-size:12px"></span>
+      </div>
+    </form>
+    <div class="pb-prev" id="pb-prev">
+      <h4>试算预览（保存前确认）</h4>
+      <div id="pb-prev-body"></div>
+    </div>
+  </div>
+
+  <div class="pb-card">
+    <h3>已保存计划书</h3>
+    <p class="pb-sub">点击「查看」进入网页版计划书（可打印 / 对接小程序）；逐年演示按最新因子实时重算。</p>
+    <table class="pb-list">
+      <thead><tr>
+        <th>编号</th><th>保司 · 产品</th><th>客户</th><th class="ctr">性别/年龄</th>
+        <th class="ctr">交费/保费</th><th class="ctr">基本保额</th><th class="ctr">创建时间</th><th class="ctr">操作</th>
+      </tr></thead>
+      <tbody>
+        {% for p in proposals %}
+        <tr>
+          <td><span class="pb-no">{{ p.proposal_no }}</span></td>
+          <td>{{ p.insurer_name }} · {{ p.product_name }}</td>
+          <td>{{ p.client_name or '—' }}</td>
+          <td class="ctr">{{ '男' if p.sex == 'M' else ('女' if p.sex == 'F' else '通') }} / {{ p.issue_age }}岁</td>
+          <td class="ctr">{{ '趸交' if p.pay_term == 0 else (p.pay_term|string + '年交') }} · ¥{{ '%.0f'|format(p.premium) }}</td>
+          <td class="ctr">¥{{ '%.0f'|format(p.base_sa) }}</td>
+          <td class="ctr">{{ p.created_at }}</td>
+          <td class="ctr">
+            <a class="pb-btn" style="padding:5px 12px;font-size:12px" href="{{ url_for('crm.proposal_view', pid=p.id) }}">查看</a>
+            <button type="button" class="pb-btn ghost" style="padding:5px 12px;font-size:12px"
+                    onclick="PB.del({{ p.id }}, '{{ p.proposal_no }}')">删除</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;color:var(--muted)">暂无计划书，先在上方录入保存</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form id="pb-del-form" method="POST" action="{{ url_for('crm.proposal_delete') }}" style="display:none">
+      <input type="hidden" name="pid" id="pb-del-pid">
+    </form>
+  </div>
+</div>
+
+<script>
+const PB = {
+  products: {{ products | tojson }},
+  previewOk: false,
+  init() {
+    const ins = [...new Set(PB.products.map(p => p.insurer))];
+    const sel = document.getElementById('pb-insurer');
+    sel.innerHTML = ins.map(i => `<option value="${i}">${i}</option>`).join('');
+    PB.fillProducts(sel.value);
+    sel.onchange = () => PB.fillProducts(sel.value);
+  },
+  fillProducts(ins) {
+    const ps = PB.products.filter(p => p.insurer === ins).map(p => p.product);
+    document.getElementById('pb-product').innerHTML = ps.map(p => `<option value="${p}">${p}</option>`).join('');
+  },
+  preview() {
+    const fd = new FormData();
+    fd.append('insurer', document.getElementById('pb-insurer').value);
+    fd.append('product', document.getElementById('pb-product').value);
+    fd.append('sex', document.querySelector('[name=sex]').value);
+    fd.append('age', document.getElementById('pb-age').value);
+    fd.append('pay_term', document.getElementById('pb-pay').value);
+    fd.append('premium', document.getElementById('pb-premium').value);
+    // 分红演示口径（条款3.2）：现金领取 / 累积生息 + 累积生息年利率
+    fd.append('div_mode', document.getElementById('pb-divmode').value);
+    fd.append('accum_rate', document.getElementById('pb-rate').value);
+    PB.previewOk = false;
+    document.getElementById('btn-save').disabled = true;
+    const msg = document.getElementById('pb-msg');
+    msg.innerHTML = '';
+    fetch('{{ url_for("crm.premium_calc_api") }}', {method:'POST', body: fd})
+      .then(r => r.json()).then(d => {
+        const box = document.getElementById('pb-prev');
+        box.style.display = 'block';
+        if (!d.ok) {
+          PB.previewOk = false;
+          document.getElementById('btn-save').disabled = true;
+          document.getElementById('pb-prev-body').innerHTML = '<span class="pb-warn">' + d.msg + '</span>';
+          msg.innerHTML = '<span class="pb-warn">' + d.msg + '</span>';
+          return;
+        }
+        const data = d.data;
+        PB.previewOk = true;
+        document.getElementById('btn-save').disabled = false;
+        msg.innerHTML = '<span class="pb-ok">✓ 测算通过，可保存</span>';
+        // 分红型才带红利三列（红利为非保证利益）
+        const dm = document.getElementById('pb-divmode').value;
+        const hasDiv = !!data.has_div && data.rows.some(r => (r.div_d || 0) > 0 || (r.div_g || 0) > 0);
+        const cumKey = dm === 'cash' ? 'cum_cash' : 'cum_acc';
+        const totKey = dm === 'cash' ? 'total_cash' : 'total_acc';
+        const cumName = dm === 'cash' ? '累计已领红利' : '累积红利(生息)';
+        let h = '<div class="pb-ok">基本保险金额：' + data.base_sa.toLocaleString() + ' 元（'
+          + (data.pay_term === 0 ? '趸交' : data.pay_term + '年交') + '）｜共 ' + data.rows.length + ' 个保单年度'
+          + (hasDiv ? '｜红利口径：' + (dm === 'cash' ? '现金领取' : '累积生息 '
+            + (data.accum_rate * 100).toFixed(2) + '%') : '')
+          + '</div><table><thead><tr>'
+          + ['年度','年末年龄','年交保费','累计保费','基本保额','年末现金价值','单利%','IRR%']
+              .concat(hasDiv ? ['当年度红利', cumName, '年末总利益'] : [])
+              .map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>';
+        data.rows.forEach(r => {
+          h += '<tr>' + [r.year, r.age_end, r.premium, r.cum_prem, r.base_sa, r.cv, r.simple, r.irr]
+            .concat(hasDiv ? [r.div_d, r[cumKey], r[totKey]] : [])
+            .map(v => '<td>' + (typeof v === 'number' ? v.toLocaleString() : v) + '</td>').join('') + '</tr>';
+        });
+        document.getElementById('pb-prev-body').innerHTML = h + '</tbody></table>';
+      })
+      .catch(e => {
+        document.getElementById('pb-prev-body').innerHTML = '<span class="pb-warn">测算出错</span>';
+      });
+  },
+  del(id, no) {
+    if (!confirm('确认删除计划书「' + no + '」？')) return;
+    document.getElementById('pb-del-pid').value = id;
+    document.getElementById('pb-del-form').submit();
+  }
+};
+document.getElementById('btn-preview').onclick = PB.preview;
+PB.init();
+</script>
+{% endblock %}

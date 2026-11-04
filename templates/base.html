@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}海盈通保OA管理系统{% endblock %}</title>
+  {% if logo_mark_url %}<link rel="icon" href="{{ logo_mark_url }}">{% endif %}
+  <style>
+    /* ===================== 品牌视觉变量 =====================
+       取值来自《海盈通保品牌视觉体系》：
+       主色·深橙 #C86432 ｜ 常用橙 #E6823C ｜ 浅橙 #F0A050
+       底色·米白 #FAF7F2 ｜ 文字·炭黑 #2A2A2A ｜ 中性线 #DEE0E3      */
+    :root{
+      --brand-deep:#C86432;   /* 深橙：按钮悬停 / 强调 */
+      --brand:#E6823C;        /* 常用橙：主色 */
+      --brand-light:#F0A050;  /* 浅橙：高亮 */
+      --brand-soft:#FBEEE2;   /* 橙色淡底 */
+      --cream:#FAF7F2;        /* 米白：页面底色 */
+      --cream-2:#F4EFE7;
+      --ink:#2A2A2A;          /* 炭黑：正文 */
+      --ink-2:#5C554D;        /* 次级文字 */
+      --muted:#9C9288;        /* 弱化文字 */
+      --line:#EAE2D6;         /* 分隔线 */
+      --card:#FFFFFF;
+      --side-1:#2B2B2B;       /* 侧栏：炭黑渐变 */
+      --side-2:#1C1C1C;
+      /* 标题字体按品牌用宋体系；本机若未装"思源宋体/寒蝉锦书宋"，回退到系统宋体 */
+      --serif:"思源宋体","Source Han Serif SC","Noto Serif SC","寒蝉锦书宋","Songti SC","STSong","宋体",SimSun,serif;
+      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--sans);
+         font-size:14px;-webkit-font-smoothing:antialiased}
+    a{text-decoration:none;color:var(--brand-deep)}
+    h1,h2,h3,.serif{font-family:var(--serif);font-weight:600;letter-spacing:.5px}
+
+    /* ===================== 布局：左列 + 主区 ===================== */
+    .layout{display:flex;min-height:100vh}
+    .sidebar{width:252px;flex:0 0 252px;position:fixed;top:0;bottom:0;left:0;z-index:30;
+             background:linear-gradient(180deg,var(--side-1) 0%,var(--side-2) 100%);
+             display:flex;flex-direction:column;color:#BFB7AD;transition:transform .25s ease}
+    /* 顶部品牌区 */
+    .brand{display:flex;align-items:center;gap:13px;padding:20px 16px 18px;
+           border-bottom:1px solid rgba(255,255,255,.07)}
+    .brand .mark{width:64px;height:64px;flex:0 0 64px;border-radius:16px;background:#fff;
+                 display:flex;align-items:center;justify-content:center;overflow:hidden;
+                 box-shadow:0 4px 16px rgba(230,130,60,.38)}
+    /* LOGO 图标：数字已裁掉四周白边并居中，故给 4px 内边距即可撑满白框、视觉居中 */
+    .brand .mark img{width:100%;height:100%;object-fit:contain;display:block;padding:4px}
+    .brand .mark svg{width:36px;height:36px}
+    .brand .txt{line-height:1.3;min-width:0}
+    .brand .txt b{display:block;color:#fff;font-family:var(--serif);font-size:23px;letter-spacing:3px}
+    .brand .txt span{display:block;font-size:9px;color:#8A8177;letter-spacing:1px;margin-top:3px;
+                     white-space:nowrap}
+    /* 导航 */
+    .nav{padding:14px 12px;flex:1;overflow-y:auto}
+    .nav .label{font-size:10.5px;color:#6E665D;letter-spacing:2px;padding:4px 10px 10px}
+    .nav a.item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;
+                color:#BFB7AD;font-size:13.5px;margin-bottom:2px;position:relative;transition:.18s}
+    .nav a.item .code{font-size:10px;font-weight:700;letter-spacing:.5px;color:#9C9288;
+                      background:rgba(255,255,255,.06);border-radius:5px;padding:3px 6px;
+                      min-width:40px;text-align:center;transition:.18s}
+    .nav a.item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .nav a.item:hover{background:rgba(255,255,255,.06);color:#fff}
+    .nav a.item.on{background:linear-gradient(90deg,rgba(230,130,60,.24),rgba(230,130,60,.06));color:#fff}
+    .nav a.item.on::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+                           border-radius:0 3px 3px 0;background:var(--brand)}
+    .nav a.item.on .code{background:rgba(240,160,80,.28);color:#F8D9B6}
+    /* 层级菜单：一级系统 + 二级模块（纯中文） */
+    .nav .sys{margin-bottom:2px}
+    .nav .sys-hd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;
+                  color:#BFB7AD;font-size:13.5px;cursor:pointer;transition:.18s;user-select:none}
+    .nav .sys-hd:hover{background:rgba(255,255,255,.06);color:#fff}
+    .nav .sys-hd .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .nav .sys-hd .ar{font-size:10px;color:#6E665D;transition:transform .2s}
+    .nav .sys.open .sys-hd .ar{transform:rotate(90deg);color:#9C9288}
+    .nav .sys-bd{display:none;padding:2px 0 5px}
+    .nav .sys.open .sys-bd{display:block}
+    .nav .sys-bd .sub{display:block;padding:8px 12px 8px 30px;border-radius:8px;color:#9C9288;
+                       font-size:13px;margin-bottom:1px;position:relative;transition:.18s}
+    .nav .sys-bd .sub::before{content:"";position:absolute;left:18px;top:50%;width:5px;height:5px;
+                              border-radius:50%;background:#4A443E;transform:translateY(-50%);transition:.18s}
+    .nav .sys-bd .sub:hover{background:rgba(255,255,255,.06);color:#fff}
+    .nav .sys-bd .sub.on{background:linear-gradient(90deg,rgba(230,130,60,.22),rgba(230,130,60,.04));color:#fff}
+    .nav .sys-bd .sub.on::before{background:var(--brand)}
+    .nav .sys-bd .sub.empty{color:#6E665D;cursor:default;font-size:12px;padding-left:30px}
+    .nav .sys-bd .sub.empty:hover{background:none;color:#6E665D}
+    /* 底部用户区 */
+    .side-foot{border-top:1px solid rgba(255,255,255,.07);padding:13px 16px 15px;font-size:12px}
+    .side-foot .row{display:flex;align-items:center;gap:9px}
+    .side-foot .av{width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:var(--brand);
+                   color:#fff;display:flex;align-items:center;justify-content:center;
+                   font-size:12.5px;font-weight:600}
+    .side-foot .un{color:#F2EDE6;font-size:13px;font-weight:600}
+    .side-foot .lv{color:#8A8177;font-size:11px;margin-top:1px}
+    .side-foot .out{display:inline-block;margin-top:10px;color:var(--brand-light);font-size:12px}
+    .side-foot .out:hover{color:#fff}
+
+    /* ===================== 左侧菜单收起/展开 =====================
+       点击顶栏「☰」按钮：整条侧边栏滑出/滑入，主区随之伸缩；
+       状态写入 localStorage，跨页面跳转后保持用户选择。 */
+    body.nav-collapsed .sidebar{transform:translateX(-100%)}
+    body.nav-collapsed .main{margin-left:0}
+    .nav-toggle{flex:0 0 auto;width:38px;height:38px;border:1px solid #F3DCC6;background:var(--brand-soft);
+                color:var(--brand-deep);border-radius:9px;font-size:17px;cursor:pointer;
+                display:flex;align-items:center;justify-content:center;transition:.16s}
+    .nav-toggle:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+    /* ===================== 主内容区 ===================== */
+    .main{flex:1;margin-left:252px;min-width:0;display:flex;flex-direction:column;transition:margin-left .25s ease}
+    .topstrip{background:#fff;border-bottom:1px solid var(--line);padding:15px 30px;
+              display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .topstrip .ttl{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.8px}
+    .topstrip .crumb{font-size:11.5px;color:var(--muted);letter-spacing:1.2px;margin-top:3px}
+    .topstrip .badge{background:var(--brand-soft);color:var(--brand-deep);border:1px solid #F3DCC6;
+                     padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+    /* 三十改（2026-10-29）：主内容区放宽。原来 1200px 在大屏两侧留白过多、表格挤成多行，
+       威哥要求向两边扩充。改为 1680px（1920 屏基本铺满，超宽屏也不至于拉得太散），
+       左右内边距同步收窄到 26px，多出来的空间全部给业务区。 */
+    .container{max-width:1680px;width:100%;margin:0 auto;padding:22px 26px 46px}
+    .flash{background:#FDF3E4;color:#8A5A18;border:1px solid #F4DFBE;padding:11px 15px;
+           border-radius:10px;margin-bottom:16px;font-size:13px}
+
+    /* ===================== 统一返回条 =====================
+       全站每个模块页都会由这里渲染返回按钮，位置/样式/口径一致；
+       返回目标在 app.py 的 BACK_MAP 里统一声明，业务模板不再各写各的。 */
+    .backbar{display:inline-flex;align-items:center;gap:6px;margin-bottom:15px;padding:7px 16px;
+             border:1px solid var(--line);border-radius:20px;background:#fff;
+             font-size:12.5px;color:var(--ink-2);transition:.16s}
+    .backbar:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft)}
+    .backbar .arw{font-size:14px;line-height:1;color:var(--brand)}
+
+    /* ===================== 表单控件统一（品牌化） =====================
+       背景色必须显式声明：Edge 等浏览器会给 required 输入框套一层默认底色，
+       与自己写的样式不一致；统一声明后各页输入框外观才完全一致。 */
+    input,select,textarea{background:#FCFAF7;color:var(--ink);border:1px solid #E2D8CA;
+                          border-radius:9px;font-family:var(--sans);font-size:14px;
+                          outline:none;transition:.16s}
+    input:focus,select:focus,textarea:focus{background:#fff;
+                          border-color:var(--brand) !important;
+                          box-shadow:0 0 0 3px rgba(230,130,60,.14)}
+    input::placeholder,textarea::placeholder{color:#BDB2A5}
+    select{cursor:pointer}
+    textarea{resize:vertical}
+    /* 二十九改（2026-10-29）：数字输入框去掉上下加减箭头（手机/桌面全部去掉）。
+       威哥：合约这类表单只要填数字，箭头容易误触改错值，一律不显示。 */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+    input[type=number]{-moz-appearance:textfield;appearance:textfield}
+
+    /* ===================== 通用小组件（各页可复用） ===================== */
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+          box-shadow:0 1px 2px rgba(42,42,42,.04)}
+    .chip{display:inline-block;padding:8px 13px;border:1px solid var(--line);border-radius:9px;
+          font-size:13px;color:var(--ink);background:#FCFAF7;transition:.16s}
+    .chip:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft)}
+    .chip .en{color:var(--brand-deep);font-weight:700}
+    .chip.plan{border-style:dashed;color:var(--muted);background:#fff}
+    .chip.plan .en{color:#C9C0B4}
+    .btn{background:var(--brand);color:#fff;border:none;padding:9px 20px;border-radius:9px;
+         font-size:14px;cursor:pointer;font-family:var(--sans)}
+    .btn:hover{background:var(--brand-deep)}
+
+    /* ===================== 窄屏回退（手机/小窗） ===================== */
+    @media (max-width:900px){
+      .layout{flex-direction:column}
+      .sidebar{position:static;width:100%;flex:none}
+      .main{margin-left:0}
+      .nav{display:flex;flex-wrap:wrap;gap:6px}
+      .nav .label{width:100%}
+      .nav a.item{width:auto}
+      .container{padding:16px}
+      .topstrip{padding:13px 16px}
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===================== 左侧导航（原顶部板块统一移到此处） ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">
+        {% if logo_mark_url %}
+          <img src="{{ logo_mark_url }}" alt="海盈通保">
+        {% else %}
+          <!-- 兜底字标：橙色圆 + 白色海浪，取自品牌 LOGO 释义 -->
+          <svg viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="15" fill="#E6823C"/>
+            <path d="M4 19.5c3.2-3.4 6.4-3.4 9.6 0s6.4 3.4 9.6 0 4.8-3.4 4.8-3.4" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M4 24c3.2-3.4 6.4-3.4 9.6 0s6.4 3.4 9.6 0" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+          </svg>
+        {% endif %}
+      </div>
+      <div class="txt">
+        <b>海盈通保</b>
+        <span>OA MANAGEMENT SYSTEM</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="label">SYSTEM · 系统导航</div>
+      <a class="item {{ 'on' if request.path == '/' else '' }}" href="{{ url_for('home') }}">
+        <span class="nm">系统总览</span>
+      </a>
+      {# 层级菜单：一级系统 + 二级模块（纯中文，按当前用户权限过滤，由 menu_tree 注入） #}
+      {% for s in menu_tree %}
+      <div class="sys" data-key="{{ s.key }}">
+        <div class="sys-hd" onclick="this.parentNode.classList.toggle('open')">
+          <span class="nm">{{ s.name }}</span>
+          <span class="ar">▸</span>
+        </div>
+        <div class="sys-bd">
+          {% for m in s.subs %}
+          <a class="sub {{ 'on' if request.endpoint == m.url else '' }}" href="{{ url_for(m.url) }}">{{ m.name }}</a>
+          {% else %}
+          <div class="sub empty">（暂无可用模块）</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </nav>
+
+    <div class="side-foot">
+      <div class="row">
+        <span class="av">{{ (session.get('username') or '?')[:1]|upper }}</span>
+        <span>
+          <span class="un">{{ session.get('username') }}</span>
+          <span class="lv">{{ session.get('level_code') }} 级 · {{ session.get('level_name') }}</span>
+        </span>
+      </div>
+      <div style="margin-top:10px">
+        <a class="out" style="margin-top:0" href="{{ url_for('change_password') }}">修改密码</a><br>
+        <a class="out" style="margin-top:8px" href="{{ url_for('logout') }}">退出登录 →</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== 主内容 ===================== -->
+  <div class="main">
+    <div class="topstrip">
+      <button class="nav-toggle" id="navToggle" title="收起 / 展开左侧菜单" aria-label="收起或展开左侧菜单">☰</button>
+      <div>
+        <div class="ttl">{% block pagename %}{{ page_title }}{% endblock %}</div>
+        <div class="crumb">海盈通保OA管理系统</div>
+      </div>
+      <div class="badge">{{ session.get('level_code') }} 级 · {{ session.get('level_name') or '未分配职级' }}</div>
+    </div>
+
+    <div class="container">
+      {# 统一返回条：由 app.py 的 BACK_MAP 提供 back；顶层页（如系统总览）为 None，不显示 #}
+      {% if back %}
+        <a class="backbar" href="{{ back.url }}"><span class="arw">←</span>返回 {{ back.label }}</a>
+      {% endif %}
+
+      {# 一次性显示所有 flash 提示（如"公告已发布"）—— 十八改起统一走**弹出窗口** #}
+      {% include '_flash_modal.html' %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+  <!-- ===================== 企业微信内置浏览器适配（2026-09-28） =====================
+       仅在企业微信（UA 含 wxwork）内生效：加载 JS-SDK、禁用右上角分享菜单、
+       设置导航栏标题、把「返回」按钮改为关闭窗口（回到工作台）。普通浏览器不执行。 -->
+  <script>
+  (function () {
+    var ua = (navigator.userAgent || '').toLowerCase();
+    if (ua.indexOf('wxwork') === -1) return;  // 仅企业微信内置浏览器
+    var s = document.createElement('script');
+    s.src = 'https://res.wx.qq.com/open/js/jweixin-1.6.0.js';
+    s.onload = function () {
+      var pageUrl = location.href.split('#')[0];
+      fetch('/wecom/jssdk_config?url=' + encodeURIComponent(pageUrl))
+        .then(function (r) { return r.json(); })
+        .then(function (cfg) {
+          if (!cfg || cfg.errcode) { console.warn('wecom jssdk config fail', cfg); return; }
+          wx.config({ beta: true, debug: false, appId: cfg.appId,
+            timestamp: cfg.timestamp, nonceStr: cfg.nonceStr, signature: cfg.signature,
+            jsApiList: cfg.jsApiList });
+          wx.ready(function () {
+            wx.hideOptionMenu();                       // 禁用右上角转发/分享
+            try { wx.invoke('setNavigationBarTitle', { title: document.title }); } catch (e) {}
+            // 「返回」按钮：企业微信里关闭当前窗口，回到工作台
+            var backs = document.querySelectorAll('.backbar');
+            for (var i = 0; i < backs.length; i++) {
+              backs[i].addEventListener('click', function (e) { e.preventDefault(); wx.closeWindow(); });
+            }
+          });
+          wx.error(function (e) { console.warn('wx.error', e); });
+        })
+        .catch(function (e) { console.warn('wecom jssdk fetch fail', e); });
+    };
+    document.head.appendChild(s);
+  })();
+  </script>
+
+  <!-- ===================== 三十一改（2026-10-29）：数字框禁用滚轮改值 =====================
+       威哥：「填写佣金系数的对话框，滚动鼠标中间的轮子，文本框的数字依然可以变动，这个要取消掉」。
+       浏览器默认行为：<input type="number"> 聚焦时滚轮会加减数值（极易误改成错误值）。
+       做法：滚轮落在 number 输入框上就立刻失焦 —— 值不再变化，滚轮继续滚页面。
+       全站一份（base.html），所有页面的数字框统一生效。 -->
+  <script>
+  document.addEventListener('wheel', function (e) {
+    var el = e.target;
+    if (el && el.tagName === 'INPUT' && el.type === 'number' && document.activeElement === el) {
+      el.blur();
+    }
+  }, { passive: true });
+
+  /* ===================== 左侧菜单收起/展开 ===================== */
+  (function () {
+    var KEY = 'hy_nav_collapsed';
+    var b = document.body;
+    try { if (localStorage.getItem(KEY) === '1') b.classList.add('nav-collapsed'); } catch (e) {}
+    var btn = document.getElementById('navToggle');
+    if (btn) {
+      btn.addEventListener('click', function () {
+        b.classList.toggle('nav-collapsed');
+        try { localStorage.setItem(KEY, b.classList.contains('nav-collapsed') ? '1' : '0'); } catch (e) {}
+      });
+    }
+    // 当前页高亮项自动展开其父级系统
+    var cur = document.querySelector('.nav .sys-bd .sub.on');
+    if (cur) { var sys = cur.closest('.sys'); if (sys) sys.classList.add('open'); }
+  })();
+  </script>
+  <!-- ===================== 四十四改（2026-10-29）：AI 悬浮机器人 =====================
+       威哥：「核心业务管理系统右下角增加一个 AI 悬浮机器人」——打开 / 最小化 / 提问 /
+       发送 / 加载提示 / 消息滚动，并把产品合约协议读成待审草稿。
+       全站一份，登录后即渲染；面板逻辑在 templates/_ai_bot.html。 -->
+  {% include '_ai_bot.html' %}
+</body>
+</html>

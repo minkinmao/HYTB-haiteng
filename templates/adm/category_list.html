@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 行政分类设置{% endblock %}
+{% block pagename %}行政管理系统 · 行政分类设置{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<h2 style="font-size:18px;margin:0 0 6px">行政分类设置</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  这里维护的分类会出现在证照 / 合同 / 资产 / 办公用品 / 印章 / 费用 表单的下拉选项里。删除分类不影响已登记的台账记录。
+</div>
+
+{% for g in groups %}
+<div class="adm-card" style="margin-bottom:16px;padding:16px 18px">
+  <h3 style="font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px">
+    <span style="width:4px;height:14px;border-radius:2px;background:#E6823C;display:inline-block"></span>
+    {{ g.label }}
+    <span style="font-size:12px;color:#9C9288;font-weight:400">（共 {{ g['items']|length }} 项）</span>
+  </h3>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+    {% for c in g['items'] %}
+      <span class="adm-tag t-info" style="padding:5px 11px;font-size:12.5px">
+        {{ c.name }}
+        {% if can_edit %}
+        <form method="post" action="{{ url_for('adm.category_delete', cid=c.id) }}"
+              style="display:inline"
+              onsubmit="return confirm('删除分类「{{ c.name }}」？已登记的台账记录不受影响。')">
+          <button class="adm-del" type="submit" style="color:#4A6BB0;margin-left:6px;font-size:13px">×</button>
+        </form>
+        {% endif %}
+      </span>
+    {% else %}
+      <span style="color:#9C9288;font-size:13px">暂无分类</span>
+    {% endfor %}
+  </div>
+  {% if can_edit %}
+  <form method="post" action="{{ url_for('adm.category_new') }}" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input type="hidden" name="kind" value="{{ g.kind }}">
+    <input type="text" name="name" required placeholder="新增{{ g.label }}"
+           style="padding:8px 11px;border:1px solid #E2D8CA;border-radius:8px;font-size:13px;
+                  min-width:190px;background:#fff">
+    <input type="number" name="sort" value="99" title="排序（小的在前）"
+           style="padding:8px 11px;border:1px solid #E2D8CA;border-radius:8px;font-size:13px;
+                  width:84px;background:#fff">
+    <button class="adm-btn pri" type="submit">＋ 新增</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

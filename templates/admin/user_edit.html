@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% set page_title = '编辑绑定' %}
+{% block content %}
+<style>
+  .frm{max-width:520px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px}
+  .frm label{display:block;font-weight:600;margin-bottom:8px}
+  .frm input{width:100%;padding:11px 13px;margin-bottom:8px}
+  .frm .hint{color:var(--muted);font-size:12.5px;margin:0 0 18px}
+  .frm .row{display:flex;gap:12px;align-items:center}
+</style>
+<h2>编辑绑定：{{ u.username }}</h2>
+<form class="frm" method="post">
+  <label>企业微信 userid</label>
+  <input name="wecom_userid" value="{{ u.wecom_userid or '' }}" placeholder="如 zhangsan（通讯录账号，非昵称）">
+  <p class="hint">填员工的企微 userid 完成绑定；留空则解绑（之后需密码登录）。</p>
+  <div class="row">
+    <button class="btn" type="submit">保存</button>
+    <a href="{{ url_for('admin.users') }}" style="color:var(--brand-deep)">返回列表</a>
+  </div>
+</form>
+{% endblock %}

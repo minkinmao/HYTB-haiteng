@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}CRM · 新契约业务清单查询{% endblock %}
+{% block pagename %}核心业务管理系统 · 新契约业务清单查询{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .q-tool{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .q-tool .qbox{flex:1;min-width:150px}
+  .q-tool .qbox label{display:block;font-size:12px;color:#9C9288;margin-bottom:4px}
+  .q-tool .qbox input,.q-tool .qbox select{width:100%;padding:7px 9px;border:1px solid #EAE2D6;border-radius:8px;font-size:13px;box-sizing:border-box}
+  .q-acts{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+  .q-btn{padding:8px 16px;border-radius:10px;border:1px solid #EAE2D6;background:#fff;color:#9C4E2C;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;font-size:13px}
+  .q-btn.primary{background:#C86432;color:#fff;border-color:#C86432}
+  .q-btn:hover{opacity:.92}
+  .q-sum{font-size:13px;color:#7A4326;background:#FAF7F2;border:1px solid #EAE2D6;border-radius:8px;padding:6px 12px}
+  .src-tag{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px}
+  .src-tag.manual{background:#E7EFF6;color:#2C6CA8}
+  .src-tag.import{background:#F0E9DD;color:#7A4326}
+  table.po{width:100%;border-collapse:collapse;background:#fff;border:1px solid #EAE2D6;border-radius:10px;overflow:hidden;font-size:13px}
+  table.po th,table.po td{border-bottom:1px solid #F0E9DD;padding:7px 9px;text-align:left;white-space:nowrap}
+  table.po th{background:#F6E5DC;color:#7A4326;font-weight:600;position:sticky;top:0}
+  table.po td .sub{color:#9C9288;font-size:11px}
+  .tag{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px;background:#F0E9DD;color:#7A4326}
+  .tag.self{background:#FBE3D0;color:#B5531E}
+  .tag.mutual{background:#FBD9D2;color:#B5301E}
+  .tag.long{background:#E7EFF6;color:#2C6CA8}
+  .tag.short{background:#EAF4EA;color:#3C8C3C}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">新契约业务清单查询
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（手工录入 + Excel 导入 全量汇总 · 可筛选提取）</small>
+</h2>
+
+<div class="q-acts">
+  <a class="q-btn primary" href="{{ url_for('crm.policy_query_export') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}">⬇ 导出 Excel</a>
+  <a class="q-btn" href="{{ url_for('crm.policy_orders') }}">前往录入 / 导入</a>
+  <span class="q-sum">共 <b>{{ rows|length }}</b> 条</span>
+</div>
+
+<form class="q-tool" method="get" action="{{ url_for('crm.policy_query') }}">
+  <div class="qbox"><label>关键字</label><input name="kw" value="{{ kw }}" placeholder="单号/姓名/产品/编码"></div>
+  <div class="qbox"><label>保险公司</label>
+    <select name="ins"><option value="">全部</option>
+      {% for i in insurers %}<option value="{{ i }}" {{ 'selected' if i==ins else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>代理人工号</label><input name="no" value="{{ no }}" placeholder="代理人工号"></div>
+  <div class="qbox"><label>省公司</label>
+    <select name="ap"><option value="">全部</option>
+      {% for i in provinces %}<option value="{{ i }}" {{ 'selected' if i==ap else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>分支</label>
+    <select name="ab"><option value="">全部</option>
+      {% for i in branches %}<option value="{{ i }}" {{ 'selected' if i==ab else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>产品</label>
+    <select name="pn"><option value="">全部</option>
+      {% for i in products %}<option value="{{ i }}" {{ 'selected' if i==pn else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>险种</label>
+    <select name="it"><option value="">全部</option>
+      {% for i in itypes %}<option value="{{ i }}" {{ 'selected' if i==it else '' }}>{{ i }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>自互保件</label>
+    <select name="sf"><option value="">全部</option>
+      {% for c,n in self_flags %}<option value="{{ c }}" {{ 'selected' if c==sf else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>长短险</label>
+    <select name="lf"><option value="">全部</option>
+      {% for c,n in ls_flags %}<option value="{{ c }}" {{ 'selected' if c==lf else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>缴费方式</label>
+    <select name="pm"><option value="">全部</option>
+      {% for c,n in pay_methods %}<option value="{{ c }}" {{ 'selected' if c==pm else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>险种状态</label>
+    <select name="rs"><option value="">全部</option>
+      {% for c,n in risk_status %}<option value="{{ c }}" {{ 'selected' if c==rs else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>数据来源</label>
+    <select name="ds"><option value="">全部</option>
+      {% for c,n in src_map %}<option value="{{ c }}" {{ 'selected' if c==ds else '' }}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="qbox"><label>投保日期起</label><input type="date" name="dstart" value="{{ dstart }}"></div>
+  <div class="qbox"><label>投保日期止</label><input type="date" name="dend" value="{{ dend }}"></div>
+  <button class="q-btn primary" type="submit">查询</button>
+  <a class="q-btn" href="{{ url_for('crm.policy_query') }}">重置</a>
+</form>
+
+<div style="overflow:auto">
+<table class="po">
+  <thead>
+    <tr>
+      <th>订单号</th><th>数据来源</th><th>投保日期</th><th>代理人(工号)</th><th>省公司</th><th>分支</th>
+      <th>投保人</th><th>被保人</th><th>保险公司</th><th>产品</th><th>险种</th>
+      <th>规模保费</th><th>行业标保</th><th>佣金</th><th>受理件数</th>
+      <th>长短险</th><th>自互保件</th><th>缴费方式</th><th>缴费年期</th><th>险种状态</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.code }}</td>
+      <td>{% if r.src=='manual' %}<span class="src-tag manual">手工录入</span>{% elif r.src=='import' %}<span class="src-tag import">Excel导入</span>{% else %}{{ r.src or '-' }}{% endif %}</td>
+      <td>{{ r.apply_date or '-' }}</td>
+      <td>{{ r.agent_name or '-' }}<div class="sub">{{ r.agent_no or '' }}</div></td>
+      <td>{{ r.agent_province or '-' }}</td>
+      <td>{{ r.agent_branch or '-' }}</td>
+      <td>{{ r.app_name or '-' }}<div class="sub">{{ r.app_code or '' }}</div></td>
+      <td>{{ r.ins_name or '-' }}<div class="sub">{{ r.ins_code or '' }}</div></td>
+      <td>{{ r.insurer_name or '-' }}</td>
+      <td>{{ r.product_name or '-' }}</td>
+      <td>{{ r.insurance_type or '-' }}</td>
+      <td class="num">{{ '%.2f' % r.scale_premium if r.scale_premium else '-' }}</td>
+      <td class="num">{{ '%.2f' % r.industry_std_premium if r.industry_std_premium else '-' }}</td>
+      <td class="num">{{ '%.2f' % r.commission if r.commission else '-' }}</td>
+      <td>{{ r.accept_count }}</td>
+      <td>{% if r.ls_flag %}<span class="tag {{ r.ls_flag }}">{{ '长期险' if r.ls_flag=='long' else '短期险' }}</span>{% else %}-{% endif %}</td>
+      <td>{% if r.self_policy_flag %}<span class="tag {{ r.self_policy_flag }}">{{ '互保件' if r.self_policy_flag=='mutual' else '自保件' }}</span>{% else %}否{% endif %}</td>
+      <td>{{ nm_pay.get(r.pay_method, '') }}</td>
+      <td>{{ r.pay_years or '-' }}</td>
+      <td>{{ r.policy_risk_status or '-' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="20" style="text-align:center;color:#9C9288;padding:24px">暂无符合条件的投保订单记录</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

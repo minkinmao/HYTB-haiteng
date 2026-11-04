@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% block title %}{{ tpl.name }} · 海盈通保{% endblock %}
+{% block pagename %}FMS · 报表中心{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">{{ tpl.name }}
+    <span style="font-size:13px;font-weight:400;color:#9C9288">
+      {{ tpl.category_cn }}{% if tpl.is_system %} · 系统内置{% endif %}
+    </span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+    {% if tpl.is_system %}
+      这是系统内置报表。想改口径请用下面的「编辑公式」——<b style="color:#5C554D">保存时会自动另存为一份自定义报表</b>，内置的保持原样，
+      这样别人对表时口径永远一致。
+    {% else %}
+      自定义报表。每个行项目挂一条取数公式，改完保存即时重算。
+    {% endif %}
+    {% if tpl.note %}<br>说明：{{ tpl.note }}{% endif %}
+  </div>
+
+  {# 期间切换 + 导出 #}
+  <div class="card" style="padding:14px 18px;margin-bottom:16px">
+    <form method="get" action="{{ url_for('fin.report_custom', tid=tpl.id) }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <label style="font-size:12.5px;color:#5C554D">
+        <div style="margin-bottom:4px">会计期间</div>
+        <input type="month" name="period" value="{{ period }}" style="padding:7px 10px;width:150px">
+      </label>
+      <button type="submit" class="btn" style="padding:8px 18px">切换期间</button>
+      <a href="{{ url_for('fin.report_export', kind='custom', tid=tpl.id, period=period) }}"
+         style="font-size:13px;color:#C86432;border:1px solid #E9D9C6;border-radius:8px;
+                padding:8px 16px;text-decoration:none;background:#FCFAF7">导出 Excel</a>
+      {% if can_design and not tpl.is_system %}
+      <form method="post" action="{{ url_for('fin.report_delete', tid=tpl.id) }}"
+            style="display:inline" onsubmit="return confirm('确认删除报表「{{ tpl.name }}」？删除后不可恢复');">
+        <button type="submit" style="background:none;border:1px solid #E9C9C9;border-radius:8px;
+                padding:8px 16px;font-size:13px;color:#991b1b;cursor:pointer">删除报表</button>
+      </form>
+      {% endif %}
+    </form>
+  </div>
+
+  {# 报表主体 #}
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead>
+        <tr style="background:#F7F3EC;color:#6B5D4F">
+          <th style="padding:10px 12px;font-size:12.5px;width:56px;border-bottom:1px solid #EAE2D6">行次</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:left;border-bottom:1px solid #EAE2D6">项目</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:right;width:150px;border-bottom:1px solid #EAE2D6">本期金额</th>
+          <th style="padding:10px 12px;font-size:12.5px;text-align:right;width:150px;border-bottom:1px solid #EAE2D6">本年累计金额</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% if r.head %}
+        <tr style="background:#FAF7F2">
+          <td></td>
+          <td colspan="3" style="padding:8px 12px;font-weight:600;color:#6B5D4F;font-size:12.5px">{{ r.label }}</td>
+        </tr>
+        {% else %}
+        <tr style="{{ 'border-top:1.5px solid #C86432;font-weight:700;background:#FFFDFA' if r.total else '' }}">
+          <td style="padding:8px 12px;text-align:center;color:#9C9288;font-size:12px">{{ r.line or '' }}</td>
+          <td style="padding:8px 12px{% if r.label.startswith('减：') %};padding-left:24px;color:#6B5D4F{% elif r.label.startswith('加：') %};padding-left:24px;color:#6B5D4F{% endif %}">
+            {{ r.label }}
+          </td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;
+                     {{ 'color:#C86432' if r.total else '' }}">{{ '{:,.2f}'.format(r.value) }}</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;
+                     color:{{ '#C86432' if r.total else '#6B5D4F' }}">{{ '{:,.2f}'.format(r.value_b) }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        {% if not rows %}
+        <tr><td colspan="4" style="padding:40px 12px;text-align:center;color:#C0B6A8">
+          这张报表还没有行项目，用下面的「编辑公式」加几行。
+        </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {# 公式编辑区 #}
+  {% if can_design %}
+  <div class="card" style="padding:0;margin-bottom:16px;overflow:hidden">
+    <details>
+      <summary style="padding:13px 18px;cursor:pointer;font-size:13.5px;font-weight:600;color:#5C554D;
+                      background:#FCFAF7;list-style:none">
+        编辑公式 <span style="font-weight:400;color:#9C9288;font-size:12.5px">
+          （支持 QC/QM/DF/CF/BF/LF 六个取数函数 + 加减与括号）</span>
+      </summary>
+      <form method="post" action="{{ url_for('fin.report_save', tid=tpl.id) }}" style="padding:16px 18px">
+        <label style="display:block;font-size:12.5px;color:#5C554D;margin-bottom:10px">
+          <div style="margin-bottom:4px">报表名称</div>
+          <input type="text" name="name" value="{{ tpl.name }}" style="padding:7px 10px;width:280px">
+        </label>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead>
+            <tr style="background:#F7F3EC;color:#6B5D4F">
+              <th style="padding:7px 8px;width:56px;text-align:left">行次</th>
+              <th style="padding:7px 8px;text-align:left;width:24%">项目名称</th>
+              <th style="padding:7px 8px;text-align:left">取数公式</th>
+              <th style="padding:7px 8px;text-align:left;width:18%">备注</th>
+              <th style="padding:7px 8px;width:52px"></th>
+            </tr>
+          </thead>
+          <tbody id="editBody">
+            {% for r in tpl.rows_list %}
+            <tr>
+              <td style="padding:4px 6px">
+                <input name="line[]" value="{{ r.line or '' }}" style="width:100%;padding:5px 6px">
+              </td>
+              <td style="padding:4px 6px">
+                <input name="label[]" value="{{ r.label or '' }}" style="width:100%;padding:5px 6px">
+              </td>
+              <td style="padding:4px 6px">
+                <input name="formula[]" value="{{ r.formula or '' }}"
+                       style="width:100%;padding:5px 6px;font-family:ui-monospace,Consolas,monospace">
+              </td>
+              <td style="padding:4px 6px">
+                <input name="note[]" value="{{ r.note or '' }}" style="width:100%;padding:5px 6px">
+              </td>
+              <td style="padding:4px 6px;text-align:center">
+                <input type="hidden" name="side[]" value="{{ r.side or '' }}">
+                <input type="hidden" name="total[]" value="{{ '1' if r.total else '0' }}">
+                <button type="button" onclick="this.closest('tr').remove()"
+                        style="background:none;border:none;color:#991b1b;cursor:pointer;font-size:12.5px">删</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+          <button type="button" onclick="addRepRow()"
+                  style="background:#FCFAF7;border:1px solid #E2D8CA;border-radius:8px;padding:7px 16px;
+                         font-size:13px;color:#5C554D;cursor:pointer">＋ 加一行</button>
+          <button type="submit" class="btn" style="padding:8px 22px">
+            {{ '另存为自定义报表' if tpl.is_system else '保存公式' }}
+          </button>
+        </div>
+        <div style="margin-top:10px;font-size:12.5px;color:#9C9288;line-height:1.9">
+          ① 项目名称<b>以「：」结尾</b>视为分类小标题（不算数）；
+          ② 公式里只写<b>一级科目</b>，明细科目系统已自动汇总到一级；
+          ③ 公式写错（括号不配对、科目不存在、乱写字符）不会报错，该行按 <b>0</b> 显示，改回来即可。
+        </div>
+      </form>
+    </details>
+  </div>
+  {% endif %}
+
+  <div class="card" style="padding:16px 18px">
+    <div style="font-size:13.5px;font-weight:600;margin-bottom:8px">取数函数</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for fn, cn in func_cn.items() %}
+      <div style="font-size:12.5px;background:#FCFAF7;border:1px solid #EAE2D6;border-radius:6px;padding:6px 12px">
+        <b style="color:#C86432">{{ fn }}(编码)</b> <span style="color:#6B5D4F">{{ cn }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:10px;font-size:12.5px;color:#9C9288">
+      不记得科目编码？开「账务管理 → 会计科目」查一下，科目编码就是公式里的参数。
+    </div>
+  </div>
+
+  <script>
+    function addRepRow() {
+      var tb = document.getElementById('editBody');
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td style="padding:4px 6px"><input name="line[]" style="width:100%;padding:5px 6px"></td>'
+        + '<td style="padding:4px 6px"><input name="label[]" style="width:100%;padding:5px 6px"></td>'
+        + '<td style="padding:4px 6px"><input name="formula[]" style="width:100%;padding:5px 6px;'
+        + 'font-family:ui-monospace,Consolas,monospace"></td>'
+        + '<td style="padding:4px 6px"><input name="note[]" style="width:100%;padding:5px 6px"></td>'
+        + '<td style="padding:4px 6px;text-align:center">'
+        + '<input type="hidden" name="side[]" value=""><input type="hidden" name="total[]" value="0">'
+        + '<button type="button" onclick="this.closest(\'tr\').remove()" '
+        + 'style="background:none;border:none;color:#991b1b;cursor:pointer;font-size:12.5px">删</button></td>';
+      tb.appendChild(tr);
+    }
+  </script>
+{% endblock %}

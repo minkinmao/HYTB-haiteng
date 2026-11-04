@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}OA · 邮件详情{% endblock %}
+{% block content %}
+
+<div style="background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:20px 24px;box-shadow:0 2px 12px rgba(42,42,42,.05)">
+  <h2 style="font-size:18px;margin:0 0 8px">{{ mail.title }}</h2>
+  <div style="font-size:13px;color:#9C9288;padding-bottom:14px;border-bottom:1px solid #F3EDE3">
+    发件人：{{ mail.sender.username if mail.sender else '未知' }}
+    ｜ 收件人：{{ mail.recipient.username if mail.recipient else '未知' }}
+    ｜ {{ mail.created_at.strftime('%Y-%m-%d %H:%M') if mail.created_at else '' }}
+  </div>
+  <div style="font-size:14px;color:#2A2A2A;line-height:1.8;padding:16px 0;white-space:pre-wrap">{{ mail.content or '（无正文）' }}</div>
+</div>
+
+{% endblock %}

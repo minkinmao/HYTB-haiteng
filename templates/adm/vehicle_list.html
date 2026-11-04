@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 车辆管理{% endblock %}
+{% block pagename %}行政管理系统 · 车辆管理{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+
+<style>
+  /* 车辆管理专用：KPI 卡 + 车牌样式（页内样式，不影响其他台账） */
+  .veh-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-bottom:16px}
+  .veh-kpi{background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:14px 18px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05);min-width:0}
+  .veh-kpi .k{font-size:12.5px;color:#9C9288}
+  .veh-kpi .v{font-size:20px;font-weight:700;margin-top:4px;color:#C86432;
+              font-variant-numeric:tabular-nums;white-space:nowrap}
+  .veh-kpi .v.g{color:#166534}
+  .veh-kpi .v.r{color:#991b1b}
+  .veh-plate{font-size:14.5px;font-weight:700;color:#2A2A2A;letter-spacing:.5px}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">车辆管理
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（车辆档案 / 保险与年检到期提醒 / 保养维修用车登记）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  登记公司车辆档案，系统按<b>保险到期日</b>与<b>年检到期日</b>自动提醒（临期 / 过期）；
+  点车牌进入车辆详情，登记保养 / 维修 / 违章 / 用车动态。车辆费用报销走 OA 申请中心，固定资产记账走财务系统。
+</div>
+
+{# ---------- KPI（车辆全量，不受筛选影响） ---------- #}
+<div class="veh-kpis">
+  <div class="veh-kpi">
+    <div class="k">在管车辆</div>
+    <div class="v">{{ total_n }} 辆</div>
+  </div>
+  <div class="veh-kpi">
+    <div class="k">在用</div>
+    <div class="v g">{{ in_use_n }} 辆</div>
+  </div>
+  <div class="veh-kpi">
+    <div class="k">保险待办</div>
+    <div class="v {{ 'r' if ins_n else '' }}">{{ ins_n }} 辆</div>
+  </div>
+  <div class="veh-kpi">
+    <div class="k">年检待办</div>
+    <div class="v {{ 'r' if insp_n else '' }}">{{ insp_n }} 辆</div>
+  </div>
+</div>
+
+{# ---------- 筛选条 ---------- #}
+<form class="adm-tool" method="get">
+  <label>关键词</label>
+  <input type="text" name="kw" value="{{ kw }}" placeholder="车牌 / 名称 / 品牌 / 责任人">
+  <label>车辆类型</label>
+  <select name="cat">
+    <option value="">全部</option>
+    {% for c in cats %}<option value="{{ c }}" {{ 'selected' if c == cat else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <label>状态 / 提醒</label>
+  <select name="st">
+    <option value="">全部</option>
+    {% for v, lb in statuses %}<option value="{{ v }}" {{ 'selected' if v == st else '' }}>{{ lb }}</option>{% endfor %}
+    <option value="alert" {{ 'selected' if st == 'alert' else '' }}>保险 / 年检临期或过期</option>
+  </select>
+  <button class="adm-btn pri" type="submit">查询</button>
+  <a class="adm-btn" href="{{ url_for('adm.vehicles') }}">重置</a>
+  <span class="adm-spacer"></span>
+  {% if can_edit %}<a class="adm-btn dark" href="{{ url_for('adm.vehicle_new') }}">＋ 登记车辆</a>{% endif %}
+</form>
+
+{% if alert_n %}
+<div style="background:#FDF3E4;border:1px solid #F0D9B8;color:#8A5A18;border-radius:10px;
+            padding:10px 16px;font-size:13px;margin-bottom:14px">
+  到期提醒：共 <b>{{ alert_n }}</b> 辆车的保险或年检已过期或 30 天内到期，请及时办理。
+</div>
+{% endif %}
+
+{# ---------- 车辆列表 ---------- #}
+<div class="adm-card">
+  {% if items %}
+  <table class="adm-table">
+    <thead>
+      <tr>
+        <th>编号</th><th>车牌号 / 车辆</th><th>类型</th><th>责任人</th><th>里程（km）</th>
+        <th>保险到期</th><th>年检到期</th><th>状态</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="mono">{{ it.r.code }}</td>
+        <td>
+          <div class="veh-plate">
+            <a class="adm-a" href="{{ url_for('adm.vehicle_detail', vid=it.r.id) }}">{{ it.r.plate_no or '未填车牌' }}</a>
+          </div>
+          <div class="adm-sub">
+            {{ it.r.name or '—' }}{% if it.r.brand %}｜{{ it.r.brand }}{% endif %}
+          </div>
+        </td>
+        <td>{{ it.r.kind or '—' }}</td>
+        <td>
+          {{ it.r.keeper or '—' }}
+          {% if it.r.dept %}<div class="adm-sub">{{ it.r.dept }}</div>{% endif %}
+        </td>
+        <td class="num">{{ '{:,.0f}'.format(it.r.mileage or 0) }}</td>
+        <td>
+          {% if not it.r.insurance_expire %}<span style="color:#C9C0B4">未登记</span>
+          {% elif it.ins[0] == 'expired' %}<span class="adm-tag t-danger">已过期 {{ -it.ins[1] }} 天</span>
+          {% elif it.ins[0] == 'danger' %}<span class="adm-tag t-danger">{{ it.ins[1] }} 天后到期</span>
+          {% elif it.ins[0] == 'warn' %}<span class="adm-tag t-warn">{{ it.ins[1] }} 天后到期</span>
+          {% else %}<span class="adm-tag t-ok">{{ it.ins[1] }} 天后到期</span>{% endif %}
+          {% if it.r.insurer %}<div class="adm-sub">{{ it.r.insurer }}</div>{% endif %}
+        </td>
+        <td>
+          {% if not it.r.inspect_expire %}<span style="color:#C9C0B4">未登记</span>
+          {% elif it.insp[0] == 'expired' %}<span class="adm-tag t-danger">已过期 {{ -it.insp[1] }} 天</span>
+          {% elif it.insp[0] == 'danger' %}<span class="adm-tag t-danger">{{ it.insp[1] }} 天后到期</span>
+          {% elif it.insp[0] == 'warn' %}<span class="adm-tag t-warn">{{ it.insp[1] }} 天后到期</span>
+          {% else %}<span class="adm-tag t-ok">{{ it.insp[1] }} 天后到期</span>{% endif %}
+        </td>
+        <td>
+          {% set sm = {'in_use': ('t-ok', '在用'), 'idle': ('t-gray', '闲置'),
+                       'repair': ('t-warn', '维修中'), 'disposed': ('t-danger', '已处置')} %}
+          {% set s = sm.get(it.r.status, ('t-gray', it.r.status)) %}
+          <span class="adm-tag {{ s[0] }}">{{ s[1] }}</span>
+        </td>
+        <td class="mono" style="white-space:nowrap">
+          <a class="adm-a" href="{{ url_for('adm.vehicle_detail', vid=it.r.id) }}">详情 / 动态</a>
+          {% if it.r.file_path %}
+          <a class="adm-a" href="{{ url_for('adm.vehicle_file', vid=it.r.id) }}" style="margin-left:8px">证件</a>
+          {% endif %}
+          {% if can_edit %}
+          <a class="adm-a" href="{{ url_for('adm.vehicle_edit', vid=it.r.id) }}" style="margin-left:8px">编辑</a>
+          <form method="post" action="{{ url_for('adm.vehicle_delete', vid=it.r.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('确定删除车辆「{{ it.r.plate_no }}」？该车的全部动态记录与附件会一并删除。')">
+            <button class="adm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="adm-empty">该条件下暂无车辆。{% if can_edit %}点右上角「＋ 登记车辆」开始建档。{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

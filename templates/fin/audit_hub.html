@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block pagename %}数据体检{% endblock %}
+
+{% block content %}
+<style>
+  .audit-wrap{max-width:1680px;margin:18px auto;padding:0 16px}
+  .summary-bar{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 18px}
+  .summary-bar .box{flex:1;min-width:150px;background:#FAF7F2;border:1px solid #EAE2D6;border-radius:10px;padding:14px 16px}
+  .summary-bar .box .n{font-size:26px;font-weight:700;line-height:1}
+  .summary-bar .box .t{color:#8a7f70;font-size:13px;margin-top:6px}
+  .summary-bar .ok .n{color:#2e8b57}
+  .summary-bar .warn .n{color:#C86432}
+  .summary-bar .err .n{color:#c0392b}
+  .check-card{background:#fff;border:1px solid #EAE2D6;border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .check-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .check-head .nm{font-weight:700;color:#2A2A2A;font-size:16px}
+  .badge{padding:3px 12px;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap}
+  .badge.ok{background:#e6f4ea;color:#2e8b57}
+  .badge.warn{background:#fbeee2;color:#C86432}
+  .badge.err{background:#fbe3e0;color:#c0392b}
+  .check-hint{color:#8a7f70;font-size:13px;margin:8px 0 10px}
+  .sample{display:flex;justify-content:space-between;gap:12px;padding:7px 10px;border-radius:8px;background:#FAF7F2;margin-bottom:6px;font-size:14px}
+  .sample .lb{color:#2A2A2A}
+  .sample .vl{color:#2A2A2A;font-family:monospace;text-align:right}
+  .empty{color:#2e8b57;font-size:14px;padding:8px 0}
+  .period-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .period-row input{padding:8px 10px;border:1px solid #EAE2D6;border-radius:8px;background:#fff;color:#2A2A2A}
+  .btn{display:inline-block;padding:8px 18px;background:#C86432;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;text-decoration:none}
+  .btn:hover{background:#E6823C}
+</style>
+
+<div class="audit-wrap">
+  <div class="period-row">
+    <form method="get" action="{{ url_for('fin.audit_hub') }}">
+      <label style="color:#2A2A2A;font-size:14px">会计期间：</label>
+      <input type="month" name="period" value="{{ period }}" min="2026-01" max="2099-12">
+      <button type="submit" class="btn">重新体检</button>
+    </form>
+  </div>
+
+  <div class="summary-bar">
+    <div class="box ok"><div class="n">{{ data.summary.total - data.summary.err - data.summary.warn }}</div><div class="t">通过项</div></div>
+    <div class="box warn"><div class="n">{{ data.summary.warn }}</div><div class="t">警告项</div></div>
+    <div class="box err"><div class="n">{{ data.summary.err }}</div><div class="t">错误项</div></div>
+  </div>
+
+  {% for c in data.checks %}
+  <div class="check-card">
+    <div class="check-head">
+      <span class="nm">{{ c.name }}</span>
+      <span class="badge {{ c.level }}">{% if c.level=='ok' %}通过{% elif c.level=='warn' %}警告 {{ c.count }}{% else %}错误 {{ c.count }}{% endif %}</span>
+    </div>
+    <div class="check-hint">{{ c.hint }}</div>
+    {% if c.samples %}
+      {% for s in c.samples %}
+      <div class="sample"><span class="lb">{{ s.label }}</span><span class="vl">{{ s.val }}</span></div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">✓ 未发现异常</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

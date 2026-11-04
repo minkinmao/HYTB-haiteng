@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}账务管理 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 账务管理{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">账务管理 <span style="font-size:13px;font-weight:400;color:#9C9288">Accounting</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    财务系统的主线：先在账套里定好口径，再建科目表，然后期初建账 → 录凭证 → 审核记账 → 出账簿与报表 → 期末结转结账。
+    已落地「账套设置 + 会计科目表 + 期初建账 + 记账凭证 + 凭证流转 + 账簿查询 + 期末结转与结账」全套闭环，
+    报表中心（三大报表）在 FMS 首页单独入口。
+  </div>
+
+  {# 概览统计 #}
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+    {% set cards = [
+      ('科目总数', stats.total, '#C9902A'),
+      ('一级科目', stats.top, '#E6823C'),
+      ('可做分录的明细科目', stats.leaf, '#166534'),
+      ('已停用', stats.disabled, '#991b1b'),
+    ] %}
+    {% for name, val, color in cards %}
+    <div style="flex:1;min-width:120px;background:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05);border-top:2px solid {{ color }}">
+      <div style="font-size:12px;color:#9C9288">{{ name }}</div>
+      <div style="font-size:22px;font-weight:700;color:{{ color }};margin-top:4px">{{ val }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# 当前账套口径 #}
+  <div style="background:#fff;border-radius:8px;padding:16px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:600">当前账套口径</div>
+      <a href="{{ url_for('fin.config') }}" style="font-size:12.5px;color:#C86432">账套设置 →</a>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;font-size:13px;color:#5C554D">
+      <div>核算主体：<b style="color:#2A2A2A">{{ cfg.company_name or '—' }}</b></div>
+      <div>会计制度：<b style="color:#2A2A2A">{{ '小企业会计准则' if cfg.standard == 'small' else '企业会计准则' }}</b></div>
+      <div>纳税人身份：<b style="color:#2A2A2A">{{ '一般纳税人' if cfg.taxpayer == 'general' else '小规模纳税人' }}</b></div>
+      <div>启用期间：<b style="color:#2A2A2A">{{ cfg.start_period or '—' }}</b></div>
+      <div>凭证字别：<b style="color:#2A2A2A">{{ cfg.voucher_types or '—' }}</b></div>
+    </div>
+  </div>
+
+  {# 子功能入口 #}
+  <div style="background:#fff;border-radius:8px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">功能入口</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <a href="{{ url_for('fin.accounts') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Account</span> · 会计科目
+        <span style="font-size:11px;color:#9C9288">（科目表增删改查、启停、辅助核算）</span>
+      </a>
+      <a href="{{ url_for('fin.config') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Ledger</span> · 账套设置
+      </a>
+      <a href="{{ url_for('fin.opening') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Opening</span> · 期初建账
+        <span style="font-size:11px;color:{{ '#166534' if cfg.opening_done else '#9C9288' }}">
+          （{{ '已建账 ' + (cfg.start_period or '') if cfg.opening_done else '期初余额录入 + 试算平衡' }}）</span>
+      </a>
+      <a href="{{ url_for('fin.vouchers') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Voucher</span> · 记账凭证
+        <span style="font-size:11px;color:{{ '#166534' if cfg.opening_done else '#9C9288' }}">
+          （{{ '多分录录入、借贷平衡校验' if cfg.opening_done else '需先完成期初建账' }}）</span>
+      </a>
+      <a href="{{ url_for('fin.vouchers', status='draft', period='all') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Flow</span> · 凭证审核记账
+        <span style="font-size:11px;color:{{ '#8A5A18' if (stats.vch_pending_audit or stats.vch_pending_post) else '#9C9288' }}">
+          （待审核 {{ stats.vch_pending_audit }} ｜ 待记账 {{ stats.vch_pending_post }} ｜ 已记账 {{ stats.vch_posted }}）</span>
+      </a>
+      <a href="{{ url_for('fin.ledger_hub') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Book</span> · 账簿查询
+        <span style="font-size:11px;color:{{ '#166534' if stats.vch_posted else '#9C9288' }}">
+          （{{ '科目余额表、明细账、现金银行日记账' if stats.vch_posted else '暂无已记账凭证，账还是空的' }}）</span>
+      </a>
+      <a href="{{ url_for('fin.report_hub') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Report</span> · 报表中心
+        <span style="font-size:11px;color:{{ '#166534' if stats.vch_posted else '#9C9288' }}">
+          （{{ '资产负债表、利润表、现金流量表简版' if stats.vch_posted else '暂无已记账凭证，报表还是空的' }}）</span>
+      </a>
+      <a href="{{ url_for('fin.closing') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Close</span> · 期末结转与结账
+        <span style="font-size:11px;color:{{ '#8A5A18' if stats.closed_periods else '#9C9288' }}">
+          （{{ '已结账 %d 期' % stats.closed_periods if stats.closed_periods else '结转损益到本年利润、期间锁定' }}）</span>
+      </a>
+      <a href="{{ url_for('fin.invoices') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Invoice</span> · 发票台账
+        <span style="font-size:11px;color:#9C9288">（进项/销项 + 认证抵扣 + 增值税测算）</span>
+      </a>
+      <a href="{{ url_for('fin.auto_book') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Auto</span> · 自动记账
+        <span style="font-size:11px;color:#9C9288">（佣金/工资/奖金池/报销/发票 汇总生成凭证）</span>
+      </a>
+
+      <a href="{{ url_for('fin.fin_audit') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Audit</span> · 操作审计
+        <span style="font-size:11px;color:#9C9288">（凭证/结账/发票/自动记账/备份 关键操作留痕）</span>
+      </a>
+      <a href="{{ url_for('fin.fin_backup') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Backup</span> · 数据备份
+        <span style="font-size:11px;color:#9C9288">（一键备份库文件快照 / 恢复）</span>
+      </a>
+    </div>
+  </div>
+{% endblock %}

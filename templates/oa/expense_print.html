@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block title %}OA · 打印单据{% endblock %}
+{% block content %}
+<style>
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+           background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:16px 20px;margin-bottom:18px;
+           box-shadow:0 2px 12px rgba(42,42,42,.05)}
+  .toolbar .tt{font-size:14px;font-weight:600;margin-bottom:4px}
+  .toolbar .ds{font-size:12.5px;color:#9C9288}
+  .btn-main{padding:10px 20px;border-radius:9px;border:none;cursor:pointer;font:inherit;font-size:13.5px;
+            font-weight:600;background:#E6823C;color:#fff}
+  .btn-main:hover{background:#C86432}
+  .btn-ghost{padding:10px 18px;border-radius:9px;border:1px solid #EAE2D6;background:#fff;color:#6B5D4F;
+             font:inherit;font-size:13.5px;cursor:pointer}
+  .paper{background:#EDE8E0;padding:18px;border-radius:12px;border:1px solid #DCD3C5}
+  .paper .tip{font-size:11.5px;color:#8A8177;text-align:center;margin-bottom:10px}
+  /* ---------- A4 单据 ---------- */
+  .doc{background:#fff;border:1px solid #BFB6A9;border-radius:4px;padding:24px 26px;margin-bottom:18px;
+       color:#111;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .doc .co{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #333;
+           padding-bottom:8px;margin-bottom:4px}
+  .doc .co .nm3{font-size:15px;font-weight:700;letter-spacing:1px}
+  .doc .co .sm{font-size:11px;color:#666}
+  .doc h2{text-align:center;font-size:19px;letter-spacing:6px;margin:12px 0 3px;font-weight:700}
+  .doc .sub{text-align:center;font-size:11.5px;color:#666;margin-bottom:12px}
+  .doc table{width:100%;border-collapse:collapse;font-size:12.5px;border:1px solid #8A8177;margin-top:8px}
+  .doc th,.doc td{border:1px solid #8A8177;padding:6px 8px;background:#fff;color:#111}
+  .doc th{background:#F3EFE8;color:#333;font-weight:600;text-align:center;font-size:12px}
+  .doc .lb{background:#F7F4EF;color:#444;text-align:center;width:82px;font-size:12px}
+  .doc .rt2{text-align:right;font-variant-numeric:tabular-nums}
+  .doc .ctr{text-align:center}
+  .doc .sig{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px 16px;margin-top:14px;
+            font-size:12.5px;color:#333}
+  .doc .sign{display:flex;align-items:flex-end;gap:6px;padding:6px 0;border-bottom:1px dotted #999;min-height:34px}
+  .doc .sign .lbl{color:#666;flex:none}
+  .doc .cap{font-size:13.5px;font-weight:700;text-align:right;margin-top:10px}
+  .doc .foot{font-size:11.5px;color:#666;margin-top:10px}
+  @media print{
+    .sidebar,.topstrip,.backbar,.toolbar,.paper .tip{display:none !important}
+    .main{margin-left:0 !important}
+    .container{max-width:none !important;padding:0 !important}
+    .paper{background:#fff;padding:0;border:none;border-radius:0}
+    body{background:#fff}
+    .doc{border:none;box-shadow:none;page-break-after:always;padding:0}
+    .doc:last-child{page-break-after:auto}
+  }
+</style>
+
+<div class="toolbar">
+  <div>
+    <div class="tt">打印与装订</div>
+    <div class="ds">
+      共 {{ pages }} 页：{% if claim %}费用申请单 → {% endif %}费用报销单 → 票据附件封面。
+      建议选择 A4 纵向、缩放 100%，按顺序装订归档。
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn-main" onclick="window.print()">🖨 合并打印（{{ pages }} 页）</button>
+    <button class="btn-ghost" onclick="window.print()">仅打印报销单</button>
+  </div>
+</div>
+
+<div class="paper">
+  <div class="tip">↓ 以下为 A4 打印效果（打印时自动隐藏左侧导航与按钮）</div>
+
+  {% if claim %}
+  <!-- ============ 第 1 页 · 费用申请单 ============ -->
+  <div class="doc">
+    <div class="co">
+      <div>
+        <div class="nm3">广东海盈通保智能科技有限公司</div>
+        <div class="sm">GUANGDONG HAIYING TONGBAO INTELLIGENT TECHNOLOGY CO., LTD.</div>
+      </div>
+      <div class="sm" style="text-align:right">
+        单据编号：{{ claim.code }}<br>
+        申请日期：{{ claim.created_at.strftime('%Y-%m-%d') if claim.created_at else '' }}
+      </div>
+    </div>
+    <h2>费 用 申 请 单</h2>
+    <div class="sub">（第 1 页 / 共 {{ pages }} 页）&nbsp;&nbsp;编号 {{ claim.code }}</div>
+    <table>
+      <tbody>
+        <tr>
+          <td class="lb">申请人</td><td>{{ claim.applicant_name }}</td>
+          <td class="lb">工号</td><td>{{ claim.employee_no or '—' }}</td>
+          <td class="lb">所属部门</td><td>{{ claim.org_name or '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lb">费用大类</td><td>{{ claim.category }}</td>
+          <td class="lb">使用期间</td>
+          <td colspan="3">{{ claim.period_start or '—' }} 至 {{ claim.period_end or '—' }}
+            &nbsp;&nbsp;|&nbsp;&nbsp; 款项方式：{{ claim.pay_mode_cn }}</td>
+        </tr>
+        <tr>
+          <td class="lb">申请金额</td>
+          <td colspan="5" class="rt2"><b style="font-size:14px">￥{{ '%.2f'|format(claim.amount or 0) }}</b>
+            &nbsp;&nbsp;（大写：{{ claim_cn }}）</td>
+        </tr>
+        <tr>
+          <td class="lb">事由说明</td>
+          <td colspan="5" style="height:54px">{{ claim.purpose or '' }}</td>
+        </tr>
+        <tr>
+          <td class="lb">审批结果</td>
+          <td colspan="5">{{ claim.status_cn }}{% if claim.approver_name %} · {{ claim.approver_name }}{% endif %}
+            {% if claim.decided_at %} · {{ claim.decided_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+            {% if claim.remark %} · 意见：{{ claim.remark }}{% endif %}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="sig">
+      <div class="sign"><span class="lbl">申请人签字：</span></div>
+      <div class="sign"><span class="lbl">部门主管：</span></div>
+      <div class="sign"><span class="lbl">财务复核：</span></div>
+      <div class="sign"><span class="lbl">总经理：</span></div>
+    </div>
+    <div class="foot">说明：本单为事前费用额度批准凭证，不构成付款依据；实际支出凭费用报销单（关联本单编号）办理。</div>
+  </div>
+  {% endif %}
+
+  <!-- ============ 费用报销单 ============ -->
+  <div class="doc">
+    <div class="co">
+      <div>
+        <div class="nm3">广东海盈通保智能科技有限公司</div>
+        <div class="sm">GUANGDONG HAIYING TONGBAO INTELLIGENT TECHNOLOGY CO., LTD.</div>
+      </div>
+      <div class="sm" style="text-align:right">
+        单据编号：{{ r.code }}<br>
+        报销日期：{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '' }}
+      </div>
+    </div>
+    <h2>费 用 报 销 单</h2>
+    <div class="sub">（第 {{ 2 if claim else 1 }} 页 / 共 {{ pages }} 页）&nbsp;&nbsp;
+      报销方式：{{ r.mode_cn }}{% if r.claim_code %}（关联申请单号：{{ r.claim_code }}）{% endif %}</div>
+    <table>
+      <tbody>
+        <tr>
+          <td class="lb">报销人</td><td>{{ r.applicant_name }}</td>
+          <td class="lb">工号</td><td>{{ r.employee_no or '—' }}</td>
+          <td class="lb">所属部门</td><td>{{ r.org_name or '—' }}</td>
+        </tr>
+        <tr>
+          <td class="lb">费用大类</td><td>{{ r.category }}</td>
+          <td class="lb">关联申请号</td>
+          <td colspan="3">{{ r.claim_code or '—（直接报销）' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px">序号</th><th style="width:88px">发生日期</th><th style="width:60px">类别</th>
+          <th>费用说明</th><th style="width:74px">金额</th><th style="width:60px">税额</th>
+          <th style="width:100px">发票类型</th><th style="width:108px">发票号码</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in r.items %}
+        <tr>
+          <td class="ctr">{{ loop.index }}</td>
+          <td class="ctr">{{ it.occur_date or '—' }}</td>
+          <td class="ctr">{{ it.category or '—' }}</td>
+          <td>{{ it.detail or '' }}</td>
+          <td class="rt2">{{ '%.2f'|format(it.amount or 0) }}</td>
+          <td class="rt2">{{ '%.2f'|format(it.tax or 0) }}</td>
+          <td class="ctr">{{ it.invoice_type or '—' }}</td>
+          <td>{{ it.invoice_no or '—' }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td colspan="4" class="rt2"><b>合计（含税）</b></td>
+          <td class="rt2"><b>{{ '%.2f'|format(r.amount or 0) }}</b></td>
+          <td class="rt2"><b>{{ '%.2f'|format(r.tax_amount or 0) }}</b></td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="cap">合计金额：￥{{ '%.2f'|format(r.amount or 0) }}
+      &nbsp;&nbsp;<span style="letter-spacing:1px">（大写：{{ amount_cn }}）</span></div>
+    <table>
+      <tbody>
+        <tr>
+          <td class="lb">关联申请批准额</td><td>{{ ('￥%.2f'|format(claim.amount or 0)) if claim else '—' }}</td>
+          <td class="lb">本单核销后结余</td>
+          <td>{{ ('￥%.2f'|format(claim.remain_amount)) if claim else '—' }}</td>
+          <td class="lb">附件张数</td><td>{{ r.items|length }} 张</td>
+        </tr>
+        <tr>
+          <td class="lb">收款户名</td><td>{{ r.payee_name or '—' }}</td>
+          <td class="lb">开户行</td><td>{{ r.bank_name or '—' }}</td>
+          <td class="lb">银行账号</td><td>{{ r.bank_account or '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="sig">
+      <div class="sign"><span class="lbl">报销人签字：</span></div>
+      <div class="sign"><span class="lbl">部门主管：</span></div>
+      <div class="sign"><span class="lbl">财务复核：</span></div>
+      <div class="sign"><span class="lbl">总经理：</span></div>
+    </div>
+    <div class="foot">财务记账联：借 {{ r.account_code }} {{ r.category }}
+      ￥{{ '%.2f'|format((r.amount or 0) - (r.tax_amount or 0)) }}
+      {% if r.tax_amount %}／ 借 222101 应交增值税 ￥{{ '%.2f'|format(r.tax_amount or 0) }}{% endif %}
+      ／ 贷 1002 银行存款 ￥{{ '%.2f'|format(r.amount or 0) }}</div>
+  </div>
+
+  <!-- ============ 末页 · 票据附件封面 ============ -->
+  <div class="doc">
+    <div class="co">
+      <div>
+        <div class="nm3">广东海盈通保智能科技有限公司</div>
+        <div class="sm">GUANGDONG HAIYING TONGBAO INTELLIGENT TECHNOLOGY CO., LTD.</div>
+      </div>
+      <div class="sm" style="text-align:right">票据附件封面</div>
+    </div>
+    <h2>票 据 附 件 封 面</h2>
+    <div class="sub">（第 {{ pages }} 页 / 共 {{ pages }} 页）&nbsp;&nbsp;对应报销单号：{{ r.code }}</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px">序号</th><th style="width:88px">发生日期</th><th>票据名称 / 事项</th>
+          <th style="width:96px">发票类型</th><th style="width:74px">金额</th><th style="width:90px">粘贴位置</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in r.items %}
+        <tr>
+          <td class="ctr">{{ loop.index }}</td>
+          <td class="ctr">{{ it.occur_date or '—' }}</td>
+          <td>{{ it.detail or '' }}</td>
+          <td class="ctr">{{ it.invoice_type or '—' }}</td>
+          <td class="rt2">{{ '%.2f'|format(it.amount or 0) }}</td>
+          <td class="ctr">
+            {% if loop.index % 3 == 1 %}左 上{% elif loop.index % 3 == 2 %}右 上{% else %}下 方{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td colspan="4" class="rt2"><b>票据合计</b></td>
+          <td class="rt2"><b>{{ '%.2f'|format(r.amount or 0) }}</b></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="sig">
+      <div class="sign"><span class="lbl">经办人：</span></div>
+      <div class="sign"><span class="lbl">财务收件人：</span></div>
+      <div class="sign"><span class="lbl">收件日期：</span></div>
+    </div>
+    <div class="foot">打印提示：本页可单独打印作为票据粘贴底纸；票据按序号粘贴，注意不要覆盖装订线。</div>
+  </div>
+</div>
+
+{% endblock %}

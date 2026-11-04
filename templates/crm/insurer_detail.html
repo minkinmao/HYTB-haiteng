@@ -1,0 +1,440 @@
+{% extends 'base.html' %}
+{% block title %}CRM · {{ row.name }}{% endblock %}
+{% block pagename %}核心业务管理系统 · 保司档案详情{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .mini-chart{display:flex;align-items:flex-end;gap:10px;height:132px;padding:0 4px;margin:8px 0 2px;
+    border-bottom:1px solid #EAE2D6}
+  .mc-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;
+    min-width:0}
+  .mc-area{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+  .mc-bar{width:58%;max-width:40px;background:#E8B489;border-radius:4px 4px 0 0;min-height:2px}
+  .mc-yr{font-size:11.5px;color:#9C9288;margin-top:6px;white-space:nowrap}
+  .mc-num{font-size:11px;color:#6B5D4F;margin-top:1px;white-space:nowrap}
+  .crm-sec .sp{flex:1}
+  /* 四十一改 C：抓不全时的「去天眼查查这家」引导条 */
+  .miss-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;
+    background:#FDF6EE;border:1px solid #E8C9A6;border-left:4px solid #D98324;
+    border-radius:0 8px 8px 0;padding:10px 14px;margin:0 0 14px;color:#6B4A2A}
+  .miss-bar b{color:#B5532A}
+  .miss-bar .tip{font-size:12.5px;color:#9C9288}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ row.name }}
+  {% if row.short_name %}<small style="font-size:13px;color:#9C9288;font-weight:400">（{{ row.short_name }}）</small>{% endif %}
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  <span class="crm-tag t-brand">{{ dname.get(row.insurer_type, row.insurer_type or '—') }}</span>
+  <span class="crm-tag {{ {'coop':'t-ok','paused':'t-warn','none':'t-gray'}.get(row.status, 't-gray') }}"
+        style="margin-left:6px">{{ dname.get(row.status, row.status or '—') }}</span>
+  <span class="crm-tag t-gray" style="margin-left:6px">来源：{{ dname.get(row.source, row.source or '—') }}</span>
+  {% if row.data_updated_at %}<span style="margin-left:10px">最后更新：{{ row.data_updated_at }}</span>{% endif %}
+</div>
+
+<div class="crm-kpis">
+  {% for rcode, rname in [('gm', '总经理'), ('mid_head', '中介分管总'),
+                          ('channel_head', '中介渠道负责人'), ('contact', '对接人')] %}
+  {% set cc = current_by_role.get(rcode) %}
+  <div class="crm-kpi">
+    <div class="k">{{ rname }}</div>
+    <div class="v" style="font-size:16px;color:#2A2A2A">{{ cc.name if cc else '—' }}</div>
+    <div style="font-size:12.5px;color:#6B5D4F;margin-top:2px;min-height:18px">
+      {{ cc.phone if (cc and cc.phone) else '' }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="crm-tool">
+  {% if can_manage %}
+  <a class="crm-btn dark" href="{{ url_for('crm.insurer_edit', iid=row.id) }}">编辑档案</a>
+  <form method="post" action="{{ url_for('crm.insurer_fetch') }}" style="display:inline"
+        onsubmit="return confirm('按保司全称抓取并回填基础信息？\n\n默认只补空字段，已填好的不会被覆盖。')">
+    <input type="hidden" name="iid" value="{{ row.id }}">
+    <label style="font-size:12.5px;color:#6B5D4F;margin-right:8px;white-space:nowrap">
+      <input type="checkbox" name="overwrite" value="1"> 覆盖已有值
+    </label>
+    <button class="crm-btn" type="submit">一键抓取基础信息</button>
+  </form>
+  <a class="crm-btn" href="{{ url_for('crm.insurer_source') }}">数据源配置</a>
+  {% endif %}
+  {# 四十一改 C：抓不全的（大保司监管站翻不到总公司）一键跳到天眼查这家公司页 #}
+  <a class="crm-btn" href="{{ tyc_url(row.name) }}" target="_blank" rel="noopener">去天眼查查这家</a>
+  <span class="crm-spacer"></span>
+  <a class="crm-btn" href="{{ url_for('crm.insurers') }}">返回列表</a>
+</div>
+
+{# 四十一改 C：缺项提示 —— 有缺就明说缺哪几项，并给天眼查直达入口 #}
+{% set miss = [] %}
+{% for _k, _v in [('统一社会信用代码', row.credit_code), ('法定代表人', row.legal_person),
+                  ('注册资本', row.reg_capital), ('成立日期', row.establish_date),
+                  ('工商营业地址', row.address), ('经营范围', row.business_scope),
+                  ('保险许可证号', row.license_no)] %}
+  {% if not (_v or '').strip() %}{% set _ = miss.append(_k) %}{% endif %}
+{% endfor %}
+{% if miss %}
+<div class="miss-bar">
+  <span>还缺 <b>{{ miss|length }}</b> 项：{{ miss|join('、') }}</span>
+  <a class="crm-btn pri" href="{{ tyc_url(row.name) }}" target="_blank" rel="noopener">
+    去天眼查查这家 →</a>
+  <span class="tip">打开后抄下信用代码 / 法人 / 注册资本 / 成立日期 / 地址，回来点「编辑档案」粘贴</span>
+</div>
+{% endif %}
+
+<div class="crm-info">
+  <div class="crm-sec">一、总公司基础信息（工商登记）</div>
+  <dl>
+    <div class="rw"><span class="l">统一社会信用代码</span><span class="v">{{ row.credit_code or '—' }}</span></div>
+    <div class="rw"><span class="l">工商注册号</span><span class="v">{{ row.reg_no or '—' }}</span></div>
+    <div class="rw"><span class="l">保险许可证号</span><span class="v">{{ row.license_no or '—' }}</span></div>
+    <div class="rw"><span class="l">许可证批准日期</span><span class="v">{{ row.license_date or '—' }}</span></div>
+    <div class="rw"><span class="l">税号</span><span class="v">{{ row.tax_no or '—' }}</span></div>
+    <div class="rw"><span class="l">法定代表人</span><span class="v">{{ row.legal_person or '—' }}</span></div>
+    <div class="rw"><span class="l">注册资本</span><span class="v">{{ row.reg_capital or '—' }}</span></div>
+    <div class="rw"><span class="l">成立日期</span><span class="v">{{ row.establish_date or '—' }}</span></div>
+    <div class="rw"><span class="l">工商营业地址</span><span class="v">{{ row.address or '—' }}</span></div>
+    <div class="rw"><span class="l">联系电话</span><span class="v">{{ row.phone or '—' }}</span></div>
+    <div class="rw"><span class="l">官方网站</span><span class="v">{{ row.website or '—' }}</span></div>
+    <div class="rw" style="grid-column:1/-1"><span class="l">经营范围</span><span class="v">{{ row.business_scope or '—' }}</span></div>
+    <div class="rw" style="grid-column:1/-1"><span class="l">备注</span><span class="v">{{ row.note or '—' }}</span></div>
+  </dl>
+</div>
+
+<div class="crm-card" id="linkmen" style="margin-bottom:16px">
+  <div class="crm-sec">一·B、联系与对接（{{ linkmen|length }} 人）
+    <span class="sp"></span>
+    {% if can_manage %}<a class="crm-btn pri sm" href="{{ url_for('crm.insurer_edit', iid=row.id) }}">维护联络人</a>{% endif %}
+  </div>
+  {% if linkmen %}
+  <table class="crm-table">
+    <thead>
+      <tr><th>联络人姓名</th><th>身份与职务</th><th>联系电话</th><th>邮箱</th><th>备注</th></tr>
+    </thead>
+    <tbody>
+    {% for lm in linkmen %}
+      <tr>
+        <td class="crm-nm">{{ lm.name or '—' }}</td>
+        <td>{{ lm.title or '—' }}</td>
+        <td class="mono">{{ lm.phone or '—' }}</td>
+        <td class="mono" style="font-size:12px">{{ lm.email or '—' }}</td>
+        <td>{{ lm.note or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty" style="padding:18px 0">暂无联络人。点「维护联络人」可登记多人。</div>
+  {% endif %}
+</div>
+
+<div class="crm-card" id="branches" style="margin-bottom:16px">
+  <div class="crm-sec">二、省分公司（{{ branches|length }}）
+    <span class="sp"></span>
+    {% if can_manage %}
+    {# 四十二改：分公司也能一键抓取 —— 只抓这家保司旗下缺项的分公司 #}
+    <form method="post" action="{{ url_for('crm.branch_fetch_all') }}" style="display:inline"
+          onsubmit="return confirm('批量抓取本保司下缺项的省分公司？\n\n默认只补空；一次最多 5 家、每条间隔 3 秒。')">
+      <input type="hidden" name="insurer_id" value="{{ row.id }}">
+      <input type="hidden" name="back" value="insurer">
+      <button class="crm-btn sm" type="submit">批量抓取缺项</button>
+    </form>
+    <a class="crm-btn pri sm" href="{{ url_for('crm.branch_new', iid=row.id) }}">＋ 新增省分公司</a>
+    {% endif %}
+  </div>
+  {% if branches %}
+  <table class="crm-table">
+    <thead>
+      <tr><th>省份</th><th>分公司全称</th><th>负责人</th><th>联系电话</th>
+          <th>联络人</th><th>营业执照</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+    {% for b in branches %}
+      <tr>
+        <td style="white-space:nowrap"><span class="crm-tag t-info">{{ b.province or '—' }}</span></td>
+        <td>
+          <div class="crm-nm">{{ b.name }}</div>
+          {% if b.address %}<div class="crm-sub">{{ b.address }}</div>{% endif %}
+        </td>
+        <td>{{ b.principal or '—' }}</td>
+        <td class="mono">{{ b.phone or '—' }}</td>
+        <td>
+          {% set blms = branch_linkmen.get(b.id, []) %}
+          {% if blms %}
+            {% for lm in blms %}
+            <div class="crm-sub" style="margin:0">
+              {{ lm.name or '—' }}{% if lm.title %}（{{ lm.title }}）{% endif %}{% if lm.phone %} {{ lm.phone }}{% endif %}
+            </div>
+            {% endfor %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="mono" style="font-size:12px">{{ b.credit_code or '—' }}</td>
+        <td style="white-space:nowrap">
+          {% if can_manage %}
+          <form method="post" action="{{ url_for('crm.branch_fetch', bid=b.id) }}" style="display:inline"
+                onsubmit="return confirm('按分公司全称抓取并回填？\n\n默认只补空字段。')">
+            <button class="crm-lnk" type="submit" style="margin-left:0">抓取</button>
+          </form>
+          <a class="crm-a" style="margin-left:8px" target="_blank" rel="noopener"
+             href="{{ tyc_url(b.name) }}">天眼查</a>
+          <a class="crm-a" style="margin-left:8px" href="{{ url_for('crm.branch_edit', bid=b.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('crm.branch_delete', bid=b.id) }}" style="display:inline"
+                onsubmit="return confirm('确定删除该省分公司？')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">暂无省分公司。总-分 / 分-分签约时建议先录入对应省分。</div>
+  {% endif %}
+</div>
+
+<div class="crm-card" id="contacts" style="margin-bottom:16px">
+  <div class="crm-sec">三、岗位人员联络簿（{{ contacts|length }}）
+    <span class="sp"></span>
+    {% if can_manage %}<a class="crm-btn pri sm" href="{{ url_for('crm.contact_new', iid=row.id) }}">＋ 登记岗位人员</a>{% endif %}
+  </div>
+  {% if contacts %}
+    {% for rcode, rname in roles %}
+      {% if role_map.get(rcode) %}
+      <div style="margin:12px 0 6px;font-size:13px;font-weight:600;color:#6B5D4F">{{ rname }}</div>
+      <table class="crm-table" style="margin-bottom:6px">
+        <thead>
+          <tr><th>姓名</th><th>联系电话</th><th>状态</th><th>上任日期</th><th>离任日期</th>
+              <th>挂靠</th><th>备注</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+        {% for ct in role_map.get(rcode) %}
+          {% set bn = (branches|selectattr('id', 'equalto', ct.branch_id)|map(attribute='name')|first) %}
+          <tr>
+            <td class="crm-nm">{{ ct.name }}</td>
+            <td class="mono">{{ ct.phone or '—' }}</td>
+            <td>
+              {% if (ct.status or '') == 'current' %}
+              <span class="crm-tag t-ok">现任</span>
+              {% else %}
+              <span class="crm-tag t-gray">离任</span>
+              {% endif %}
+            </td>
+            <td class="mono">{{ ct.start_date or '—' }}</td>
+            <td class="mono">{{ ct.end_date or '—' }}</td>
+            <td style="font-size:12.5px">{{ bn or '总公司' }}</td>
+            <td>{{ ct.note or '—' }}</td>
+            <td style="white-space:nowrap">
+              {% if can_manage %}
+              <a class="crm-a" href="{{ url_for('crm.contact_edit', kid=ct.id) }}">编辑</a>
+              {% if (ct.status or '') == 'current' %}
+              <form method="post" action="{{ url_for('crm.contact_leave', kid=ct.id) }}" style="display:inline"
+                    onsubmit="return confirm('将 {{ ct.name }} 标记为离任？')">
+                <button class="crm-del" type="submit" style="margin-left:8px">标记离任</button>
+              </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('crm.contact_delete', kid=ct.id) }}" style="display:inline"
+                    onsubmit="return confirm('删除该人员记录？')">
+                <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+              </form>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+  <div class="crm-empty">暂无岗位人员。建议先登记总经理 / 中介分管总 / 中介渠道负责人，方便销售端对接。</div>
+  {% endif %}
+</div>
+
+<div class="crm-card" id="metrics" style="margin-bottom:16px">
+  <div class="crm-sec">四、年度经营指标 <span>实时手工更新 · 为销售策略提供参考</span></div>
+
+  {% if metrics %}
+  <div class="mini-chart">
+    {% for i in range(chart.years|length) %}
+    <div class="mc-col" title="{{ chart.years[i] }} 年度：总保费 {{ chart.premium[i] }} 亿元｜投资回报率 {{ '%.2f'|format(chart.roi[i]) }}%｜综合投资收益率 {{ '%.2f'|format(chart.cy[i]) }}%{% if chart.rating[i] %}｜评级 {{ chart.rating[i] }}{% endif %}">
+      <div class="mc-area">
+        <div class="mc-bar" style="height:{{ ((chart.premium[i] / chart.max_premium) * 100)|round(1) if chart.max_premium else 0 }}%"></div>
+      </div>
+      <div class="mc-yr">{{ chart.years[i] }}</div>
+      <div class="mc-num">{{ chart.premium[i] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="font-size:11.5px;color:#9C9288;margin-bottom:12px">柱高 = 当年度总保费（亿元），鼠标悬停看投资回报率与评级</div>
+
+  <table class="crm-table" style="margin-bottom:14px">
+    <thead>
+      <tr><th>年度</th><th style="text-align:right">投资回报率</th><th style="text-align:right">综合投资收益率</th>
+          <th>评级</th><th style="text-align:right">总保费</th><th style="text-align:right">净利润</th>
+          <th style="text-align:right">偿付能力充足率</th><th>数据来源</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+    {% for m in metrics %}
+      <tr>
+        <td class="mono">{{ m.year }}</td>
+        <td class="num">{{ '%.2f'|format(m.roi or 0) }}%</td>
+        <td class="num">{{ '%.2f'|format(m.composite_yield or 0) }}%</td>
+        <td><span class="crm-tag t-info">{{ m.rating or '—' }}</span></td>
+        <td class="num">{{ '{:,.2f}'.format(m.premium or 0) }} {{ dname.get(m.premium_unit, '亿元') }}</td>
+        <td class="num">{{ '{:,.2f}'.format(m.net_profit or 0) }}</td>
+        <td class="num">{{ '%.2f'|format(m.solvency or 0) }}%</td>
+        <td style="font-size:12.5px">{{ m.source or '—' }}</td>
+        <td style="white-space:nowrap">
+          {% if can_manage %}
+          <button class="crm-a" type="button" style="background:none;border:none;cursor:pointer;padding:0;font-size:13px"
+                  onclick='fillMetric({{ {"year": m.year, "roi": m.roi, "composite_yield": m.composite_yield, "rating": m.rating or "", "rating_org": m.rating_org or "", "premium": m.premium, "premium_unit": m.premium_unit or "yi", "net_profit": m.net_profit, "solvency": m.solvency, "source": m.source or "", "note": m.note or ""}|tojson }})'>改这一年</button>
+          <form method="post" action="{{ url_for('crm.metric_delete', mid=m.id) }}" style="display:inline"
+                onsubmit="return confirm('删除 {{ m.year }} 年度指标？')">
+            <button class="crm-del" type="submit" style="margin-left:8px">删除</button>
+          </form>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty" style="padding:22px 0">暂无经营指标。下面按年度录入，或点表格里的「改这一年」修正。</div>
+  {% endif %}
+
+  {% if can_manage %}
+  <form name="metricForm" method="post" action="{{ url_for('crm.metric_save', iid=row.id) }}"
+        style="padding:14px 16px;background:#FBF8F4;border-radius:11px">
+    <div style="font-size:12.5px;color:#6B5D4F;margin-bottom:10px">
+      录入 / 覆盖某年度指标 —— 同一年度已存在则直接覆盖更新。
+    </div>
+    <div class="crm-grid">
+      <div class="crm-fld">
+        <label>年度 <b>*</b></label>
+        <input type="text" name="year" placeholder="如 2025" required value="{{ today[:4] }}">
+      </div>
+      <div class="crm-fld">
+        <label>投资回报率（%）</label>
+        <input type="number" step="0.01" name="roi">
+      </div>
+      <div class="crm-fld">
+        <label>综合投资收益率（%）</label>
+        <input type="number" step="0.01" name="composite_yield">
+      </div>
+      <div class="crm-fld">
+        <label>风险综合评级</label>
+        <select name="rating">
+          <option value="">— 未评 —</option>
+          {% for r in rating_levels %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld">
+        <label>评级机构 / 来源</label>
+        <input type="text" name="rating_org" placeholder="监管 / 惠誉 / 标普 等">
+      </div>
+      <div class="crm-fld">
+        <label>当年度总保费</label>
+        <input type="number" step="0.01" name="premium">
+      </div>
+      <div class="crm-fld">
+        <label>保费单位</label>
+        <select name="premium_unit">
+          {% for c, n in premium_units %}<option value="{{ c }}">{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="crm-fld">
+        <label>净利润（与保费同单位）</label>
+        <input type="number" step="0.01" name="net_profit">
+      </div>
+      <div class="crm-fld">
+        <label>核心偿付能力充足率（%）</label>
+        <input type="number" step="0.01" name="solvency">
+      </div>
+      <div class="crm-fld">
+        <label>数据来源</label>
+        <input type="text" name="source" placeholder="年报 / 监管披露 / 手工">
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="crm-btn pri sm" type="submit">保存该年度指标</button>
+      <span style="font-size:12px;color:#9C9288;margin-left:10px">数据仅作销售策略参考，请以保司披露为准。</span>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<div class="crm-card" style="margin-bottom:16px">
+  <div class="crm-sec">五、该保司的产品合约（{{ contracts|length }}）</div>
+  {% if contracts %}
+  <table class="crm-table">
+    <thead>
+      <tr><th>编号</th><th>签约级别</th><th>产品名称</th><th>险种</th>
+          <th style="white-space:nowrap">缴别</th><th style="text-align:right">首年总合计</th>
+          <th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+    {% for c in contracts %}
+      {% set cs = cstats.get(c.id, {'n': 0, 'out': 0, 'total': 0}) %}
+      <tr>
+        <td class="mono">{{ c.code }}</td>
+        <td><span class="crm-tag t-brand">{{ dname.get(c.sign_level, c.sign_level or '—') }}</span></td>
+        <td>
+          <div class="crm-nm"><a class="crm-a" href="{{ url_for('crm.contract_detail', cid=c.id) }}">{{ c.product_name }}</a></div>
+          {% if c.product_code %}<div class="crm-sub">{{ c.product_code }}</div>{% endif %}
+        </td>
+        <td>{{ c.insurance_type or '—' }}</td>
+        <td style="white-space:nowrap">
+          <span class="crm-tag t-info">{{ cs.n }} 个</span>
+          {% if cs.out %}<span class="crm-tag t-warn" style="margin-left:4px">协议外 {{ cs.out }}</span>{% endif %}
+        </td>
+        <td class="num crm-hl">{{ '%.2f'|format(cs.total) }}%</td>
+        <td>{{ dname.get(c.status, c.status or '—') }}</td>
+        <td><a class="crm-a" href="{{ url_for('crm.contract_detail', cid=c.id) }}">详情</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">该保司暂无产品合约。</div>
+  {% endif %}
+</div>
+
+<div class="crm-card">
+  <div class="crm-sec">六、该保司的产品资料（{{ docs|length }}）</div>
+  {% if docs %}
+  <table class="crm-table">
+    <thead>
+      <tr><th>资料类型</th><th>标题</th><th>产品</th><th>文件名</th><th>上传时间</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+    {% for d in docs %}
+      <tr>
+        <td><span class="crm-tag t-info">{{ dname.get(d.doc_type, d.doc_type or '—') }}</span></td>
+        <td>{{ d.title }}</td>
+        <td>{{ d.product_name or '—' }}</td>
+        <td>{{ d.file_name or '—' }}</td>
+        <td class="mono">{{ d.upload_at.strftime('%Y-%m-%d %H:%M') if d.upload_at else '—' }}</td>
+        <td><a class="crm-a" href="{{ url_for('crm.doc_download', did=d.id) }}">下载</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="crm-empty">该保司暂无产品资料。</div>
+  {% endif %}
+</div>
+
+<script>
+  // 把表格里某一年的指标回填到录入表单，方便修正
+  function fillMetric(d) {
+    var f = document.forms['metricForm'];
+    if (!f) { return; }
+    for (var k in d) {
+      if (f[k]) { f[k].value = (d[k] === null || d[k] === undefined) ? '' : d[k]; }
+    }
+    var box = document.getElementById('metrics');
+    if (box) { window.scrollTo(0, box.offsetTop - 20); }
+    if (f.year) { f.year.focus(); }
+  }
+</script>
+{% endblock %}

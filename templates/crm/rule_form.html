@@ -1,0 +1,463 @@
+{% extends 'base.html' %}
+{# =====================================================================
+   继续率考核规则 · 表单（八改 2026-10-02 · 两步制第一步）
+   · 第一步（本页）：建初始续期考核规则
+       保险公司（必选）→ 保司分公司（可多选，非必选）
+       → 奖励项目 → （勾「继续率奖金系数」后）继续率考核标准（可多选）
+       → 考核指标档位（按考核标准分块）→ 倒扣机制
+       **本页不再选产品、不再选缴别**
+   · 第二步：「产品匹配」页 —— 选保司 → 自动弹出产品 → 产品多选 → 关联规则
+   · ⚠️ 本页不提交 product_names / pay_periods，避免把已匹配的产品清空
+   · ⚠️ 奖励项目 ↔ 考核标准 ↔ 档位 三者绑定（八改核心口径）：
+       继续率奖金系数 → 按考核标准（13/25/37/49 个月继续率考核标准）分块；
+       长期服务奖系数 → 只跟下限/上限有关，与月份无关，单独一块。
+   · ⚠️ 九改（2026-10-02）：
+       ① 删除「规则名称」「考核指标说明」两个输入项 —— 名称由系统按
+          「保司简称 + 继续率考核规则」自动生成（同名自动加序号）；
+       ② 档位每行下限/上限各带运算符下拉，看得出是否含等号；
+   · ⚠️ 十三改（2026-10-02）：
+       档位区间改按「**值 符号 指标 符号 值**」一行读完（如 `80 ≤ 指标 < 90`）——
+       原来拆成「下限（%）」「上限（%）」两列、运算符在数值左边，读不出在和谁比。
+       现在合并成一列，左侧下限符号**反向书写**（下限 ≥ 80 → 「80 ≤」），
+       右侧上限符号写在「指标」之后；**存储值 min_op / max_op 不变，零迁移**。
+       ③ 倒扣机制选「否」时，倒扣标准块不展示（内容保留）。
+   · ⚠️ 八改+（2026-10-02，对齐 6 份真实保司协议）：
+       ① 「规则基本信息」补 继续率算法口径（月度/前溯）+ 继续率精度规则
+          （两位四舍五入 / 两位舍弃 / 一位四舍五入）——各家不同，必须按合约登记；
+       ② 倒扣机制由「一段文本」扩为 起扣线（%）+ 扣费基数（下拉）+ 公式说明。
+   ===================================================================== #}
+{% block title %}CRM · {{ '编辑继续率规则' if row else '新建继续率规则' }}{% endblock %}
+{% block pagename %}核心业务管理系统 · {{ '编辑继续率规则' if row else '新建继续率规则' }}{% endblock %}
+{% block content %}
+{% include 'crm/_crm_css.html' %}
+
+<style>
+  .crm-table td input{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #E2D8CA;
+    border-radius:7px;font-size:13px;background:#fff;color:#2A2A2A;font-family:inherit}
+  .crm-table td input:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .pp-wrap{display:flex;flex-wrap:wrap;gap:8px 10px;padding:8px 10px;border:1px solid #E2D8CA;
+    border-radius:9px;background:#fff;max-height:190px;overflow:auto}
+  .pp{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#2A2A2A;
+    background:#F8F3EC;border:1px solid #EADFCE;border-radius:14px;padding:4px 11px 4px 8px;
+    cursor:pointer;white-space:nowrap;user-select:none}
+  .pp input{margin:0;cursor:pointer}
+  .pp.on{background:#FBEEE0;border-color:#E5B58C;color:#9C4E2C;font-weight:600}
+  .step-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .step-bar .st{flex:1;min-width:240px;border:1px solid #EADFCE;border-radius:10px;
+    padding:9px 12px;font-size:12.5px;color:#6B5D4F;background:#FBF8F4}
+  .step-bar .st b{display:block;font-size:13px;color:#9C4E2C;margin-bottom:3px}
+  .step-bar .st.on{background:#FBEEE0;border-color:#E5B58C}
+  .step-bar .st.on b{color:#8A4A21}
+  /* 档位分块：每条考核标准一块 */
+  .cy-blk{border:1px solid #EADFCE;border-radius:10px;padding:11px 13px;margin-bottom:12px;background:#FFFDFA}
+  .cy-blk.ls{background:#FBF8F4;border-color:#E2D8CA}
+  .cy-blk .bh{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+  .cy-blk .bh b{font-size:13.5px;color:#8A4A21}
+  .cy-blk .bh .tg{font-size:12px;color:#6B5D4F;background:#F8F3EC;border:1px solid #EADFCE;
+    border-radius:12px;padding:2px 9px}
+  .cy-blk .empty-tip{font-size:12.5px;color:#9C9288;padding:4px 0}
+  /* 九改：边界运算符 + 数值 并排（下限 / 上限是否含等号一眼可见） */
+  .op-bx{display:flex;gap:5px;align-items:center}
+  .op-bx select{width:58px;flex:none;padding:7px 4px;border:1px solid #E2D8CA;border-radius:7px;
+    font-size:13px;background:#fff;color:#2A2A2A;font-family:inherit;text-align:center}
+  .op-bx select:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .op-bx input{width:auto;flex:1;min-width:0}
+  /* 十三改：档位区间按「值 符号 指标 符号 值」一行读完（如 80 ≤ 指标 < 90） */
+  .rng{display:flex;align-items:center;gap:6px}
+  .rng input{flex:1;min-width:0}
+  .rng select{width:50px;flex:none;padding:7px 2px;border:1px solid #E2D8CA;border-radius:7px;
+    font-size:13px;background:#fff;color:#2A2A2A;font-family:inherit;text-align:center}
+  .rng select:focus{outline:none;border-color:#E5B58C;box-shadow:0 0 0 3px rgba(230,130,60,.12)}
+  .rng .rng-t{font-size:13px;color:#9C4E2C;font-weight:600;white-space:nowrap;padding:0 1px}
+  .ro-name{background:#F7F3ED !important;color:#6B5D4F !important;cursor:not-allowed}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">{{ '编辑继续率规则' if row else '新建继续率规则' }}</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:14px">
+  继续率考核改<b>两步制</b>：本页建规则（保司 / 分公司 / 奖励项目 / 考核标准 / 档位 / 倒扣），
+  产品关联到「产品匹配」页完成。此处的改动会<b>同步生效</b>到所有命中它的合约。
+  带 <b style="color:#C86432;font-weight:400">*</b> 为必填。
+</div>
+
+<div class="step-bar">
+  <div class="st on"><b>第一步 · 建续期考核规则（本页）</b>
+    保险公司 → 保司分公司（可多选）→ 奖励项目 → 继续率考核标准 → 考核指标档位 → 倒扣机制</div>
+  <div class="st"><b>第二步 · 产品匹配</b>
+    到「继续率考核规则」列表点<b>产品匹配</b>：选保司 → 系统弹出产品 → 产品多选 → 与本规则关联</div>
+</div>
+
+<form class="crm-form" method="post">
+  <div class="crm-sec">一、规则基本信息</div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>保险公司 <b>*</b></label>
+      <select name="insurer_id" id="selInsurer" required>
+        <option value="">— 请选择保险公司 —</option>
+        {% for iv in insurers %}
+        <option value="{{ iv.id }}" {{ 'selected' if row and row.insurer_id == iv.id else '' }}>{{ iv.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">必选；选择后下方「保司分公司」候选随之联动。</div>
+    </div>
+    <div class="crm-fld">
+      <label>规则名称 <span style="color:#9C9288;font-weight:400">（系统自动生成，不用填）</span></label>
+      <input type="text" id="namePreview" class="ro-name" readonly
+             value="{{ (row.name or '') if row else '' }}"
+             placeholder="选定保险公司后自动命名">
+      <div class="hint">系统按 <span style="color:#C86432">保司简称 + 继续率考核规则</span> 自动命名；
+        同一保司建多条时自动追加（2）（3）…</div>
+    </div>
+    <div class="crm-fld">
+      <label>状态</label>
+      <select name="status">
+        <option value="on" {{ 'selected' if not row or (row.status or '') == 'on' else '' }}>启用</option>
+        <option value="off" {{ 'selected' if row and (row.status or '') == 'off' else '' }}>停用</option>
+      </select>
+    </div>
+    {# 十五改：继续率算法口径 / 精度规则整块删除，系统统一精度 = 四舍五入 1 位 #}
+    <div class="crm-fld full">
+      <label>继续率精度</label>
+      <div class="hint" style="margin:0">系统统一规则：四舍五入，保留 1 位小数（原「各家不同口径 / 精度」选择已取消）。</div>
+    </div>
+    <div class="crm-fld full">
+      <label>保司分公司 <span style="color:#9C9288;font-weight:400">（可多选，非必选；不选＝该保司全部分公司通用）</span></label>
+      <div class="pp-wrap" id="brWrap">
+        {% for b in branches %}
+        <label class="pp{% if b.id in cur_branches %} on{% endif %}"
+               data-ins="{{ b.insurer_id }}" style="{{ '' if (row and row.insurer_id == b.insurer_id) else ('display:none' if row else '') }}">
+          <input type="checkbox" name="branch_ids" value="{{ b.id }}"
+                 {% if b.id in cur_branches %}checked{% endif %}>{{ b.name }}{% if b.province %}（{{ b.province }}）{% endif %}</label>
+        {% endfor %}
+      </div>
+      <div class="hint">先选保险公司，这里只列出该保司旗下的省分公司；可勾选多家，也可一家不勾（＝不限分公司）。</div>
+    </div>
+  </div>
+
+  {# —— 奖励项目：决定下面出现哪些档位块 —— #}
+  <div class="crm-sec">二、奖励项目 <span>决定下方档位的构成方式</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <div class="pp-wrap" id="awWrap">
+        {% for c, n in awards %}
+        <label class="pp{% if c in cur_awards %} on{% endif %}">
+          <input type="checkbox" name="award_items" value="{{ c }}" id="aw_{{ c }}"
+                 {% if c in cur_awards %}checked{% endif %}>{{ n }}</label>
+        {% endfor %}
+      </div>
+      <div class="hint">
+        · <b>继续率奖金系数</b>：勾选后再选「继续率考核标准」（可多选），
+        下方按每条标准分块填「下限 / 上限 / 继续率奖金系数」。<br>
+        · <b>长期服务奖系数</b>：只跟「下限 / 上限」有关，<b>与 13/25 这些月份无关</b>，单独一块填。
+      </div>
+    </div>
+    <div class="crm-fld full" id="cyWrap" style="display:none">
+      <label>继续率考核标准 <span style="color:#9C9288;font-weight:400">（可多选，仅「继续率奖金系数」适用）</span></label>
+      <div class="pp-wrap" id="cyPick">
+        {% for c in cycles %}
+        <label class="pp{% if c in cur_cycles %} on{% endif %}">
+          <input type="checkbox" name="cycles" value="{{ c }}"
+                 {% if c in cur_cycles %}checked{% endif %}>{{ c }}</label>
+        {% endfor %}
+      </div>
+      <div class="hint">勾选几种，下方就出现几块考核标准档位表（每条标准各自一套下限/上限/奖金系数）。</div>
+    </div>
+  </div>
+
+  <div class="crm-sec">三、考核指标档位
+    <span>本系统登记的是<b>保费继续率</b>；每行按「<b>值 符号 指标 符号 值</b>」阅读，
+      例如 <b>80 ≤ 指标 &lt; 90</b>（只有下限就是 <b>90 ≤ 指标</b>，只有上限就是 <b>指标 &lt; 80</b>）；
+      上限留空＝不限</span></div>
+  <div id="noBlk" class="crm-empty" style="padding:14px 0;display:none">
+    请先在上方勾选<b>奖励项目</b>：勾「继续率奖金系数」需再选继续率考核标准；勾「长期服务奖系数」则出现独立档位块。
+  </div>
+
+  {# —— 各继续率考核标准的档位块（继续率奖金系数） —— #}
+  {% for cy in cycles %}
+  {% set key = 'c' ~ loop.index0 %}
+  {% set rows = (items | selectattr('cycle', 'equalto', cy) | list) or [none] %}
+  <div class="cy-blk" id="blk_{{ key }}" style="display:none">
+    <div class="bh">
+      <b>{{ cy }}</b><span class="tg">继续率奖金系数档位</span>
+      <span class="crm-spacer"></span>
+      <button class="crm-btn sm" type="button" onclick="addItem('{{ key }}')">＋ 添加档位</button>
+    </div>
+    <table class="crm-table" style="margin-bottom:0">
+      <thead>
+        <tr><th style="width:36%">继续率区间（%）</th>
+            <th style="width:17%">继续率奖金系数（%）</th><th>说明</th>
+            <th style="width:62px">操作</th></tr>
+      </thead>
+      <tbody id="body_{{ key }}">
+        {% for it in rows %}
+        {% set mop = (it.min_op or '>=') if it else '>=' %}
+        {% set xop = (it.max_op or '<') if it else '<' %}
+        <tr>
+          <td>
+            <input type="hidden" name="item_idx_{{ key }}" value="{{ loop.index0 }}">
+            <span class="rng">
+              <input type="number" step="0.01" name="item_min_{{ key }}_{{ loop.index0 }}"
+                     value="{{ (it.rate_min if it and it.rate_min is not none else '') }}" placeholder="80">
+              <select name="item_minop_{{ key }}_{{ loop.index0 }}">
+                {% for v, s in ops_left %}<option value="{{ v }}" {{ 'selected' if mop == v else '' }}>{{ s }}</option>{% endfor %}
+              </select>
+              <b class="rng-t">指标</b>
+              <select name="item_maxop_{{ key }}_{{ loop.index0 }}">
+                {% for v, s in ops_right %}<option value="{{ v }}" {{ 'selected' if xop == v else '' }}>{{ s }}</option>{% endfor %}
+              </select>
+              <input type="number" step="0.01" name="item_max_{{ key }}_{{ loop.index0 }}"
+                     value="{{ (it.rate_max if it and it.rate_max else '') }}" placeholder="留空=不限">
+            </span>
+          </td>
+          <td><input type="number" step="0.01" name="item_bonus_{{ key }}_{{ loop.index0 }}"
+                     value="{{ (it.bonus_coef if it and it.bonus_coef is not none else '') }}"></td>
+          <td><input type="text" name="item_note_{{ key }}_{{ loop.index0 }}" value="{{ it.note if it else '' }}"></td>
+          <td><button class="crm-del" type="button" onclick="delItem(this)">删除</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  {# —— 长期服务奖系数档位块（与月份无关，只看下限/上限） —— #}
+  {% set ls_rows = (items | selectattr('cycle', 'equalto', ls_cycle) | list) or [none] %}
+  <div class="cy-blk ls" id="blk_ls" style="display:none">
+    <div class="bh">
+      <b>长期服务奖系数</b>
+      <span class="crm-spacer"></span>
+      <button class="crm-btn sm" type="button" onclick="addItem('ls')">＋ 添加档位</button>
+    </div>
+    <table class="crm-table" style="margin-bottom:0">
+      <thead>
+        <tr><th style="width:36%">继续率区间（%）</th>
+            <th style="width:17%">长期服务奖系数（%）</th><th>说明</th>
+            <th style="width:62px">操作</th></tr>
+      </thead>
+      <tbody id="body_ls">
+        {% for it in ls_rows %}
+        {% set mop = (it.min_op or '>=') if it else '>=' %}
+        {% set xop = (it.max_op or '<') if it else '<' %}
+        <tr>
+          <td>
+            <input type="hidden" name="item_idx_ls" value="{{ loop.index0 }}">
+            <span class="rng">
+              <input type="number" step="0.01" name="item_min_ls_{{ loop.index0 }}"
+                     value="{{ (it.rate_min if it and it.rate_min is not none else '') }}" placeholder="80">
+              <select name="item_minop_ls_{{ loop.index0 }}">
+                {% for v, s in ops_left %}<option value="{{ v }}" {{ 'selected' if mop == v else '' }}>{{ s }}</option>{% endfor %}
+              </select>
+              <b class="rng-t">指标</b>
+              <select name="item_maxop_ls_{{ loop.index0 }}">
+                {% for v, s in ops_right %}<option value="{{ v }}" {{ 'selected' if xop == v else '' }}>{{ s }}</option>{% endfor %}
+              </select>
+              <input type="number" step="0.01" name="item_max_ls_{{ loop.index0 }}"
+                     value="{{ (it.rate_max if it and it.rate_max else '') }}" placeholder="留空=不限">
+            </span>
+          </td>
+          <td><input type="number" step="0.01" name="item_lsc_ls_{{ loop.index0 }}"
+                     value="{{ (it.long_service_coef if it and it.long_service_coef is not none else '') }}"></td>
+          <td><input type="text" name="item_note_ls_{{ loop.index0 }}" value="{{ it.note if it else '' }}"></td>
+          <td><button class="crm-del" type="button" onclick="delItem(this)">删除</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="crm-sec">四、倒扣机制
+    <span>不达标退回：起扣线 + 扣费基数 + 具体公式说明</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld">
+      <label>是否有倒扣机制</label>
+      <select name="has_clawback" id="selClaw">
+        <option value="0" {{ 'selected' if not row or not row.has_clawback else '' }}>否</option>
+        <option value="1" {{ 'selected' if row and row.has_clawback else '' }}>是</option>
+      </select>
+      <div class="hint">选「<b>否</b>」时下方三项不展示，规则下发给合约时也不会出现倒扣标准。</div>
+    </div>
+    {# 八改+：倒扣结构化（起扣线 + 扣费基数 + 公式说明）——选否整块隐藏，值保留 #}
+    <div class="crm-fld" id="clawWrap" style="display:flex;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:130px">
+        <label>起扣线（%）</label>
+        <input type="number" step="0.01" name="clawback_line"
+               value="{{ (row.clawback_line if row and row.clawback_line else '') }}" placeholder="如 88">
+        <div class="hint">低于此线起扣（如 88 表示 88%）。</div>
+      </div>
+      <div style="flex:2;min-width:220px">
+        <label>扣费基数</label>
+        <select name="clawback_base">
+          {% for v, n in clawback_bases %}<option value="{{ v }}" {{ 'selected' if cur_cbase == v else '' }}>{{ n }}</option>{% endfor %}
+        </select>
+        <div class="hint">退回费用按此基数计算。</div>
+      </div>
+    </div>
+    <div class="crm-fld full" id="clawWrap2">
+      <label>倒扣机制考核标准（公式说明）</label>
+      <textarea name="clawback_std"
+                placeholder="如：退回费用 =（88% − 实际达成值）× 第13月应收保单对应产生的全部推广费">{{ (row.clawback_std or '') if row else '' }}</textarea>
+      <div class="hint">已填内容会保留：改成「否」后切回「是」会自动恢复，不必重填。</div>
+    </div>
+  </div>
+
+  <div class="crm-sec">五、备注</div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      <textarea name="note">{{ (row.note or '') if row else '' }}</textarea>
+    </div>
+  </div>
+
+  {% if row %}
+  <div class="crm-sec">六、已关联的产品 <span>在「产品匹配」页维护</span></div>
+  <div class="crm-grid">
+    <div class="crm-fld full">
+      {% if rule_products %}
+      <div style="font-size:13px;color:#2A2A2A">
+        {% for p in rule_products %}<span class="crm-tag t-info" style="margin:0 6px 6px 0">{{ p }}</span>{% endfor %}
+      </div>
+      {% else %}
+      <div style="font-size:13px;color:#9C9288">尚未关联产品（＝不限产品，该保司所有产品都会命中本规则）。
+        建议到「继续率考核规则」列表点<b>产品匹配</b>明确关联。</div>
+      {% endif %}
+      <div style="margin-top:10px">
+        <a class="crm-btn" href="{{ url_for('crm.rule_match', insurer_id=row.insurer_id, rule_id=row.id) }}">去「产品匹配」</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="crm-acts">
+    <button class="crm-btn pri" type="submit">保存</button>
+    <a class="crm-btn" href="{{ url_for('crm.rule_list') }}">取消</a>
+  </div>
+</form>
+
+<script>
+  var CYCLE_NAMES = {{ cycles|tojson }};
+  var OPTS_LEFT = {{ ops_left|tojson }};      /* 十三改：左侧「值 ≤ 指标」——符号反向书写 */
+  var OPTS_RIGHT = {{ ops_right|tojson }};    /* 十三改：右侧「指标 < 值」 */
+  var INS_SHORT = { {% for iv in insurers %}"{{ iv.id }}": {{ (iv.short_name or iv.name)|tojson }},{% endfor %} };
+  var SEQ = 0;
+  var selIns = document.getElementById('selInsurer');
+  var brWrap = document.getElementById('brWrap');
+  var awWrap = document.getElementById('awWrap');
+  var cyWrap = document.getElementById('cyWrap');
+  var noBlk = document.getElementById('noBlk');
+  var namePrev = document.getElementById('namePreview');
+  var selClaw = document.getElementById('selClaw');
+  var clawWrap = document.getElementById('clawWrap');
+  var clawWrap2 = document.getElementById('clawWrap2');
+
+  /* 九改：规则名全自动生成（保司简称 + 继续率考核规则）——
+     只在用户真的换了「保险公司」时刷新预览，初始加载不覆盖已存名字 */
+  function refreshName() {
+    if (!namePrev || !selIns || !selIns.value) { return; }
+    var sn = INS_SHORT[selIns.value];
+    if (sn) { namePrev.value = sn + '-继续率考核规则'; }
+  }
+
+  /* 九改：倒扣机制选「否」→ 标准块不展示（内容保留，切回「是」自动恢复） */
+  function syncClawback() {
+    if (!selClaw) { return; }
+    var on = (selClaw.value === '1');
+    if (clawWrap) { clawWrap.style.display = on ? 'flex' : 'none'; }
+    if (clawWrap2) { clawWrap2.style.display = on ? '' : 'none'; }
+  }
+
+  /* 省分公司候选：随「保险公司」联动（只显示该保司旗下的） */
+  function refreshBranches() {
+    if (!selIns || !brWrap) { return; }
+    var iid = selIns.value;
+    [].slice.call(brWrap.querySelectorAll('.pp')).forEach(function (lb) {
+      var ok = !iid || lb.getAttribute('data-ins') === String(iid);
+      lb.style.display = ok ? '' : 'none';
+      if (!ok) {                        // 隐藏时顺手取消勾选，避免误提交它司分公司
+        var cb = lb.querySelector('input');
+        if (cb) { cb.checked = false; lb.className = 'pp'; }
+      }
+    });
+  }
+
+  /* 八改：奖励项目 ↔ 考核标准 ↔ 档位块 三者联动 ——
+       只有「继续率奖金系数」勾上，才出现继续率考核标准的勾选；
+       勾了哪几条标准，就显示哪几块标准档位表；
+       「长期服务奖系数」独立一块，与月份无关。
+     隐藏块里的输入一律 disabled，避免把不该存的档位提交上去。 */
+  function setBlk(key, on) {
+    var box = document.getElementById('blk_' + key);
+    if (!box) { return; }
+    box.style.display = on ? '' : 'none';
+    // 隐藏块里的 输入框 / 运算符下拉 一律 disabled，避免把不该存的档位提交上去
+    [].slice.call(box.querySelectorAll('input, select')).forEach(function (el) { el.disabled = !on; });
+  }
+
+  function syncBlocks() {
+    var bonusOn = !!(document.getElementById('aw_bonus') || {}).checked;
+    var lsOn = !!(document.getElementById('aw_long_service') || {}).checked;
+    if (cyWrap) { cyWrap.style.display = bonusOn ? '' : 'none'; }
+    // 未勾「继续率奖金系数」→ 考核标准勾选一并禁用（不提交）
+    var picks = [].slice.call(document.querySelectorAll('#cyPick input[name="cycles"]'));
+    picks.forEach(function (cb) { cb.disabled = !bonusOn; });
+    // 已勾的考核标准 → 打开对应块（固定顺序 13→25→37→49）
+    var on = {};
+    picks.forEach(function (cb) { if (cb.checked) { on[cb.value] = true; } });
+    for (var i = 0; i < CYCLE_NAMES.length; i++) {
+      setBlk('c' + i, bonusOn && !!on[CYCLE_NAMES[i]]);
+    }
+    setBlk('ls', lsOn);
+    var any = (bonusOn && Object.keys(on).length) || lsOn;
+    if (noBlk) { noBlk.style.display = any ? 'none' : ''; }
+  }
+
+  /* 多选标签高亮 */
+  document.addEventListener('change', function (e) {
+    var cb = e.target;
+    if (!cb) { return; }
+    if (cb.name === 'branch_ids' || cb.name === 'award_items' || cb.name === 'cycles') {
+      if (cb.parentNode) { cb.parentNode.className = 'pp' + (cb.checked ? ' on' : ''); }
+    }
+    if (cb.name === 'award_items' || cb.name === 'cycles') { syncBlocks(); }
+  });
+
+  if (selIns) {
+    selIns.addEventListener('change', function () { refreshBranches(); refreshName(); });
+  }
+  if (selClaw) {
+    selClaw.addEventListener('change', syncClawback);
+  }
+  refreshBranches();
+  syncBlocks();
+  syncClawback();
+
+  /* 档位行增删（块键：c0~c3 / ls；九改起每行带下限 / 上限运算符下拉） */
+  function opOptions(list, def) {
+    var s = '';
+    list.forEach(function (o) {
+      s += '<option value="' + o[0] + '"' + (o[0] === def ? ' selected' : '') + '>' + o[1] + '</option>';
+    });
+    return s;
+  }
+  function addItem(key) {
+    var body = document.getElementById('body_' + key);
+    if (!body) { return; }
+    var ix = 'n' + (SEQ++);
+    var coefField = (key === 'ls') ? 'item_lsc_' : 'item_bonus_';
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="hidden" name="item_idx_' + key + '" value="' + ix + '">'
+      + '<span class="rng">'
+      + '<input type="number" step="0.01" name="item_min_' + key + '_' + ix + '" placeholder="80">'
+      + '<select name="item_minop_' + key + '_' + ix + '">' + opOptions(OPTS_LEFT, '>=') + '</select>'
+      + '<b class="rng-t">指标</b>'
+      + '<select name="item_maxop_' + key + '_' + ix + '">' + opOptions(OPTS_RIGHT, '<') + '</select>'
+      + '<input type="number" step="0.01" name="item_max_' + key + '_' + ix + '" placeholder="留空=不限"></span></td>'
+      + '<td><input type="number" step="0.01" name="' + coefField + key + '_' + ix + '"></td>'
+      + '<td><input type="text" name="item_note_' + key + '_' + ix + '"></td>'
+      + '<td><button class="crm-del" type="button" onclick="delItem(this)">删除</button></td>';
+    body.appendChild(tr);
+  }
+  function delItem(btn) {
+    var tr = btn.closest ? btn.closest('tr') : btn.parentNode.parentNode;
+    if (tr) { tr.parentNode.removeChild(tr); }
+  }
+</script>
+{% endblock %}

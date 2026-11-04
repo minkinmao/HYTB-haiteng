@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海盈通保OA管理系统 · 登录</title>
+    {% if logo_mark_url %}<link rel="icon" href="{{ logo_mark_url }}">{% endif %}
+    <style>
+        /* 品牌变量：主色深橙 #C86432 ｜ 常用橙 #E6823C ｜ 浅橙 #F0A050 ｜ 米白 #FAF7F2 ｜ 炭黑 #2A2A2A */
+        :root{
+          --brand-deep:#C86432; --brand:#E6823C; --brand-light:#F0A050;
+          --cream:#FAF7F2; --ink:#2A2A2A; --line:#E7DED1;
+          --serif:"思源宋体","Source Han Serif SC","Noto Serif SC","寒蝉锦书宋","Songti SC","STSong","宋体",SimSun,serif;
+          --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+        }
+        *{box-sizing:border-box}
+        html,body{margin:0;height:100%}
+        body{font-family:var(--sans);background:var(--cream)}
+        a{text-decoration:none}
+
+        /* 整页一条连续的斜向渐变：左橙 → 右米白，
+           左右两栏共用同一张"底"，不再各画各的背景，就不会出现中间那道硬分界。 */
+        .wrap{display:flex;min-height:100vh;position:relative;overflow:hidden;
+              background:
+                radial-gradient(780px 580px at 12% 20%, rgba(255,255,255,.20), transparent 60%),
+                radial-gradient(560px 460px at 60% 82%, rgba(240,160,80,.20), transparent 64%),
+                linear-gradient(108deg,#A5441A 0%,#C05E2C 17%,#DE7C36 33%,#EC9A56 47%,
+                                #F3C79B 61%,#F8E4CE 76%,#FAF7F2 90%)}
+        /* 若放入了 static/img/login-bg.jpg，则整页铺这张图，再压一层同方向的渐变蒙版 */
+        {% if login_bg_url %}
+        .photo{position:absolute;inset:0;z-index:0;background:url("{{ login_bg_url }}") center/cover no-repeat}
+        .photo::after{content:"";position:absolute;inset:0;
+              background:linear-gradient(108deg,rgba(165,68,26,.94) 0%,rgba(192,94,44,.84) 20%,
+                         rgba(222,124,54,.70) 38%,rgba(236,154,86,.52) 54%,
+                         rgba(248,228,206,.80) 74%,rgba(250,247,242,.96) 90%)}
+        {% endif %}
+
+        /* 海浪曲线：取品牌 LOGO"海浪负形"意象；用蒙版让波纹向右渐渐淡出，与右侧米白自然衔接 */
+        .waves{position:absolute;left:0;right:0;bottom:-2px;width:100%;height:40%;z-index:1;
+               pointer-events:none;
+               -webkit-mask-image:linear-gradient(90deg,#000 0%,#000 44%,rgba(0,0,0,.25) 68%,transparent 90%);
+               mask-image:linear-gradient(90deg,#000 0%,#000 44%,rgba(0,0,0,.25) 68%,transparent 90%)}
+        .waves svg{width:100%;height:100%;display:block}
+        .glow{position:absolute;width:520px;height:520px;border-radius:50%;top:-190px;right:-190px;z-index:1;
+              background:radial-gradient(circle,rgba(255,255,255,.16),transparent 66%)}
+
+        /* ============ 左侧：品牌画面 ============ */
+        .stage{flex:0 0 54%;position:relative;z-index:2;display:flex;
+               align-items:center;justify-content:center;padding:56px 48px;background:transparent}
+
+        /* ============ 左侧：品牌画面 ============
+           全部内容沿同一中轴居中；块与块之间按统一节奏留白，避免忽松忽紧 */
+        .stage-in{position:relative;z-index:2;color:#fff;width:100%;max-width:400px;text-align:center}
+        .brandrow{display:flex;align-items:center;justify-content:center;gap:20px}
+        /* 白色圆角框里的 LOGO 图标：icon 已裁掉白边，9px 内边距让它在框里撑满且居中 */
+        .mark{width:92px;height:92px;flex:0 0 92px;border-radius:26px;background:#fff;
+              display:flex;align-items:center;justify-content:center;
+              box-shadow:0 10px 34px rgba(120,60,20,.34)}
+        .mark img{width:100%;height:100%;object-fit:contain;display:block;padding:9px}
+        .mark svg{width:56px;height:56px}
+        /* 品牌名组合：中文名加大后，由脚本把它的宽度对齐到下方英文行，
+           两行等宽、左右齐平，整体成为一块整齐的矩形 */
+        .brandname{text-align:center}
+        .cn{font-family:var(--serif);font-size:44px;font-weight:600;line-height:1.12;
+            display:inline-block;white-space:nowrap}
+        .en{font-size:10.5px;letter-spacing:3.2px;color:rgba(255,255,255,.78);margin-top:10px}
+        .hr{width:44px;height:2px;border-radius:2px;background:rgba(255,255,255,.6);margin:30px auto}
+        .slogan{font-family:var(--serif);font-size:22px;letter-spacing:3px;color:#fff}
+        .slogan-en{font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.72);margin-top:10px}
+        /* 四字「海 盈 通 保」+ 四字短语：
+           等分四列、每列内容居中，大字加粗加大后正好压在下方短语的中部 */
+        .four{display:grid;grid-template-columns:repeat(4,1fr);max-width:380px;margin:34px auto 0}
+        .four div{text-align:center;font-size:12.5px;letter-spacing:1.5px;color:rgba(255,255,255,.92)}
+        .four b{display:block;font-family:var(--serif);font-size:26px;font-weight:700;
+                color:#fff;letter-spacing:2px;margin-bottom:10px}
+        .stage-foot{position:absolute;left:48px;bottom:30px;z-index:2;font-size:11px;
+                    letter-spacing:2.4px;color:rgba(255,255,255,.72)}
+
+        /* ============ 右侧：登录窗口 ============ */
+        .pane{flex:1;position:relative;z-index:2;display:flex;align-items:center;
+              justify-content:center;padding:44px 40px;background:transparent}
+        .card{width:100%;max-width:376px;background:#fff;padding:38px 34px 30px;border-radius:18px;
+              box-shadow:0 12px 44px rgba(120,80,40,.12);border:1px solid var(--line)}
+        .card .title{text-align:center;font-family:var(--serif);font-size:19px;
+                     font-weight:600;color:var(--ink);letter-spacing:1.5px}
+        .card .sub{text-align:center;color:#9C9288;font-size:11px;letter-spacing:2.6px;margin:7px 0 22px}
+        .divider{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin-bottom:24px}
+        .field{margin-bottom:16px}
+        label{display:block;font-size:12.5px;color:var(--ink);margin-bottom:7px;letter-spacing:.5px}
+        input{width:100%;padding:11px 13px;border:1px solid #E2D8CA;border-radius:10px;font-size:14px;
+              outline:none;background:#FCFAF7;transition:.18s;font-family:var(--sans)}
+        input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(230,130,60,.14)}
+        .btn{width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;cursor:pointer;
+             color:#fff;font-weight:600;letter-spacing:3px;font-family:var(--sans);
+             background:linear-gradient(135deg,var(--brand),var(--brand-deep));
+             box-shadow:0 6px 18px rgba(200,100,50,.28);transition:.18s}
+        .btn:hover{filter:brightness(1.06);box-shadow:0 8px 22px rgba(200,100,50,.34)}
+        .msg{background:#FDF3E4;color:#8A5A18;border:1px solid #F4DFBE;font-size:12.5px;
+             padding:9px 13px;border-radius:9px;text-align:center;margin-bottom:16px}
+        .tip{text-align:center;color:#BDB2A5;font-size:11.5px;margin-top:20px;letter-spacing:.5px}
+
+        /* 窄屏：改为上下堆叠 */
+        @media (max-width:1000px){
+          .wrap{flex-direction:column}
+          .stage{flex:none;padding:34px 26px}
+          .stage-foot{position:static;margin-top:22px;left:auto;bottom:auto}
+          .four{display:none}
+          .pane{padding:30px 20px}
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+  {# 整页背景图（可选）：放了 static/img/login-bg.jpg 就自动铺满整屏 #}
+  {% if login_bg_url %}<div class="photo"></div>{% endif %}
+  <div class="glow"></div>
+  <div class="waves">
+    <svg viewBox="0 0 1440 320" preserveAspectRatio="none">
+      <path d="M0 160c180-70 360-70 540 0s360 70 540 0 360-70 360-70v230H0z" fill="#fff" opacity=".10"/>
+      <path d="M0 210c180-70 360-70 540 0s360 70 540 0 360-70 360-70v180H0z" fill="#fff" opacity=".14"/>
+      <path d="M0 262c180-70 360-70 540 0s360 70 540 0 360-70 360-70v128H0z" fill="#fff" opacity=".20"/>
+    </svg>
+  </div>
+
+  <!-- ================= 左：品牌画面 ================= -->
+  <aside class="stage">
+    <div class="stage-in">
+      <div class="brandrow">
+        <div class="mark">
+          {% if logo_mark_url %}
+            <img src="{{ logo_mark_url }}" alt="海盈通保">
+          {% else %}
+            <!-- 兜底字标：橙色圆 + 白色海浪（品牌 LOGO 释义） -->
+            <svg viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="15" fill="#E6823C"/>
+              <path d="M4 19.5c3.2-3.4 6.4-3.4 9.6 0s6.4 3.4 9.6 0 4.8-3.4 4.8-3.4" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+              <path d="M4 24c3.2-3.4 6.4-3.4 9.6 0s6.4 3.4 9.6 0" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+            </svg>
+          {% endif %}
+        </div>
+        <div class="brandname">
+          <div class="cn">海盈通保</div>
+          <div class="en">OA MANAGEMENT SYSTEM</div>
+        </div>
+      </div>
+      <div class="hr"></div>
+      <div class="slogan">科技 · 服务 · 价值</div>
+      <div class="slogan-en">TOGETHER FOR A BETTER FUTURE</div>
+      <div class="four">
+        <div><b>海</b>海纳百川</div>
+        <div><b>盈</b>充盈增长</div>
+        <div><b>通</b>通达顺畅</div>
+        <div><b>保</b>稳健保障</div>
+      </div>
+    </div>
+    <div class="stage-foot">海盈通保 · 与您共创价值</div>
+  </aside>
+
+  <!-- ================= 右：登录窗口 ================= -->
+  <main class="pane">
+    <div class="card">
+      <div class="title">海盈通保OA管理系统</div>
+      <div class="sub">OFFICE AUTOMATION SYSTEM</div>
+      <div class="divider"></div>
+      {# 十八改：登录失败等提示也统一弹窗 #}
+      {% include '_flash_modal.html' %}
+      <form method="post">
+          <div class="field">
+              <label>账号</label>
+              <input type="text" name="username" placeholder="请输入账号" autofocus>
+          </div>
+          <div class="field">
+              <label>密码</label>
+              <input type="password" name="password" placeholder="请输入密码">
+          </div>
+          <button class="btn" type="submit">登 录</button>
+      </form>
+    </div>
+  </main>
+</div>
+<script>
+/* 「海盈通保」的字形天生比下方英文行窄，这里按实测宽度补足字距，
+   让两行等宽、左右齐平，组合成一块整齐的矩形（换字体/换语言也会自动重算） */
+(function () {
+  var cn = document.querySelector('.brandname .cn');
+  var en = document.querySelector('.brandname .en');
+  if (!cn || !en) return;
+
+  function textWidth(el) {                 // 量"文字本身"的宽度，而不是块的宽度
+    var r = document.createRange();
+    r.selectNodeContents(el);
+    var w = r.getBoundingClientRect().width;
+    if (r.detach) r.detach();
+    return w;
+  }
+
+  function fit() {
+    cn.style.letterSpacing = '0px';
+    cn.style.marginRight = '0px';
+    var target = textWidth(cn);            // 以中文名为准
+    var cur = textWidth(en);
+    var n = (en.textContent || '').length;
+    if (!target || !cur || n < 2) return;
+
+    var enLs = 0;
+    try { enLs = parseFloat(getComputedStyle(en).letterSpacing) || 0; } catch (e) { }
+    en.style.letterSpacing = '0px';
+    en.style.marginRight = '0px';
+    var glyph = textWidth(en);             // 纯字母宽度（不含字距）
+    var gap = (target - glyph) / (n - 1);  // 末字后不补字距，右端才对齐
+    if (gap > 0.5) {
+      en.style.letterSpacing = gap.toFixed(2) + 'px';
+      en.style.marginRight = (-gap).toFixed(2) + 'px';   // 抵消末字后多出的那段字距
+    } else {
+      en.style.letterSpacing = enLs + 'px';
+    }
+  }
+
+  fit();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  window.addEventListener('resize', fit);
+})();
+</script>
+</body>
+</html>

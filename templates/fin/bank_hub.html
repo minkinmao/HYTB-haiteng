@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}银企对账中心 · 海盈通保{% endblock %}
+{% block pagename %}FMS · 银企对账{% endblock %}
+{% macro amt(v) %}{% if v %}{{ '{:,.2f}'.format(v) }}{% else %}<span style="color:#D8D0C4">—</span>{% endif %}{% endmacro %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">银企对账中心 <span style="font-size:13px;font-weight:400;color:#9C9288">Bank Reconciliation</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    把「企业账上的银行存款（1002）」和「银行实际流水」对清楚，找出未达账项并生成
+    <b style="color:#5C554D">银行存款余额调节表</b>。每个银行账户对应一个 1002 明细科目，是对账的桥梁。
+  </div>
+
+  <div style="margin-bottom:14px">
+    <a href="{{ url_for('fin.bank_accounts') }}" class="btn" style="text-decoration:none;display:inline-block;padding:8px 18px">＋ 银行账户管理</a>
+  </div>
+
+  {% if not accounts %}
+  <div class="card" style="padding:40px;text-align:center;color:#9C9288;font-size:14px">
+    还没有银行账户。先到「银行账户管理」添加一个账户（绑定 1002 明细科目），再导入银行流水对账。
+  </div>
+  {% else %}
+  <div style="display:flex;flex-wrap:wrap;gap:14px">
+    {% for ba in accounts %}
+    <div class="card" style="flex:1;min-width:300px;padding:18px 20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:16px;font-weight:700;color:#2A2A2A">{{ ba.name }}
+          {% if ba.is_default %}<span style="font-size:11px;background:#F8F0DC;color:#C9902A;padding:2px 8px;border-radius:6px;margin-left:6px">默认</span>{% endif %}
+        </div>
+        <div style="font-family:monospace;font-size:12px;color:#9C9288">{{ ba.code }}</div>
+      </div>
+      <div style="font-size:12.5px;color:#6B5D4F;line-height:1.9">
+        开户行：{{ ba.bank_name or '—' }}<br>
+        账号：{{ ba.account_no or '—' }}<br>
+        对应科目：<span style="font-family:monospace">{{ ba.account_code }}</span> ｜ 币种 {{ ba.currency }}
+      </div>
+      <div style="display:flex;gap:10px;margin:12px 0;font-size:12.5px">
+        <div style="flex:1;background:#FAF7F2;border:1px solid #EAE2D6;border-radius:8px;padding:8px 10px">
+          <div style="color:#9C9288">期初余额</div>
+          <div style="font-weight:700;color:#2A2A2A">￥{{ amt(ba.opening_balance) }}</div>
+        </div>
+        <div style="flex:1;background:{{ '#FDECEC' if ba.pending else '#E8F5EC' }};border:1px solid {{ '#F3C9C9' if ba.pending else '#BFE3C9' }};border-radius:8px;padding:8px 10px">
+          <div style="color:#9C9288">待对账</div>
+          <div style="font-weight:700;color:{{ '#991b1b' if ba.pending else '#166534' }}">{{ ba.pending }} 笔</div>
+        </div>
+        <div style="flex:1;background:#FAF7F2;border:1px solid #EAE2D6;border-radius:8px;padding:8px 10px">
+          <div style="color:#9C9288">流水行数</div>
+          <div style="font-weight:700;color:#2A2A2A">{{ ba.stmt_count }}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="{{ url_for('fin.bank_statements', baid=ba.id) }}" class="btn" style="text-decoration:none;padding:7px 14px;font-size:13px">查看流水 / 导入</a>
+        <a href="{{ url_for('fin.bank_reconcile', baid=ba.id) }}" style="text-decoration:none;padding:7px 14px;font-size:13px;border:1px solid #EAE2D6;border-radius:9px;color:#5C554D">对账工作台</a>
+        <a href="{{ url_for('fin.bank_adjust', baid=ba.id) }}" style="text-decoration:none;padding:7px 14px;font-size:13px;border:1px solid #EAE2D6;border-radius:9px;color:#5C554D">余额调节表</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div style="margin-top:18px;font-size:12.5px;color:#9C9288;line-height:1.9">
+    <b style="color:#6B5D4F">方向口径：</b>
+    企业账「借 1002」= 存款增加、「贷 1002」= 存款减少；银行流水（银行视角）「贷方」= 银行收进（企业增）、「借方」= 银行付出（企业减）。
+    因此<b style="color:#5C554D">流水贷方 ↔ 凭证借 1002</b>、<b style="color:#5C554D">流水借方 ↔ 凭证贷 1002</b>。
+  </div>
+{% endblock %}

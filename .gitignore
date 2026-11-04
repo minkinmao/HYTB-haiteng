@@ -1,0 +1,38 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== 数据库与备份（含业务数据，绝不入库） =====
+*.db
+*.db.*
+*.sqlite
+*.sqlite3
+*.bak
+*.bak_*
+
+# ===== 企微明文凭证（含 Secret，绝不入库） =====
+wecom_config.txt
+wecom_verify/
+WW_verify_*.txt
+
+# ===== Windows 专用（Mac/Linux 用不上） =====
+*.bat
+
+# ===== 临时 / 验证脚本产物（_ 开头） =====
+_*.py
+_*.txt
+backups/
+预览截图/
+
+# ===== 用户上传文件（运行时生成） =====
+static/uploads/
+
+# ===== 项目元数据 =====
+.workbuddy/
+
+# ===== 日志 =====
+logs/
+*.log

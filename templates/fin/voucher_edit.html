@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+{% block title %}{{ '修改凭证' if v else '新增凭证' }} · 海盈通保{% endblock %}
+{% block pagename %}FMS · {{ '修改凭证' if v else '新增凭证' }}{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">
+    {{ '修改凭证' if v else '新增凭证' }}
+    <span style="font-size:13px;font-weight:400;color:#9C9288">Voucher Entry</span>
+  </h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    多借多贷都可以；<b style="color:#5C554D">借方合计必须等于贷方合计</b>，
+    且每一行只能填一个方向。同一张凭证里「收 / 付 / 转」选一个作为字别，凭证号由系统自动生成。
+  </div>
+
+  <form method="post" action="{{ url_for('fin.voucher_save') }}" id="vform">
+    <input type="hidden" name="vid" value="{{ v.id if v else '' }}">
+
+    {# ---------- 凭证抬头 ---------- #}
+    <div class="card" style="padding:16px 18px;margin-bottom:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+        <label style="font-size:12.5px;color:#5C554D">
+          <div style="margin-bottom:4px">凭证号</div>
+          <div style="padding:8px 12px;background:#FAF7F2;border:1px solid #EAE2D6;border-radius:9px;
+                      font-family:monospace;font-weight:600;color:{{ '#C86432' if v else '#9C9288' }};min-width:150px">
+            {{ v.voucher_no if v else '保存后自动生成' }}
+          </div>
+        </label>
+        <label style="font-size:12.5px;color:#5C554D">
+          <div style="margin-bottom:4px">凭证日期 <span style="color:#C86432">*</span></div>
+          <input type="date" name="voucher_date" required value="{{ today }}"
+                 style="padding:7px 10px;width:160px">
+        </label>
+        <label style="font-size:12.5px;color:#5C554D">
+          <div style="margin-bottom:4px">字别 <span style="color:#C86432">*</span></div>
+          <select name="word" style="padding:7px 10px;width:92px">
+            {% if v and v.word and v.word not in words %}
+              <option value="{{ v.word }}" selected>{{ v.word }}</option>
+            {% endif %}
+            {% for w in words %}
+              <option value="{{ w }}" {{ 'selected' if v and v.word == w else '' }}>{{ w }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12.5px;color:#5C554D">
+          <div style="margin-bottom:4px">附件张数</div>
+          <input type="number" name="attach_count" min="0" step="1"
+                 value="{{ (v.attach_count or 0) if v else 0 }}" style="padding:7px 10px;width:96px">
+        </label>
+        <label style="font-size:12.5px;color:#5C554D;flex:1;min-width:220px">
+          <div style="margin-bottom:4px">凭证摘要 <span style="color:#C86432">*</span></div>
+          <input type="text" name="summary" required maxlength="200"
+                 placeholder="如：确认 2026年9月 代理手续费收入"
+                 value="{{ (v.summary or '') if v else '' }}" style="padding:7px 10px;width:100%">
+        </label>
+      </div>
+      <div style="font-size:12px;color:#9C9288;margin-top:10px">
+        会计期间按凭证日期自动归入（
+        {% if cfg.start_period %}账套启用期间 {{ cfg.start_period }}，{% endif %}
+        建议录在启用期间或其之后）。
+      </div>
+    </div>
+
+    {# ---------- 分录 ---------- #}
+    <div class="card" style="padding:0;margin-bottom:16px;overflow:hidden">
+      <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #F2EBE1">
+        <div style="font-size:14px;font-weight:600">会计分录</div>
+        <button type="button" id="addRow"
+                style="background:#FCFAF7;border:1px solid #E2D8CA;border-radius:8px;padding:6px 14px;
+                       font-size:13px;color:#C86432;cursor:pointer">＋ 添加一行</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+        <colgroup>
+          <col style="width:44px"><col style="width:22%"><col><col style="width:140px"><col style="width:140px"><col style="width:46px">
+        </colgroup>
+        <thead>
+          <tr style="background:#FAF7F2;color:#5C554D;font-size:12.5px">
+            <th style="padding:9px 8px">行</th>
+            <th style="text-align:left;padding:9px 8px">摘要</th>
+            <th style="text-align:left;padding:9px 8px">会计科目（只列启用中的明细科目）</th>
+            <th style="text-align:right;padding:9px 8px">借方金额</th>
+            <th style="text-align:right;padding:9px 8px">贷方金额</th>
+            <th style="padding:9px 4px"></th>
+          </tr>
+        </thead>
+        <tbody id="entryBody">
+          {% for r in rows %}
+          <tr class="erow" data-idx="{{ loop.index0 }}" style="border-top:1px solid #F2EBE1">
+            <td class="no" style="padding:7px 8px;text-align:center;color:#9C9288">{{ loop.index }}</td>
+            <td style="padding:7px 4px">
+              <input type="text" class="esum" name="entry_summary_{{ loop.index0 }}" maxlength="200"
+                     placeholder="可留空，默认用凭证摘要" value="{{ r.summary }}"
+                     style="width:100%;padding:6px 8px;font-size:13px">
+            </td>
+            <td style="padding:7px 4px">
+              <select class="ecode" name="entry_code_{{ loop.index0 }}" style="width:100%;padding:6px 8px;font-size:13px">
+                <option value="">— 请选择科目 —</option>
+                {% for cat, accs in groups %}
+                <optgroup label="{{ cat }}">
+                  {% for a in accs %}
+                  <option value="{{ a.code }}" {{ 'selected' if a.code == r.account_code else '' }}>{{ a.code }} {{ a.name }}</option>
+                  {% endfor %}
+                </optgroup>
+                {% endfor %}
+              </select>
+            </td>
+            <td style="padding:7px 4px">
+              <input type="text" class="edebit" name="entry_debit_{{ loop.index0 }}" inputmode="decimal"
+                     placeholder="0.00" value="{{ r.debit }}"
+                     style="width:100%;padding:6px 8px;font-size:13px;text-align:right">
+            </td>
+            <td style="padding:7px 4px">
+              <input type="text" class="ecredit" name="entry_credit_{{ loop.index0 }}" inputmode="decimal"
+                     placeholder="0.00" value="{{ r.credit }}"
+                     style="width:100%;padding:6px 8px;font-size:13px;text-align:right">
+            </td>
+            <td style="padding:7px 4px;text-align:center">
+              <button type="button" class="del" title="删除本行"
+                      style="background:none;border:none;color:#B0A597;font-size:16px;line-height:1;cursor:pointer">×</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="border-top:2px solid #EAE2D6;background:#FCFAF7">
+            <td colspan="3" style="padding:11px 10px;text-align:right;font-size:12.5px;color:#5C554D">合计</td>
+            <td style="padding:11px 8px;text-align:right;font-weight:700;color:#C86432">￥<span id="sumDebit">0.00</span></td>
+            <td style="padding:11px 8px;text-align:right;font-weight:700;color:#C86432">￥<span id="sumCredit">0.00</span></td>
+            <td></td>
+          </tr>
+          <tr style="background:#fff">
+            <td colspan="3" style="padding:6px 10px;text-align:right;font-size:12.5px;color:#9C9288">差额</td>
+            <td colspan="2" style="padding:6px 8px;text-align:right;font-size:12.5px;color:#9C9288">￥<span id="sumDiff">0.00</span></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {# ---------- 平衡状态 + 提交 ---------- #}
+    <div class="card" style="padding:16px 18px;margin-bottom:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+        <span id="balBadge" style="display:inline-block;padding:5px 14px;border-radius:20px;
+              font-size:13px;font-weight:600;color:#991b1b;background:#FDECEC">借贷不平衡</span>
+        <span id="balHint" style="font-size:12.5px;color:#991b1b">
+          借贷不等不能保存（差额需为 0，且至少两行有效分录）
+        </span>
+      </div>
+      <label style="display:block;font-size:12.5px;color:#5C554D;margin-top:14px">
+        <div style="margin-bottom:4px">备注</div>
+        <textarea name="remark" rows="2" maxlength="200" placeholder="选填，如凭证来源说明"
+                  style="width:100%;padding:8px 10px;font-size:13px">{{ (v.remark or '') if v else '' }}</textarea>
+      </label>
+      <div style="display:flex;gap:12px;align-items:center;margin-top:16px">
+        <button type="submit" id="submitBtn" class="btn" style="padding:9px 26px">保存凭证</button>
+        <a href="{{ url_for('fin.voucher_detail', vid=v.id) if v else url_for('fin.vouchers') }}"
+           style="font-size:13px;color:#9C9288">取消</a>
+        <span style="font-size:12.5px;color:#9C9288">
+          保存后是<b style="color:#8A5A18">草稿</b>，需由另一位财务主管「审核 → 记账」才正式入账（制单 ≠ 审核）。
+        </span>
+      </div>
+    </div>
+  </form>
+
+  {# 新增行的原型：# 添加一行 时克隆它，避免把科目下拉在 JS 里再写一遍 #}
+  <template id="rowTpl">
+    <tr class="erow" style="border-top:1px solid #F2EBE1">
+      <td class="no" style="padding:7px 8px;text-align:center;color:#9C9288"></td>
+      <td style="padding:7px 4px">
+        <input type="text" class="esum" maxlength="200" placeholder="可留空，默认用凭证摘要"
+               style="width:100%;padding:6px 8px;font-size:13px">
+      </td>
+      <td style="padding:7px 4px">
+        <select class="ecode" style="width:100%;padding:6px 8px;font-size:13px">
+          <option value="">— 请选择科目 —</option>
+          {% for cat, accs in groups %}
+          <optgroup label="{{ cat }}">
+            {% for a in accs %}<option value="{{ a.code }}">{{ a.code }} {{ a.name }}</option>{% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </td>
+      <td style="padding:7px 4px">
+        <input type="text" class="edebit" inputmode="decimal" placeholder="0.00"
+               style="width:100%;padding:6px 8px;font-size:13px;text-align:right">
+      </td>
+      <td style="padding:7px 4px">
+        <input type="text" class="ecredit" inputmode="decimal" placeholder="0.00"
+               style="width:100%;padding:6px 8px;font-size:13px;text-align:right">
+      </td>
+      <td style="padding:7px 4px;text-align:center">
+        <button type="button" class="del" title="删除本行"
+                style="background:none;border:none;color:#B0A597;font-size:16px;line-height:1;cursor:pointer">×</button>
+      </td>
+    </tr>
+  </template>
+
+  <script>
+  (function () {
+    var body = document.getElementById('entryBody');
+    var tpl = document.getElementById('rowTpl');
+    var rowIdx = {{ rows|length }};          // 新行的编号从现有行数往后排，不重编已有行，避免键名撞车
+
+    function num(v) {                        // 容忍千分位逗号与空格；非法当 0
+      v = (v || '').replace(/[,，\s￥¥]/g, '');
+      if (v === '') return 0;
+      var f = parseFloat(v);
+      return isNaN(f) ? 0 : f;
+    }
+    function fmt(n) {
+      return n.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function r2(n) { return Math.round(n * 100) / 100; }
+
+    function nameRow(tr, i) {                // 克隆出来的行没有 name，这里按约定补上
+      var s = tr.querySelector('.esum'), c = tr.querySelector('.ecode');
+      var d = tr.querySelector('.edebit'), k = tr.querySelector('.ecredit');
+      s.name = 'entry_summary_' + i;
+      c.name = 'entry_code_' + i;
+      d.name = 'entry_debit_' + i;
+      k.name = 'entry_credit_' + i;
+      tr.setAttribute('data-idx', i);
+    }
+    function renumber() {
+      var rows = body.querySelectorAll('tr.erow');
+      for (var i = 0; i < rows.length; i++) {
+        var no = rows[i].querySelector('.no');
+        if (no) no.textContent = (i + 1);
+      }
+    }
+    function recalc() {                      // 实时借贷合计 + 平衡判定 + 提交闸门
+      var rows = body.querySelectorAll('tr.erow'), d = 0, c = 0, filled = 0;
+      for (var i = 0; i < rows.length; i++) {
+        d += num(rows[i].querySelector('.edebit').value);
+        c += num(rows[i].querySelector('.ecredit').value);
+        if (rows[i].querySelector('.ecode').value) filled++;
+      }
+      d = r2(d); c = r2(c);
+      var diff = r2(d - c);
+      document.getElementById('sumDebit').textContent = fmt(d);
+      document.getElementById('sumCredit').textContent = fmt(c);
+      document.getElementById('sumDiff').textContent = fmt(diff);
+
+      var tight = Math.abs(diff) < 0.005;
+      var ok = tight && d > 0 && filled >= 2;
+      var badge = document.getElementById('balBadge');
+      badge.textContent = ok ? '借贷平衡' : (tight ? '分录不足' : '借贷不平衡');
+      badge.style.color = ok ? '#166534' : '#991b1b';
+      badge.style.background = ok ? '#E8F5EC' : '#FDECEC';
+      document.getElementById('balHint').style.display = ok ? 'none' : 'inline';
+
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? '1' : '.5';
+      btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+    }
+    function bindRow(tr) {
+      var d = tr.querySelector('.edebit'), c = tr.querySelector('.ecredit');
+      // 同一行不能又借又贷：填了一边就自动清空另一边（对应后端的硬校验）
+      d.addEventListener('input', function () { if (d.value.trim() !== '') c.value = ''; recalc(); });
+      c.addEventListener('input', function () { if (c.value.trim() !== '') d.value = ''; recalc(); });
+      tr.querySelector('.ecode').addEventListener('change', recalc);
+      tr.querySelector('.del').addEventListener('click', function () {
+        if (body.querySelectorAll('tr.erow').length <= 2) { alert('一张凭证至少保留两行分录'); return; }
+        body.removeChild(tr); renumber(); recalc();
+      });
+    }
+
+    var initRows = body.querySelectorAll('tr.erow');
+    for (var i = 0; i < initRows.length; i++) bindRow(initRows[i]);
+
+    document.getElementById('addRow').addEventListener('click', function () {
+      var frag = tpl.content.cloneNode(true);
+      var tr = frag.querySelector('tr');
+      body.appendChild(frag);
+      nameRow(tr, rowIdx++);
+      bindRow(tr);
+      renumber(); recalc();
+      tr.querySelector('.ecode').focus();
+    });
+
+    renumber(); recalc();
+  })();
+  </script>
+{% endblock %}

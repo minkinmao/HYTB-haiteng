@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}佣金明细 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 16px">
+    佣金明细
+    {% if my_agent %}<small style="font-size:13px;color:#9C9288;font-weight:400">（{{ my_agent.agent_type }} · {{ my_agent.name }}）</small>{% endif %}
+    {% if can_manage %}<a href="{{ url_for('commission.bonuses') }}" style="font-size:13px;color:#E6823C;text-decoration:none;margin-left:10px">奖金池</a>{% endif %}
+  </h2>
+
+  {# 我的佣金汇总（仅外勤可见） #}
+  {% if my_agent %}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">我的佣金</div>
+    {% if my_commissions %}
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div><div style="font-size:12px;color:#9C9288">已确认</div>
+             <div style="font-size:18px;font-weight:600;color:#166534">{{ '%.2f'|format(my_confirmed_total) }}</div></div>
+        <div><div style="font-size:12px;color:#9C9288">待确认</div>
+             <div style="font-size:18px;font-weight:600;color:#E6823C">{{ '%.2f'|format(my_pending_total) }}</div></div>
+      </div>
+    {% else %}
+      <div style="color:#9C9288;font-size:13px">暂无佣金数据</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# 新增佣金（仅管理员） #}
+  {% if can_manage %}
+  <div style="background:#fff;border-radius:8px;padding:16px;margin-bottom:20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">新增佣金</div>
+    <form method="post" action="{{ url_for('commission.commission_new') }}"
+          style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">销售人员 *</div>
+        <select name="employee_id" required style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+          <option value="">请选择</option>
+          {% for e in employees.values() %}<option value="{{ e.id }}">{{ e.name }}（{{ e.employee_no }}）· {{ e.agent_type }}</option>{% endfor %}
+        </select></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">归属月份 *</div>
+        <input name="month" required placeholder="如 2026-08" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:120px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">产品</div>
+        <input name="product_name" placeholder="产品名称" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:160px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">渠道</div>
+        <input name="channel_name" placeholder="渠道名称" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:120px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">保费(元)</div>
+        <input name="premium" type="number" step="0.01" placeholder="0.00" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">佣金率(%)</div>
+        <input name="commission_rate" type="number" step="0.01" placeholder="0.00" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:100px"></div>
+      <div><div style="font-size:12px;color:#9C9288;margin-bottom:4px">佣金金额(元)</div>
+        <input name="commission_amount" type="number" step="0.01" placeholder="0.00" style="padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;width:110px"></div>
+      <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;cursor:pointer">添加</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div style="background:#fff;border-radius:8px;padding:8px 16px;box-shadow:0 1px 3px rgba(42,42,42,.05);overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap">
+      <thead>
+        <tr style="color:#9C9288;text-align:left">
+          <th style="padding:8px">销售</th><th>月份</th><th>产品</th><th>渠道</th>
+          <th>保费</th><th>佣金率</th><th>佣金</th><th>状态</th><th>备注</th>
+          {% if can_manage %}<th>操作</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for it in items %}
+      <tr style="border-top:1px solid #F3EDE3">
+        <td style="padding:8px">{{ it.employee.name if it.employee else '—' }}
+          <br><span style="color:#9C9288;font-size:11px">{{ it.employee.employee_no if it.employee else '' }}</span></td>
+        <td>{{ it.month }}</td>
+        <td style="max-width:140px">{{ it.product_name or '—' }}</td>
+        <td>{{ it.channel_name or '—' }}</td>
+        <td>{{ '%.2f'|format(it.premium) }}</td>
+        <td>{{ '%.2f%%'|format(it.commission_rate) }}</td>
+        <td style="color:#166534;font-weight:600">{{ '%.2f'|format(it.commission_amount) }}</td>
+        <td>
+          {% if it.status == 'confirmed' %}
+            <span style="font-size:11px;padding:2px 7px;border-radius:9px;background:#dcfce7;color:#166534">已确认</span>
+          {% else %}
+            <span style="font-size:11px;padding:2px 7px;border-radius:9px;background:#FDF3E4;color:#8A5A18">待确认</span>
+          {% endif %}
+        </td>
+        <td style="white-space:normal;max-width:120px">{{ it.note or '' }}</td>
+        {% if can_manage %}
+        <td>
+          {% if it.status != 'confirmed' %}
+          <form method="post" action="{{ url_for('commission.commission_confirm', cid=it.id) }}"
+                onsubmit="return confirm('确认此笔佣金？确认后无法撤销。')">
+            <button type="submit" style="font-size:12px;color:#166534;background:#fff;border:1px solid #86efac;padding:3px 10px;border-radius:6px;cursor:pointer">确认</button>
+          </form>
+          {% else %}
+            <span style="font-size:12px;color:#9C9288">—</span>
+          {% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="10" style="padding:20px;text-align:center;color:#9C9288">暂无佣金数据</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

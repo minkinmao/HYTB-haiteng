@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}ADM · 行政事务{% endblock %}
+{% block pagename %}行政管理系统 · 行政事务{% endblock %}
+{% block content %}
+{% include 'adm/_adm_css.html' %}
+<style>
+  .sv-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px}
+  .sv-card{display:block;background:#fff;border:1px solid #EAE2D6;border-radius:14px;padding:18px 20px;
+           text-decoration:none;color:#2A2A2A;box-shadow:0 2px 12px rgba(42,42,42,.05);min-width:0}
+  .sv-card:hover{border-color:#E5B58C;background:#FFFCF8}
+  .sv-en{font-size:11px;font-weight:700;color:#E6823C;letter-spacing:.5px}
+  .sv-nm{font-size:16px;font-weight:600;margin:3px 0 6px}
+  .sv-ds{font-size:12.5px;color:#9C9288;line-height:1.6;min-height:40px}
+  .sv-nums{font-size:12.5px;color:#6B5D4F;border-top:1px dashed #F0E9DE;padding-top:10px;margin-top:10px}
+  .sv-nums b{font-size:17px;color:#C86432;font-variant-numeric:tabular-nums}
+  .sv-tip{background:#FAF7F2;border:1px solid #EAE2D6;border-radius:12px;padding:12px 16px;
+          font-size:12.5px;color:#6B5D4F;line-height:1.9}
+</style>
+
+<h2 style="font-size:18px;margin:0 0 6px">行政事务
+  <small style="font-size:12px;color:#9C9288;font-weight:400">（办公用品 / 印章使用登记 / 快递收发）</small>
+</h2>
+<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
+  行政后勤的日常登记台账。本模块只管「登记与提醒」——用章如需审批请走 OA 申请中心，相关付款走 OA / 财务系统。
+</div>
+
+<div class="sv-cards">
+  <a class="sv-card" href="{{ url_for('adm.supplies') }}">
+    <div class="sv-en">OFFICE SUPPLY</div>
+    <div class="sv-nm">办公用品</div>
+    <div class="sv-ds">用品台账 + 入库 / 领用登记，库存低于安全线自动预警。</div>
+    <div class="sv-nums">
+      在管 <b>{{ supply_n }}</b> 种
+      {% if supply_low %}· <span class="adm-tag t-warn">{{ supply_low }} 项库存预警</span>{% endif %}
+    </div>
+  </a>
+  <a class="sv-card" href="{{ url_for('adm.seals') }}">
+    <div class="sv-en">SEAL REGISTER</div>
+    <div class="sv-nm">印章使用登记</div>
+    <div class="sv-ds">记录每一次用章：用章人、事由、文件份数与归还状态。</div>
+    <div class="sv-nums">
+      累计 <b>{{ seal_n }}</b> 条
+      {% if seal_pending %}· <span class="adm-tag t-warn">{{ seal_pending }} 条待盖章</span>{% endif %}
+    </div>
+  </a>
+  <a class="sv-card" href="{{ url_for('adm.express_list') }}">
+    <div class="sv-en">EXPRESS</div>
+    <div class="sv-nm">快递收发</div>
+    <div class="sv-ds">收件 / 寄件登记，未签收、待寄出的单据一眼看清。</div>
+    <div class="sv-nums">
+      累计 <b>{{ exp_n }}</b> 条
+      {% if exp_pending %}· <span class="adm-tag t-warn">{{ exp_pending }} 条待处理</span>{% endif %}
+    </div>
+  </a>
+</div>
+
+<div class="sv-tip">
+  <b>边界提醒</b>：① 用章审批 → OA 申请中心；② 费用报销 / 请款 → OA 申请中心；
+  ③ 固定资产记账与折旧凭证 → 财务管理系统（本模块只出台账，不生成凭证）。
+  {% if not can_edit %}<br>你的账号为只读查看，如需登记请联系行政管理员。{% endif %}
+</div>
+{% endblock %}

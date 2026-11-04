@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}人员差勤管理 · 海盈通保{% endblock %}
+{% block pagename %}EHR · 人员差勤管理{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">人员差勤管理 <span style="font-size:13px;font-weight:400;color:#9C9288">Attendance Admin</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px">
+    本板块仅提供出勤数据查询；所有申请、审批相关流程统一在「OA 办公系统」办理。
+  </div>
+
+  <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">功能入口</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <a href="{{ url_for('oa.attendance_records') }}"
+         style="display:inline-block;padding:10px 18px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;color:#2A2A2A;text-decoration:none;background:#FCFAF7">
+        <span style="color:#E6823C;font-weight:600">Records</span> · 月度出勤查询
+        <span style="font-size:11px;color:#9C9288">（日历 + 每日打卡数据）</span>
+      </a>
+    </div>
+    <div style="font-size:12px;color:#9C9288;margin-top:12px">
+      差勤申请、休假申请等需审批的流程，请前往「OA 办公系统 → 差勤申请」办理。
+    </div>
+  </div>
+{% endblock %}

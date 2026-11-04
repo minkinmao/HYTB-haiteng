@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}员工花名册 · 海盈通保{% endblock %}
+{% block content %}
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+    <div style="min-width:0">
+      <h2 style="font-size:18px;margin:0 0 6px">员工花名册 <span style="font-size:13px;font-weight:400;color:#9C9288">Employee Roster</span></h2>
+      <div style="font-size:13px;color:#9C9288;max-width:760px;line-height:1.7">
+        按<b style="color:#C86432">部门分组</b>展示（顺序与「组织架构」一致），<b style="color:#C86432">点击姓名</b>弹出该员工档案卡片；
+        本页为全员档案数据备份，<b style="color:#C86432">仅供查询，不做任何修改</b>；
+        档案由「入职人员信息增加」流程确认后自动入册，人员异动 / 离职在「在职人员信息维护」办理。
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#9C9288">共 <b style="color:#C86432;font-size:14px">{{ items|length }}</b> 人</span>
+      <a href="{{ url_for('hr.roster_export') }}" class="btn"
+         style="text-decoration:none;display:inline-block;white-space:nowrap">一键导出 CSV</a>
+    </div>
+  </div>
+
+  {% for dname, members in groups %}
+  <div class="card" style="padding:0;margin-top:18px;overflow:hidden">
+    {# 部门分组标题：部门名 + 该部门人数 #}
+    <div style="padding:11px 18px;background:#FAF7F2;border-bottom:1px solid #F3EDE3;
+                display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="font-size:14px;font-weight:600;color:#2A2A2A;display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:2px;background:#E6823C;display:inline-block"></span>{{ dname }}
+      </div>
+      <div style="font-size:12px;color:#9C9288">{{ members|length }} 人</div>
+    </div>
+    {% for it in members %}
+    <div style="padding:12px 18px;border-bottom:1px solid #F7F2EA;display:flex;
+                justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="min-width:0">
+        <div style="font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          {# 姓名可点：弹出档案卡片（JS 弹窗，数据见页尾 EMP） #}
+          <a href="javascript:;" onclick="openEmp({{ it.id }})"
+             style="color:#C86432;text-decoration:none;border-bottom:1px dashed #E2B48C">{{ it.name }}</a>
+          <span style="font-size:12px;color:#9C9288;font-weight:400">工号 {{ it.employee_no or '待分配' }}</span>
+          <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#FBEEE2' if it.staff_type=='internal' else '#FDF3E4' }};color:{{ '#C86432' if it.staff_type=='internal' else '#8A5A18' }}">{{ '内勤' if it.staff_type=='internal' else '外勤' }}</span>
+          <span style="font-size:11px;padding:1px 7px;border-radius:9px;background:{{ '#dcfce7' if it.status=='active' else '#FBE3DD' }};color:{{ '#166534' if it.status=='active' else '#991b1b' }}">{{ '在职' if it.status=='active' else '离职' }}</span>
+        </div>
+        <div style="font-size:12px;color:#9C9288;margin-top:4px">
+          {% if it.staff_type == 'external' %}外勤·{{ it.agent_type or '未设代理类型' }}{% else %}内勤·{{ it.level.code if it.level else '未设职级' }}{% endif %} ｜
+          职务：{{ it.title or '—' }} ｜
+          入职：{{ it.hire_date or '—' }}
+        </div>
+      </div>
+      <a href="{{ url_for('hr.employee_view', eid=it.id) }}"
+         style="font-size:12px;color:#E6823C;text-decoration:none;border:1px solid #E2D8CA;padding:4px 12px;border-radius:6px">查看档案</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card" style="padding:24px;margin-top:18px;text-align:center;color:#9C9288">
+    花名册暂无数据，请通过「入职人员信息增加」流程入册
+  </div>
+  {% endfor %}
+
+  {# ===================== 档案卡片弹窗（点击姓名弹出） ===================== #}
+  <div id="empModal" onclick="if(event.target===this)closeEmp()"
+       style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(42,42,42,.45);
+              z-index:80;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;max-height:86vh;overflow:auto;
+                box-shadow:0 12px 40px rgba(42,42,42,.25)">
+      <div style="padding:16px 18px;display:flex;align-items:center;gap:14px;border-bottom:1px solid #F3EDE3">
+        <img id="emPhoto" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:none">
+        <div id="emAvatar" style="width:56px;height:56px;border-radius:50%;background:#FBEEE2;color:#C86432;
+             display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700"></div>
+        <div style="min-width:0">
+          <div id="emName" style="font-size:17px;font-weight:700"></div>
+          <div id="emSub" style="font-size:12.5px;color:#9C9288;margin-top:3px"></div>
+        </div>
+        <button type="button" onclick="closeEmp()"
+                style="margin-left:auto;background:none;border:none;font-size:22px;color:#9C9288;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div id="emFields" style="padding:12px 18px"></div>
+      <div style="padding:12px 18px;border-top:1px solid #F3EDE3;display:flex;gap:10px;justify-content:flex-end">
+        <a id="emCard" href="#" style="font-size:13px;color:#6B5D4F;border:1px solid #E2D8CA;padding:7px 16px;
+           border-radius:8px;text-decoration:none;background:#fff">人事卡片</a>
+        <a id="emView" href="#" style="font-size:13px;color:#fff;background:#C86432;padding:8px 18px;
+           border-radius:8px;text-decoration:none">完整档案</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 弹窗档案数据（后端按「部门 + 工号」排序后逐人打包，键为员工 id）
+    var EMP = {{ emp_data | tojson }};
+    var EM_ROWS = [['部门', 'dept'], ['职务', 'title'], ['职级/代理', 'rank'], ['用工类型', 'type'],
+                   ['入职日期', 'hire'], ['联系电话', 'phone'], ['公司邮箱', 'email'], ['在职状态', 'status']];
+    function openEmp(id) {
+      var e = EMP[id];
+      if (!e) return;
+      document.getElementById('emName').textContent = e.name;
+      document.getElementById('emSub').textContent = '工号 ' + (e.no || '待分配') + ' ｜ ' + (e.type || '');
+      // 有照片用照片，没有则用姓名首字占位
+      var img = document.getElementById('emPhoto'), av = document.getElementById('emAvatar');
+      if (e.photo) { img.src = e.photo; img.style.display = 'block'; av.style.display = 'none'; }
+      else { img.style.display = 'none'; av.style.display = 'flex'; av.textContent = (e.name || '').slice(0, 1); }
+      // 逐行渲染档案字段（值一律 textContent 赋值，避免注入）
+      var box = document.getElementById('emFields');
+      box.innerHTML = '';
+      EM_ROWS.forEach(function (r) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;padding:7px 0;border-bottom:1px solid #F7F2EA;font-size:13px';
+        var k = document.createElement('div');
+        k.style.cssText = 'width:88px;color:#9C9288;flex:none';
+        k.textContent = r[0];
+        var v = document.createElement('div');
+        v.style.cssText = 'color:#2A2A2A;overflow-wrap:anywhere';
+        v.textContent = e[r[1]] || '—';
+        row.appendChild(k); row.appendChild(v); box.appendChild(row);
+      });
+      document.getElementById('emCard').href = e.card;
+      document.getElementById('emView').href = e.view;
+      document.getElementById('empModal').style.display = 'flex';
+    }
+    function closeEmp() { document.getElementById('empModal').style.display = 'none'; }
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeEmp(); });
+  </script>
+{% endblock %}
