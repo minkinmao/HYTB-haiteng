@@ -92,8 +92,12 @@ def user_new():
     full_tree = build_menu_tree(set(MODULE_KEYS))  # 全量模块（按系统分组），供勾选
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
-        pwd = request.form.get('password') or ''
-        pwd2 = request.form.get('password2') or ''
+        pwd = (request.form.get('password') or '').strip()
+        pwd2 = (request.form.get('password2') or '').strip()
+        # 初始密码默认 123456（未填写时使用默认值，所有新建用户初始密码统一为 123456）
+        if not pwd:
+            pwd = '123456'
+            pwd2 = '123456'
         level_id = request.form.get('level_id')
         keys = request.form.getlist('keys')  # 勾选的模块端点
         # 校验失败也回显已勾选的模块，避免用户重选
@@ -110,8 +114,11 @@ def user_new():
         if User.query.filter_by(username=username).first():
             flash('该工号账号已存在')
             return render_template('admin/user_new.html', levels=levels, full_tree=full_tree, owned=owned_keys)
+        # 初始密码为 123456 的账号，首次登录强制改密（沿用既有机制）
+        must_change = (pwd == '123456')
         u = User(username=username, password_hash=generate_password_hash(pwd),
-                 level_id=int(level_id) if level_id else None, is_admin=False)
+                 level_id=int(level_id) if level_id else None, is_admin=False,
+                 must_change_password=must_change)
         db.session.add(u)
         db.session.flush()  # 拿到 u.id 再写模块权限
         added = 0
@@ -170,3 +177,30 @@ def user_password(uid):
         flash('已重置「%s」的密码' % u.username)
         return redirect(url_for('admin.users'))
     return render_template('admin/user_password.html', u=u)
+
+
+@bp.route('/admin/users/<int:uid>/delete', methods=['POST'])
+@login_required
+@admin_required
+def user_delete(uid):
+    """删除用户（含其模块权限）；带防护：不能删自己、不能删唯一的系统管理员"""
+    u = User.query.get_or_404(uid)
+    # 防护1：不能删除当前登录账号，否则会把自己锁在后台外
+    if u.id == session.get('user_id'):
+        flash('不能删除当前登录的账号')
+        return redirect(url_for('admin.users'))
+    # 防护2：不能删除唯一的系统管理员，避免后台被锁死
+    if u.is_admin:
+        admin_count = User.query.filter_by(is_admin=True).count()
+        if admin_count <= 1:
+            flash('不能删除唯一的系统管理员账号')
+            return redirect(url_for('admin.users'))
+    # 先清理该用户的模块权限，再删账号
+    UserModulePerm.query.filter_by(user_id=u.id).delete()
+    username = u.username
+    db.session.delete(u)
+    db.session.commit()
+    log_audit('delete_user', module='auth', target_id=uid, target_no=username,
+              detail='管理员删除用户：%s' % username)
+    flash('已删除用户「%s」' % username)
+    return redirect(url_for('admin.users'))

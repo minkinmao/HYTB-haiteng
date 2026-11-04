@@ -38,6 +38,18 @@ def login_required(f):
     return wrapper
 
 
+@app.before_request
+def enforce_must_change_password():
+    """已登录但被标记必须改密码的用户，除改密码/退出/静态资源外一律拦截到改密码页。"""
+    if 'user_id' not in session:
+        return
+    if request.endpoint in ('change_password', 'logout', 'static'):
+        return
+    user = User.query.get(session.get('user_id'))
+    if user and user.must_change_password:
+        return redirect(url_for('change_password'))
+
+
 def permission_required(code):
     """权限闸门：要求当前登录用户所属职级拥有指定权限 code，否则拦截。
     与 login_required 配合：先登录，再校验权限（权限流）。"""
@@ -97,6 +109,10 @@ def login():
             session['level_code'] = user.level.code if user.level else ''
             session['level_name'] = user.level.name if user.level else ''
             log_audit('login', module='auth')
+            # 首次登录强制改密码：被标记的用户必须先改密码，再进系统
+            if user.must_change_password:
+                flash('出于安全，请先修改登录密码')
+                return redirect(url_for('change_password'))
             return redirect(url_for('home'))
         flash('用户名或密码错误')  # 校验失败提示
     return render_template('login.html')
@@ -133,6 +149,7 @@ def change_password():
             flash('两次输入的新密码不一致')
             return redirect(url_for('change_password'))
         user.password_hash = generate_password_hash(new)
+        user.must_change_password = False  # 改密后解除强制改密标记
         db.session.commit()
         log_audit('change_password', module='auth', detail='用户自助修改密码')
         flash('密码修改成功')

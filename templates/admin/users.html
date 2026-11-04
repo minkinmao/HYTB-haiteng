@@ -12,6 +12,9 @@
   .tag.adm{background:#EDEAE6;color:#4A443E;font-weight:600}
   .acts a{margin-right:10px;color:var(--brand-deep);font-weight:600;white-space:nowrap}
   .acts a:hover{text-decoration:underline}
+  .acts form{display:inline}
+  .acts button{margin-right:10px;color:#C0392B;font-weight:600;white-space:nowrap;background:none;border:none;padding:0;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .acts button:hover{text-decoration:underline}
   .toolbar{display:flex;justify-content:flex-end;margin-bottom:14px}
 </style>
 
@@ -48,6 +51,9 @@
       <a href="{{ url_for('admin.user_perms', uid=r.u.id) }}">模块权限</a>
       <a href="{{ url_for('admin.user_edit', uid=r.u.id) }}">绑定企微</a>
       <a href="{{ url_for('admin.user_password', uid=r.u.id) }}">重置密码</a>
+      <form action="{{ url_for('admin.user_delete', uid=r.u.id) }}" method="post" onsubmit="return confirm('确定删除用户「{{ r.u.username }}」？该操作不可恢复');">
+        <button type="submit">删除</button>
+      </form>
     </td>
   </tr>
   {% else %}

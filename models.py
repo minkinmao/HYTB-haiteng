@@ -48,6 +48,9 @@ class User(db.Model):
     # 与职级权限流(level_permission)是两条独立维度：职级决定功能操作权限，
     # 本标识决定用户能看见/进入哪些二级菜单（UserModulePerm）。
     is_admin = db.Column(db.Boolean, default=False, comment='是否系统管理员（拥有全部模块权限）')
+    # 首次登录强制改密码：初始弱口令（如 admin/123456）账号置 True，登录后必须改密码，改完置 False
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False,
+                                     comment='首次登录是否必须改密码（初始弱口令账号）')
 
 
 # ---------- 一之一、用户·二级菜单模块权限（用户级授权） ----------

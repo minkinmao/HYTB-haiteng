@@ -1852,6 +1852,7 @@ def seed():
                 level_id=lv_s.id,  # 演示账号设为 S 级（总经理/老板），可进 IT 后台
                 org_id=org_company.id,
                 is_admin=True,   # 系统管理员：拥有全部二级菜单模块权限
+                must_change_password=True,  # 初始弱口令，强制首次登录改密码
             ))
         # 兜底：旧库 admin 已存在但无 is_admin 标记时，确保其为管理员
         _admin = User.query.filter_by(username='admin').first()
