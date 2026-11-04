@@ -1813,16 +1813,41 @@ def seed():
 
         # 佣金/奖金权限（营销负责人专属，S/A/B/C 级默认授予）
         p_comm_admin = get_or_create(Permission, name='佣金-管理员', code='commission.admin')
-        # 默认权限流（IT 管理员后台可随时改）：
-        # S/A/B/C 有审批权 + 人事管理权 + 佣金管理权（管理人员），D/E 无
-        # 数据可见范围：S/A/B=全量，C=团队，D/E=本人
-        # 财务：S/A/B 是财务主管层（账套/科目/期初/确认函/审核记账/报表自定义/期末结转结账全权）；
-        #      C 是会计层——只给「凭证录入 + 凭证查询 + 报表查看」，
-        #      审核 / 记账 / 红冲（#33）、报表改公式（#35）、结账锁期（#36）都归主管
-        lv_s.permissions = [p_all, p_approve, p_hr, p_salary, p_org, p_leave, p_comm_admin, p_attendance, p_contract_upload, p_holiday, p_attrule, p_flow, p_announce, p_fin_cfg, p_fin_acc, p_fin_open, p_fin_confirm, p_fin_vch_edit, p_fin_vch_view, p_fin_vch_audit, p_fin_rpt_view, p_fin_rpt_design, p_fin_closing, p_fin_invoice, p_fin_auto, p_it_sys, p_fin_audit, p_fin_backup, p_fin_bank_view, p_fin_bank_manage, p_fin_cash_view, p_fin_cash_edit, p_oa_exp_approve, p_oa_exp_pay, p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh, p_adm_exp, p_adm_svc, p_crm_view, p_crm_ins, p_crm_ctr]
-        lv_a.permissions = [p_all, p_approve, p_hr, p_salary, p_org, p_leave, p_comm_admin, p_attendance, p_contract_upload, p_holiday, p_attrule, p_flow, p_announce, p_fin_cfg, p_fin_acc, p_fin_open, p_fin_confirm, p_fin_vch_edit, p_fin_vch_view, p_fin_vch_audit, p_fin_rpt_view, p_fin_rpt_design, p_fin_closing, p_fin_invoice, p_fin_auto, p_it_sys, p_fin_audit, p_fin_backup, p_fin_bank_view, p_fin_bank_manage, p_fin_cash_view, p_fin_cash_edit, p_oa_exp_approve, p_oa_exp_pay, p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh, p_adm_exp, p_adm_svc, p_crm_view, p_crm_ins, p_crm_ctr]
-        lv_b.permissions = [p_all, p_approve, p_hr, p_salary, p_org, p_leave, p_comm_admin, p_attendance, p_contract_upload, p_holiday, p_attrule, p_flow, p_announce, p_fin_cfg, p_fin_acc, p_fin_open, p_fin_confirm, p_fin_vch_edit, p_fin_vch_view, p_fin_vch_audit, p_fin_rpt_view, p_fin_rpt_design, p_fin_closing, p_fin_invoice, p_fin_auto, p_it_sys, p_fin_audit, p_fin_backup, p_fin_bank_view, p_fin_bank_manage, p_fin_cash_view, p_fin_cash_edit, p_oa_exp_approve, p_oa_exp_pay, p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh, p_adm_exp, p_adm_svc, p_crm_view, p_crm_ins, p_crm_ctr]
-        lv_c.permissions = [p_team, p_approve, p_hr, p_salary, p_org, p_leave, p_comm_admin, p_attendance, p_contract_upload, p_holiday, p_attrule, p_flow, p_announce, p_fin_vch_edit, p_fin_vch_view, p_fin_rpt_view, p_fin_invoice, p_oa_exp_approve, p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh, p_adm_exp, p_adm_svc, p_crm_view, p_crm_ins, p_crm_ctr]
+        # 默认权限流（IT 管理员后台可随时改）—— 2026-11-04 按威哥口径重排：
+        #   ① S 最高负责人 = 终审 + 全局查看，不参与具体操作（老板只拍板、不干细活）
+        #   ② A/B 部门负责人·总经理 = 一级/二级审批 + 部门业务全面管理（同一套权限，
+        #      审批层级差异由「审批流」的节点配置决定，不靠权限码区分）
+        #   ③ C 部门主管 = 二级审批 + 日常系统操作（考勤导入、合同上传、凭证录入等）
+        #   ④ D/E = 纯系统操作（只看本人数据 + 行政台账 + 核心业务查看），无管理、无审批
+        #   ⑤ IT/M2 维持原设计（系统运维 / 由 admin 自行配置），不随本口径调整
+        # 红线：it.system.manage 只给 S / IT / M2，A/B/C 一律不给；
+        #      hr.salary.manage（工资）只给 S / A / B，C 及以下看不到工资。
+        # 数据可见范围：S=全量，A/B/C=团队，D/E=本人
+        lv_s.permissions = [p_self, p_team, p_all,
+                            p_approve, p_oa_exp_approve, p_oa_exp_pay,
+                            p_fin_confirm, p_fin_vch_audit,
+                            p_fin_vch_view, p_fin_rpt_view, p_fin_audit, p_fin_bank_view, p_fin_cash_view,
+                            p_hr, p_emp_del, p_salary, p_org,
+                            p_adm_view, p_crm_view, p_it_sys]
+        # A/B 同一套：34 项（一级 / 二级审批靠审批流节点区分）
+        _lv_ab = [p_self, p_team,
+                  p_approve, p_oa_exp_approve, p_oa_exp_pay,
+                  p_fin_confirm, p_fin_vch_audit,
+                  p_fin_vch_view, p_fin_rpt_view, p_fin_audit, p_fin_bank_view, p_fin_cash_view,
+                  p_hr, p_emp_del, p_salary, p_org, p_leave, p_attendance,
+                  p_contract_upload, p_holiday, p_attrule,
+                  p_flow, p_announce,
+                  p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh, p_adm_exp, p_adm_svc,
+                  p_comm_admin, p_crm_view, p_crm_ins, p_crm_ctr]
+        lv_a.permissions = list(_lv_ab)
+        lv_b.permissions = list(_lv_ab)
+        # C 部门主管：14 项 = 二级审批 + 日常操作
+        lv_c.permissions = [p_self, p_team,
+                            p_approve, p_oa_exp_approve,
+                            p_attendance, p_contract_upload,
+                            p_adm_view, p_adm_ast, p_adm_exp, p_adm_svc,
+                            p_crm_view, p_crm_ctr,
+                            p_fin_vch_edit, p_fin_vch_view]
         lv_d.permissions = [p_self, p_adm_view, p_crm_view]
         lv_e.permissions = [p_self, p_adm_view, p_crm_view]
         # IT 系统管理员：独立职级（#40 红线）—— 只管权限流配置 + 看审计 + 做备份，

@@ -28,9 +28,13 @@ def _uniq(seq):
 _OA_APPROVE = ['oa.approvals', 'oa.todos', 'oa.apply_hub', 'oa.announcements']
 _OA_BASIC = ['oa.mails', 'oa.announcements', 'oa.apply_hub', 'oa.todos']
 _HR_OPS = ['hr.org_admin', 'hr.pay_admin', 'hr.att_admin']
+# C 级只做操作：给「员工档案（传合同）+ 考勤」，不给「工资管理」（无 hr.salary.manage，避免看到全员工资）
+_HR_ATT = ['hr.org_admin', 'hr.att_admin']
 _ADM_OPS = ['adm.licenses', 'adm.contracts', 'adm.assets', 'adm.vehicles', 'adm.expenses', 'adm.services']
 _FIN_OPS = ['fin.acct_hub', 'fin.bank_hub', 'fin.report_hub', 'fin.invoices', 'fin.auto_book',
             'fin.confirm_hub', 'fin.cash_orders', 'commission.commissions', 'commission.bonuses']
+# C 级财务只到「帐务中心」（凭证录入/查询），不给银行、报表、发票、自动记账
+_FIN_VCH = ['fin.acct_hub']
 _CRM_OPS = ['crm.insurers', 'crm.contracts', 'crm.org_struct', 'crm.agencies', 'crm.manpower',
             'crm.team_coefficient', 'crm.sales_fee', 'crm.commission_coefficient', 'crm.docs',
             'crm.policy_orders', 'crm.policy_query', 'crm.dashboard']
@@ -38,14 +42,17 @@ _SALES_OPS = ['crm.proposals', 'crm.proposal_engine']
 _IT_OPS = ['admin.levels', 'admin.users']
 
 LEVEL_DEFAULT_MODULES = {
-    'S': _uniq(list(MODULE_KEYS)),                                                     # 最高负责人：全部
+    'S': _uniq(list(MODULE_KEYS)),                                                     # 最高负责人：全部（看得全，改不动的会被权限拦）
+    # A/B 功能权限已统一（34 项），模块也统一：审批 + 人事 + 行政 + 财务 + 核心业务 + 销售
     'A': _uniq(_OA_APPROVE + _HR_OPS + _ADM_OPS + _FIN_OPS + _CRM_OPS + _SALES_OPS),   # 部门负责人：审批 + 全业务
-    'B': _uniq(_OA_APPROVE + _HR_OPS + _CRM_OPS + _SALES_OPS),                         # 部门总经理：审批 + 业务
-    'C': _uniq(_OA_APPROVE + _HR_OPS + _ADM_OPS + _CRM_OPS + _SALES_OPS),              # 部门主管：二级审批 + 业务操作
+    'B': _uniq(_OA_APPROVE + _HR_OPS + _ADM_OPS + _FIN_OPS + _CRM_OPS + _SALES_OPS),   # 部门总经理：审批 + 全业务
+    # C 级：审批 + 员工档案/考勤 + 行政 + 核心业务 + 销售 + 帐务中心（不含工资、不含银行报表）
+    'C': _uniq(_OA_APPROVE + _HR_ATT + _ADM_OPS + _FIN_VCH + _CRM_OPS + _SALES_OPS),   # 部门主管：二级审批 + 业务操作
     'D': _uniq(_OA_BASIC + _CRM_OPS + _SALES_OPS),                                     # 部门员工：业务操作
     'E': _uniq(_OA_BASIC),                                                             # 其他人员：OA 基础
     'IT': _uniq(_IT_OPS),                                                              # IT 系统管理员：系统管理
-    'M2': _uniq(_OA_APPROVE + _IT_OPS),                                                # 二级系统管理员：审批 + 系统管理
+    # M2 无 approval.approve，不给审批页，避免「能看审批却审不了」
+    'M2': _uniq(_OA_BASIC + _IT_OPS),                                                  # 二级系统管理员：OA 基础 + 系统管理
 }
 
 
