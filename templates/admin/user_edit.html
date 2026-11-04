@@ -13,6 +13,8 @@
   <label>企业微信 userid</label>
   <input name="wecom_userid" value="{{ u.wecom_userid or '' }}" placeholder="如 zhangsan（通讯录账号，非昵称）">
   <p class="hint">填员工的企微 userid 完成绑定；留空则解绑（之后需密码登录）。</p>
+  <label>登录拼音（可选）</label>
+  <input name="pinyin" value="{{ u.pinyin or '' }}" placeholder="如 zhangsan，填后可用姓名拼音登录">
   <div class="row">
     <button class="btn" type="submit">保存</button>
     <a href="{{ url_for('admin.users') }}" style="color:var(--brand-deep)">返回列表</a>

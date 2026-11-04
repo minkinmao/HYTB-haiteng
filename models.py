@@ -51,6 +51,8 @@ class User(db.Model):
     # 首次登录强制改密码：初始弱口令（如 admin/123456）账号置 True，登录后必须改密码，改完置 False
     must_change_password = db.Column(db.Boolean, default=False, nullable=False,
                                      comment='首次登录是否必须改密码（初始弱口令账号）')
+    # 登录用姓名拼音：允许员工用「姓名拼音」登录（与工号 username 二选一，可空）
+    pinyin = db.Column(db.String(64), default='', comment='登录用姓名拼音（可空，填后可用拼音登录）')
 
 
 # ---------- 一之一、用户·二级菜单模块权限（用户级授权） ----------

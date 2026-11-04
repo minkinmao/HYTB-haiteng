@@ -6,6 +6,7 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import check_password_hash, generate_password_hash
 from models import db, User, FinAuditLog, Employee, Organization
+from sqlalchemy import or_, func
 
 
 def create_app():
@@ -58,8 +59,8 @@ def permission_required(code):
         def wrapper(*args, **kwargs):
             user = User.query.get(session.get('user_id'))
             # 判断该用户职级下是否挂着指定权限 code
-            has = bool(user and user.level and
-                       any(p.code == code for p in user.level.permissions))
+            has = bool(user and (user.is_admin or
+                       (user.level and any(p.code == code for p in user.level.permissions))))
             if not has:
                 flash('无权限执行该操作（缺少权限：%s）' % code)
                 return redirect(url_for('home'))
@@ -100,7 +101,11 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        user = User.query.filter_by(username=username).first()
+        # 支持「工号」或「姓名拼音」两种登录方式：统一转小写后匹配
+        user = User.query.filter(
+            or_(func.lower(User.username) == username.lower(),
+                func.lower(User.pinyin) == username.lower())
+        ).first()
         # 校验账号存在 + 密码哈希匹配（密码不存明文，用 werkzeug 校验）
         if user and check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
@@ -166,7 +171,8 @@ def change_password():
 #  - 人员差勤管理仅保留「月度出勤查询」（出勤结果数据查询，归 EHR）；
 #  - 合同分两类：EHR 的"人事合同"= 劳动/代理合同，行政的"合同管理"= 商务合同（物业租赁/商业合作等）。
 # 命名统一规范：界面一律按「英文简称 · 中文名」呈现，简称与中文名不重复。
-# 系统顺序（用户指定）：OA办公系统 排最前（在行政管理系统上方），其后依次为 行政/人事/财务/核心业务/IT。
+# 系统顺序（用户指定）：OA办公系统 排最前（在行政管理系统上方），其后依次为 行政/人事/财务/核心业务/销售支持；
+# 2026-11-04 威哥要求把「信息技术管理系统」挪到最下方（原在销售支持系统之上）。
 SYSTEMS = [
     {
         'key': 'oa', 'name': 'OA办公系统', 'en': 'OA',
@@ -301,19 +307,6 @@ SYSTEMS = [
         ],
     },
     {
-        'key': 'it', 'name': '信息技术管理系统', 'en': 'IT',
-        'color': '#4A443E', 'soft': '#EDEAE6',   # 取品牌"文字·炭黑"
-        'desc': '全局系统管理：职级权限流、用户、系统参数等，由 IT 统一配置（总版块的系统管理）。',
-        'modules': [
-            {'name': '权限设置·权限流配置', 'en': 'Perm', 'url': 'admin.levels', 'done': True},
-            {'name': '用户管理', 'en': 'User', 'url': 'admin.users', 'done': True},
-            {'name': '系统参数', 'en': 'SysCfg', 'done': False},
-        ],
-        'settings': [
-            {'name': '全局权限流配置', 'en': 'PermFlow', 'url': 'admin.levels', 'done': True},
-        ],
-    },
-    {
         # 2026-10-06 威哥拍板：模块名称由「计划书」升级为「销售支持系统」
         # （key 仍为 proposal，不动路由 / ENDPOINT_SYSTEM / BACK_MAP，避免连锁改动）
         'key': 'proposal', 'name': '销售支持系统', 'en': 'SALES',
@@ -329,6 +322,21 @@ SYSTEMS = [
         ],
         'settings': [
             {'name': '版块权限配置', 'en': 'PermCfg', 'done': False},
+        ],
+    },
+    {
+        # 2026-11-04 威哥要求：信息技术管理系统挪到最下方（原来是倒数第二）
+        'key': 'it', 'name': '信息技术管理系统', 'en': 'IT',
+        'color': '#4A443E', 'soft': '#EDEAE6',   # 取品牌"文字·炭黑"
+        'desc': '全局系统管理：职级权限流、用户、系统参数等，由 IT 统一配置（总版块的系统管理）。',
+        'modules': [
+            {'name': '权限设置·权限流配置', 'en': 'Perm', 'url': 'admin.levels', 'done': True},
+            {'name': '用户管理', 'en': 'User', 'url': 'admin.users', 'done': True},
+            {'name': '系统参数', 'en': 'SysCfg', 'done': False},
+        ],
+        'settings': [
+            # 2026-11-04：原「全局权限流配置」与上面「权限设置·权限流配置」指向同一页面
+            # (admin.levels)，属重复入口，已合并去掉，避免侧栏出现两个一模一样的项。
         ],
     },
 ]
@@ -367,9 +375,11 @@ def build_menu_tree(allowed):
     tree = []
     for s in SYSTEMS:
         subs = []
+        seen = set()  # 2026-11-04：按 URL 去重，防止模块/设置登记同一页面（如 IT 的 admin.levels）重复出现
         for grp in ('modules', 'settings'):
             for m in s.get(grp, []):
-                if m.get('url') and m['url'] in allowed:
+                if m.get('url') and m['url'] in allowed and m['url'] not in seen:
+                    seen.add(m['url'])
                     subs.append({'name': m['name'], 'url': m['url'], 'en': m.get('en', '')})
         tree.append({'name': s['name'], 'key': s['key'], 'subs': subs})
     return tree

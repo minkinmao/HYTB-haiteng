@@ -161,6 +161,26 @@
          font-size:14px;cursor:pointer;font-family:var(--sans)}
     .btn:hover{background:var(--brand-deep)}
 
+    /* ===================== 内嵌窗口（iframe）：点模块不跳页 =====================
+       需求（2026-11-04 威哥）：点击左侧任一模块，在当前页面内容区以内嵌窗口加载，
+       不再整页跳转。被嵌入的页面自动进入精简模式（隐藏侧栏/顶栏/返回条/AI机器人），
+       外层侧栏始终保留，随时切换别的模块。 */
+    .embed-wrap{display:none;padding:0 26px 28px}
+    body.embed-open .embed-wrap{display:block}
+    body.embed-open .container{display:none}
+    .embed-wrap iframe{width:100%;height:calc(100vh - 96px);border:1px solid var(--line);
+                       border-radius:14px;background:var(--cream);display:block;
+                       box-shadow:0 2px 10px rgba(42,42,42,.05)}
+    /* 被 iframe 嵌入时的精简模式：只留业务内容 */
+    body.embed-mode .sidebar,
+    body.embed-mode .topstrip,
+    body.embed-mode .backbar,
+    body.embed-mode #aiLaunch,
+    body.embed-mode #aiPanel{display:none !important}
+    body.embed-mode .main{margin-left:0}
+    body.embed-mode .container{max-width:none;width:100%;padding:16px 20px 34px}
+    body.embed-mode .embed-wrap{display:none !important}
+
     /* ===================== 窄屏回退（手机/小窗） ===================== */
     @media (max-width:900px){
       .layout{flex-direction:column}
@@ -258,6 +278,11 @@
 
       {% block content %}{% endblock %}
     </div>
+
+    <!-- 内嵌窗口：点击左侧模块时在此加载，避免整页跳转（2026-11-04） -->
+    <div class="embed-wrap" id="embedWrap">
+      <iframe id="embedFrame" title="模块内容"></iframe>
+    </div>
   </div>
 </div>
   <!-- ===================== 企业微信内置浏览器适配（2026-09-28） =====================
@@ -323,6 +348,33 @@
     // 当前页高亮项自动展开其父级系统
     var cur = document.querySelector('.nav .sys-bd .sub.on');
     if (cur) { var sys = cur.closest('.sys'); if (sys) sys.classList.add('open'); }
+  })();
+  </script>
+  <!-- ===================== 内嵌窗口：点击模块不跳页（2026-11-04） =====================
+       侧栏二级模块链接统一拦截，改为在主内容区 iframe 内加载；
+       外层侧栏/顶栏保留，嵌入页面自身进入精简模式（见上方 CSS）。 -->
+  <script>
+  (function () {
+    var body = document.body;
+    // 被 iframe 嵌入时进入精简模式（隐藏侧栏/顶栏/返回条/AI机器人）
+    if (window.self !== window.top) { body.classList.add('embed-mode'); }
+
+    var wrap  = document.getElementById('embedWrap');
+    var frame = document.getElementById('embedFrame');
+    var ttl   = document.querySelector('.topstrip .ttl');
+    if (!wrap || !frame) return;
+
+    document.querySelectorAll('.nav a.sub').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return; // 保留「新标签打开」原生行为
+        e.preventDefault();
+        frame.src = a.getAttribute('href');
+        body.classList.add('embed-open');
+        if (ttl) ttl.textContent = (a.textContent || '').trim();
+        document.querySelectorAll('.nav a.sub').forEach(function (x) { x.classList.remove('on'); });
+        a.classList.add('on');
+      });
+    });
   })();
   </script>
   <!-- ===================== 四十四改（2026-10-29）：AI 悬浮机器人 =====================

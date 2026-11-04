@@ -19,8 +19,8 @@ def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         user = User.query.get(session.get('user_id'))
-        has = bool(user and user.level and
-                   any(p.code == 'it.system.manage' for p in user.level.permissions))
+        has = bool(user and (user.is_admin or
+                   (user.level and any(p.code == 'it.system.manage' for p in user.level.permissions))))
         if not has:
             flash('无权限访问 IT 管理员后台（缺少权限：it.system.manage）')
             return redirect(url_for('home'))
@@ -62,6 +62,7 @@ def user_edit(uid):
     u = User.query.get_or_404(uid)
     if request.method == 'POST':
         u.wecom_userid = (request.form.get('wecom_userid') or '').strip()
+        u.pinyin = (request.form.get('pinyin') or '').strip().lower()
         db.session.commit()
         flash('已保存「%s」的企业微信绑定' % u.username)
         return redirect(url_for('admin.users'))
@@ -92,6 +93,7 @@ def user_new():
     full_tree = build_menu_tree(set(MODULE_KEYS))  # 全量模块（按系统分组），供勾选
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
+        pinyin = (request.form.get('pinyin') or '').strip().lower()
         pwd = (request.form.get('password') or '').strip()
         pwd2 = (request.form.get('password2') or '').strip()
         # 初始密码默认 123456（未填写时使用默认值，所有新建用户初始密码统一为 123456）
@@ -118,7 +120,7 @@ def user_new():
         must_change = (pwd == '123456')
         u = User(username=username, password_hash=generate_password_hash(pwd),
                  level_id=int(level_id) if level_id else None, is_admin=False,
-                 must_change_password=must_change)
+                 must_change_password=must_change, pinyin=pinyin)
         db.session.add(u)
         db.session.flush()  # 拿到 u.id 再写模块权限
         added = 0

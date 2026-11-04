@@ -1829,6 +1829,16 @@ def seed():
         lv_it.permissions = [p_it_sys, p_fin_audit, p_fin_backup, p_fin_bank_view, p_fin_bank_manage, p_fin_cash_view, p_fin_cash_edit]
         db.session.flush()
 
+        # 二级系统管理员：默认给一套「系统管理类」权限（不含 fin.* 财务数据红线），
+        # 具体权限由 admin 在「职级权限」页随时增删调整。
+        lv_m2 = get_or_create(Level, code='M2', name='二级系统管理员', titles='由 admin 配置权限')
+        lv_m2.permissions = [p_it_sys, p_announce, p_flow, p_org, p_hr, p_leave,
+                             p_attendance, p_contract_upload, p_holiday, p_attrule,
+                             p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh,
+                             p_adm_exp, p_adm_svc, p_crm_view, p_crm_ins, p_crm_ctr,
+                             p_all, p_team, p_self]
+        db.session.flush()
+
         # --- 3. 组织（公司 -> 团队，构成树）---
         # 公司节点名称统一用「工商全称」，人事卡片等正式单据的抬头取此值。
         org_company = get_or_create(Organization, name='广东海盈通保智能科技有限公司',

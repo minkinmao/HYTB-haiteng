@@ -46,6 +46,13 @@
 
   <div class="row">
     <div>
+      <label>登录拼音（可选）</label>
+      <input name="pinyin" value="{{ request.form.get('pinyin','') }}" placeholder="如 zhangsan，填后可用姓名拼音登录" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
       <label>登录密码</label>
       <input type="password" name="password" value="123456" placeholder="至少 6 位" autocomplete="new-password">
     </div>
