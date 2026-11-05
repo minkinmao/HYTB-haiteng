@@ -9725,7 +9725,7 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
     """生成结果行（含三层口径 + 首年/续期明细），并按 销售分公司/归属月份/保司/缴别/产品 过滤。
 
     三层口径：
-      · 股东层面：签约费用 = 首年佣金(FYC+首年方案)；89%净费 = 基础佣金+销售费用+经营费用（净费）
+      · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；89%净费 = 基础佣金+销售费用+经营费用（净费）
       · 子公司层面：基础佣金 / 销售费用 / 经营费用（跨6项求和）
       · 团队长层面：基础佣金 = 子公司基础佣金 × 团队长基础佣金比例%
     销售分公司过滤：选具体省 → 命中该省或全国；选全国 → 仅全国；all → 全部。
@@ -9779,7 +9779,7 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         # 归属月份非法（如历史脏数据 2099-13）：读取时过滤，避免出现在「归属月份」下拉
         if (r.month or '').strip() and not _comm_valid_month(r.month):
             continue
-        first_amt = fyc + plan          # 首年佣金（FYC + 首年方案）
+        first_amt = fyc + plan          # 首佣合计（FYC + 首年方案）
         # RYC 各年计算佣金（仅佣金；各层级一致）
         # 二改（2026-11-03）：RYC续年度佣金数据取整数值 —— 直接舍去小数（int 截断，非四舍五入）。
         #   purchase 以「百分点/100」存（5%→0.05），ratio 为百分比数值（40 即 40%），
@@ -9791,14 +9791,14 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         }
         ryc = {yn: int(ryc_raw[yn] or 0.0) for yn in ('y2', 'y3', 'y4', 'y5')}
         ryc_hide_lt1 = bool(cfg.ryc_hide_lt1)   # RYC续年度佣金<1%自动置空（线下/互联网统一规则）
-        # 基础佣金 = 首年佣金 × 基础佣金比例% + Σ各年(RYC × 该年RYC佣金比例%)
+        # 基础佣金 = 首佣合计 × 基础佣金比例% + Σ各年(RYC × 该年RYC佣金比例%)
         #   ryc 已为整数百分比（如 2 表 2%），汇总时 ÷100 还原占保费比例
         base = first_amt * br / 100.0 + (ryc['y2'] + ryc['y3'] + ryc['y4'] + ryc['y5']) / 100.0
         # 销售费用：仅首年
         sales = _comm_apply_round(first_amt * sr / 100.0, cfg.round_rule or '3')
         # 经营费用：仅首年（RYC 只计佣金，不计经营费用）
         op = first_amt * orr / 100.0
-        # 股东·签约费用 = 首年佣金（FYC + 首年方案）
+        # 股东·签约费用 = 首佣合计（FYC + 首年方案）
         #   口径纠正（威哥 2026-11-05）：签约费用就是首年这一笔的采购成本，
         #   不能把 RYC2~RYC5 的续期采购成本加进来（原口径 Σ六项导致新华 7% 被加成 8%）。
         #   续期采购成本另有 RYC2~RYC5采购 四列单独展示，不重复计入签约费用。
@@ -9806,7 +9806,7 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         # 股东·净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例（随渠道自动测算）
         #   线下默认 80+5+4=89%；互联网默认 80+0+5=85%
         net_ratio = _comm_net_ratio_of(cfg)
-        # 股东·净费 = 首年佣金 × 净费比例%，第三位起直接舍去（四舍五也舍，不四舍五入）
+        # 股东·净费 = 首佣合计 × 净费比例%，第三位起直接舍去（四舍五也舍，不四舍五入）
         # 例：22.5% × 89% = 20.025% → 20.02%；47.5% × 89% = 42.275% → 42.27%
         _pct_first = Decimal(str(round(first_amt * 100, 4)))
         net = float(
@@ -9822,7 +9822,7 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
             'pay_period': r.pay_period or '', 'region': r.region or '',
             'is_internet': r.is_internet, 'channel': ct,
             'fyc': fyc, 'plan': plan, 'y2': y2, 'y3': y3, 'y4': y4, 'y5': y5,
-            'first_year_comm': first_amt,  # 首年佣金 = FYC + 首年方案
+            'first_year_comm': first_amt,  # 首佣合计 = FYC + 首年方案
             'sign_total': sign_total, 'net': net, 'net_ratio': net_ratio,
             'base': base, 'sales': sales, 'op': op, 'team': team,
             'ryc_comm': ryc,
@@ -10095,7 +10095,7 @@ def commission_coefficient_export():
     pct_cols = {}          # 列号(1起) → 小数位数；Excel 按百分比格式显示，与页面一致
     col = 10
     if level in ('all', 'shareholder'):
-        heads += ['FYC', '首年方案', '首年佣金']
+        heads += ['FYC', '首年方案', '首佣合计']
         groups.append(('首年明细（采购成本 %）', 3))
         col += 1; pct_cols[col] = 2
         col += 1; pct_cols[col] = 2
