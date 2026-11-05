@@ -5,6 +5,9 @@
    上下文依赖：cfg_json（五险一金配置，hr._social_cfg_json）、allowance_items（启用的补贴项）
    口径：总薪资 = 基本薪资 + 绩效薪资 + 岗位补贴；测算逻辑与后端 hr._social_summary 完全一致。 #}
 {% set social_override = social_override if social_override is defined else {} %}
+{% set social_limits = social_limits if social_limits is defined else {} %}
+{% set social_cities = social_cities if social_cities is defined else [] %}
+{% set social_city = social_city if social_city is defined else '' %}
 <style>
   .sblk .lbl{font-size:12px;color:#9C9288;margin-bottom:4px}
   .sblk .in{width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;box-sizing:border-box}
@@ -66,6 +69,14 @@
              title="{{ '由「补贴明细」逐项自动合计（要调整请展开明细改各项金额）' if allowance_items else '后台尚未配置补贴项，可手工填写' }}"></div>
     <div><div class="lbl">总薪资（自动）</div>
       <input id="sb_total" readonly value="{{ sb.total_show }}" class="in"></div>
+    <div><div class="lbl">参保城市
+        <a href="{{ url_for('hr.social_standards') }}" style="font-size:11px;color:#E6823C;text-decoration:none;margin-left:2px">上下限设置 ↗</a></div>
+      <select name="social_city" id="sb_city" class="in" onchange="onCityChange()">
+        <option value="">系统默认</option>
+        {% for c in social_cities %}
+        <option value="{{ c }}" {{ 'selected' if social_city == c }}>{{ c }}</option>
+        {% endfor %}
+      </select></div>
   </div>
 
   {# ---------- 岗位补贴明细（后台配置的字段端口，如 通讯费/交通费）---------- #}
@@ -188,20 +199,49 @@
   // 五险一金配置（后端 _social_cfg_json 注入，前端口径与后端 _social_summary 保持一致）
   var SB_CFG_GLOBAL = {{ cfg_json | tojson }};
   var SB_OVERRIDE = {{ social_override | tojson }};
+  var SB_LIMITS_ALL = {{ social_limits | tojson }};   // {城市: {险种: {min,max}}}
   var SB_CFG = SB_CFG_GLOBAL;            // 当前生效配置（开关切换时改为特殊比例）
   var SB_LAST_SALARY = 0;               // 最近一次测算出的总薪资（applyCalc 回填用）
 
-  // 缴费基数 = 金额夹在 [baseMin, baseMax] 之间（上限 0 视为未设）
-  function sbClamp(v){
+  // 险种 key 映射（前端险种中文名 → 后端 HrSocialBaseLimit.insurance）
+  var SB_INS = {'养老':'pension', '医疗':'medical', '失业':'unemploy', '公积金':'fund'};
+  var SB_INS2 = {'养老':'pension', '医疗':'medical', '失业':'unemploy', '工伤':'injury', '生育':'medical', '公积金':'fund'};
+
+  // 当前参保城市下某险种的缴费基数上下限
+  // 优先级：特殊通道填写的上下限 > 该城市该险种标准 > 后台共用 baseMin/baseMax
+  function sbLimit(insKey){
     var lo = +SB_CFG.baseMin || 0, hi = +SB_CFG.baseMax || 0;
+    // 特殊通道覆盖了基数上下限 → 优先（对所有险种统一生效）
+    var spMin = document.getElementById('sp_base_min'), spMax = document.getElementById('sp_base_max');
+    var spOn = document.getElementById('sp_on') && document.getElementById('sp_on').checked;
+    if (spOn && spMin && spMin.value !== ''){ lo = parseFloat(spMin.value) || 0; }
+    if (spOn && spMax && spMax.value !== ''){ hi = parseFloat(spMax.value) || 0; }
+    // 未被特殊通道覆盖时，按「参保城市 × 险种」取标准
+    if (!(spOn && spMin && spMin.value !== '') && !(spOn && spMax && spMax.value !== '')){
+      var city = (document.getElementById('sb_city') || {}).value || '';
+      var byCity = city && SB_LIMITS_ALL[city] ? SB_LIMITS_ALL[city] : null;
+      if (byCity && byCity[insKey]){
+        lo = +byCity[insKey].min || 0;
+        hi = +byCity[insKey].max || 0;
+      }
+    }
     if (hi <= 0) hi = Infinity;
-    return Math.max(lo, Math.min(v, hi));
+    return {lo: lo, hi: hi};
   }
-  // 按比例表算明细（逐项四舍五入到分，再合计——与后端一致）
-  function sbSocial(base, dict){
-    var det = {}, sum = 0;
-    for (var k in dict){ var v = Math.round(base * dict[k]) / 100; det[k] = v; sum += v; }
-    return {det: det, sum: Math.round(sum * 100) / 100};
+  // 缴费基数 = 金额夹在 [下限, 上限] 之间（按险种各自独立夹取，与后端 _calc_social 一致）
+  function sbClamp(v, insKey){
+    var L = sbLimit(insKey || 'pension');
+    return Math.max(L.lo, Math.min(v, L.hi));
+  }
+  // 按比例表算明细（逐项四舍五入到分，再合计——与后端一致）；各险种基数独立
+  function sbSocial(salary, dict, insMap){
+    var det = {}, sum = 0, bases = {};
+    for (var k in dict){
+      var b = sbClamp(salary, (insMap || SB_INS)[k] || 'pension');
+      bases[k] = b;
+      var v = Math.round(b * dict[k]) / 100; det[k] = v; sum += v;
+    }
+    return {det: det, bases: bases, sum: Math.round(sum * 100) / 100};
   }
   function sbNum(el){ var v = parseFloat(el && el.value); return isNaN(v) ? 0 : v; }
   function sbFmt(v){ return (Math.round(v * 100) / 100).toFixed(2); }
@@ -267,10 +307,10 @@
     var x = sbNum(document.getElementById('calc_input'));
     var salary, corp, personal, cost;
     if (mode === 'byCost'){
-      // 反推：区间内 cost = s(1+r)；越界时单位部分按上下限固定
+      // 反推：区间内 cost = s(1+r)；越界时单位部分按上下限固定（用主险养老的上下限作代表，与后端一致）
       var r = 0; for (var k in SB_CORP) r += SB_CORP[k]; r = r / 100;
-      var lo = +SB_CFG.baseMin || 0, hi = +SB_CFG.baseMax || 0;
-      if (hi <= 0) hi = Infinity;
+      var L0 = sbLimit('pension');
+      var lo = L0.lo, hi = L0.hi;
       var s = 0;
       if (x <= 0){ s = 0; }
       else if (r <= 0){ s = x; }
@@ -283,27 +323,27 @@
     } else {
       salary = Math.round(x * 100) / 100;
     }
-    var base = sbClamp(salary);
-    corp = sbSocial(base, SB_CORP);
-    personal = sbSocial(base, SB_PERSON);
+    var corp = sbSocial(salary, SB_CORP, SB_INS2);
+    var personal = sbSocial(salary, SB_PERSON, SB_INS);
     cost = Math.round((salary + corp.sum) * 100) / 100;
     document.getElementById('calc_cost').value = x > 0 ? sbFmt(cost) : '';
     SB_LAST_SALARY = salary;
-    var html = buildCostHtml(salary, base, personal, corp, cost);
+    var html = buildCostHtml(salary, personal, corp, cost);
     document.getElementById('calc_out').innerHTML = html;
     var cs = document.getElementById('costSummary');
     if (cs) cs.innerHTML = html;
   }
   // 渲染人力成本明细列表（弹窗内 calc_out 与主表单下方 costSummary 共用）
-  function buildCostHtml(salary, base, personal, corp, cost){
+  function buildCostHtml(salary, personal, corp, cost){
     var h = '<div class="cost-list">';
-    h += '<div class="crow"><span>个人薪资（税前应发）</span><b>' + sbFmt(salary) + '</b> 元'
-       + '<span>缴费基数 ' + sbFmt(base) + '</span></div>';
+    h += '<div class="crow"><span>个人薪资（税前应发）</span><b>' + sbFmt(salary) + '</b> 元</div>';
     h += '<div class="sec">个人五险一金明细（合计 ' + sbFmt(personal.sum) + ' 元）</div><div class="grid">';
-    for (var k in personal.det) h += '<span>' + k + ' <b>' + sbFmt(personal.det[k]) + '</b></span>';
+    for (var k in personal.det) h += '<span>' + k + ' <b>' + sbFmt(personal.det[k]) + '</b>'
+       + '<i style="font-style:normal;color:#B5A99C;font-size:11px">基数' + sbFmt(personal.bases[k]) + '</i></span>';
     h += '</div>';
     h += '<div class="sec">公司五险一金明细（合计 ' + sbFmt(corp.sum) + ' 元）</div><div class="grid">';
-    for (var k2 in corp.det) h += '<span>' + k2 + ' <b>' + sbFmt(corp.det[k2]) + '</b></span>';
+    for (var k2 in corp.det) h += '<span>' + k2 + ' <b>' + sbFmt(corp.det[k2]) + '</b>'
+       + '<i style="font-style:normal;color:#B5A99C;font-size:11px">基数' + sbFmt(corp.bases[k2]) + '</i></span>';
     h += '</div>';
     h += '<div class="crow total"><span>人力总成本（总薪资 + 单位五险一金）</span><b>' + sbFmt(cost) + '</b> 元</div>';
     h += '</div>';
@@ -312,14 +352,15 @@
   // 按「已填总薪资」刷新主表单下方明细（不随弹窗反推模式变化）
   function renderCostSummary(salary){
     salary = Math.round(salary * 100) / 100;
-    var base = sbClamp(salary);
-    var corp = sbSocial(base, SB_CFG.corp);
-    var pers = sbSocial(base, SB_CFG.person);
+    var corp = sbSocial(salary, SB_CFG.corp, SB_INS2);
+    var pers = sbSocial(salary, SB_CFG.person, SB_INS);
     var cost = Math.round((salary + corp.sum) * 100) / 100;
-    var html = buildCostHtml(salary, base, pers, corp, cost);
+    var html = buildCostHtml(salary, pers, corp, cost);
     var cs = document.getElementById('costSummary');
     if (cs) cs.innerHTML = html;
   }
+  // 切换参保城市 → 换用该城市各险种上下限后重算
+  function onCityChange(){ runCalc(); }
   // 把测算出的总薪资填到「基本薪资」（其余构成清零，由 HR 再分配）
   function applyCalc(){
     var v = SB_LAST_SALARY;             // 填「测算出的总薪资」，而非输入框原值（byCost 模式下输入框是总人力成本）

@@ -1445,12 +1445,17 @@ def _size_text(n):
     return '%.1f MB' % (n / 1024.0 / 1024.0)
 
 
-def _xlsx_response(sheet_title, title, headers, data, groups=None):
+def _xlsx_response(sheet_title, title, headers, data, groups=None, pct_cols=None):
     """把一张表写进 xlsx 并返回下载响应（openpyxl 为项目既有依赖）。
 
     ⚠️ groups（十六改微调新增，可选）：两级表头时传 [(分组名, 跨列数), ...]，
        各分组跨列数之和须等于 len(headers)；不传就是原来的单层表头（老调用点零影响）。
        例：[('', 3), ('首年度销售费用', 4), ('续年期销售费用', 9)]
+
+    ⚠️ pct_cols（可选）：百分比列配置 {列号(1起): 小数位数}。
+       单元格仍存「百分点数值」（如 4.5 表示 4.5%），但用 Excel 数字格式
+       0.00"%" 显示成 4.50%，与页面显示一致，且仍是数字、可参与 Excel 计算。
+       不传＝普通数值列（老调用点零影响）。
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side
@@ -1493,6 +1498,9 @@ def _xlsx_response(sheet_title, title, headers, data, groups=None):
         for ci, v in enumerate(row, 1):
             cell = ws.cell(row=ri, column=ci, value=v)
             cell.border = box
+            # 百分比列：用 Excel 数字格式显示成 XX.XX%（值仍是数字，可继续参与计算）
+            if pct_cols and ci in pct_cols and isinstance(v, (int, float)):
+                cell.number_format = '0.' + '0' * int(pct_cols[ci]) + '"%"'
 
     for i in range(1, ncol + 1):
         w = 10
@@ -4900,8 +4908,10 @@ def commission_export():
                      round(x['ff_fyc'], 2), round(x['plan_comm'], 2)] +
                     [x['ryc'][n] for n in range(2, 11)])
     # 十六改微调：末行「合计」已删（与页面一致）
+    # 百分比列（第5~17列）按 Excel 百分比格式显示，与页面一致（页面 4.50%，导出也是 4.50%）
+    pct_cols = {ci: 2 for ci in range(5, 18)}
     return _xlsx_response('佣金查询', '佣金查询（按产品＋缴别 · 百分比）', headers, data,
-                          groups=groups)
+                          groups=groups, pct_cols=pct_cols)
 
 
 # 十六改微调：_commission_sum 已废弃删除（页面与导出都不再需要合计行）。
@@ -10082,23 +10092,37 @@ def commission_coefficient_export():
 
     heads = ['保险公司', '险种名称', '渠道', '类型', '出单平台', '平台名称', '是否需要补录', '保障期限', '缴费期', '销售分公司']
     groups = [('产品信息', 10)]
+    pct_cols = {}          # 列号(1起) → 小数位数；Excel 按百分比格式显示，与页面一致
+    col = 10
     if level in ('all', 'shareholder'):
         heads += ['FYC', '首年方案', '首年佣金']
         groups.append(('首年明细（采购成本 %）', 3))
+        col += 1; pct_cols[col] = 2
+        col += 1; pct_cols[col] = 2
+        col += 1; pct_cols[col] = 2
     if level in ('all', 'shareholder'):
         heads += ['RYC2采购', 'RYC3采购', 'RYC4采购', 'RYC5采购']
         groups.append(('RYC采购成本（%）', 4))
+        for _ in range(4):
+            col += 1; pct_cols[col] = 2
     if level in ('all', 'shareholder'):
         heads += ['签约费用', '销售净费']
         groups.append(('股东层面', 2))
+        col += 1; pct_cols[col] = 2
+        col += 1; pct_cols[col] = 2
     if level in ('all', 'subsidiary'):
         heads += ['FYC首佣', '销售费用', '经营费用']
         groups.append(('子公司层面', 3))
+        for _ in range(3):
+            col += 1; pct_cols[col] = 2
     if level in ('all', 'team'):
         heads += ['FYC首佣']
         groups.append(('团队长层面', 1))
+        col += 1; pct_cols[col] = 2
     heads += ['RYC2佣金', 'RYC3佣金', 'RYC4佣金', 'RYC5佣金']
     groups.append(('RYC续年度佣金', 4))
+    for _ in range(4):
+        col += 1; pct_cols[col] = 1     # RYC续年度佣金显示 1 位小数（与页面一致）
 
     data = []
     for r in rows:
@@ -10130,7 +10154,7 @@ def commission_coefficient_export():
     lv_name = {'all': '全部层级', 'shareholder': '股东层面',
                'subsidiary': '子公司层面', 'team': '团队长层面'}.get(level, '全部层级')
     title = '产品佣金系数 · %s（归属月份 %s · 单位 %% · 共 %d 条）' % (lv_name, month or '全部', len(data))
-    return _xlsx_response('佣金系数' + lv_name, title, heads, data, groups=groups)
+    return _xlsx_response('佣金系数' + lv_name, title, heads, data, groups=groups, pct_cols=pct_cols)
 
 
 @bp.route('/crm/commission-coefficient/import', methods=['POST'])

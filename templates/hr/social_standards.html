@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% block title %}社保基数标准 · 海盈通保{% endblock %}
+{% block content %}
+  <h2 style="font-size:18px;margin:0 0 6px">社保缴费基数标准 <span style="font-size:13px;font-weight:400;color:#9C9288">Social Insurance Base Limit</span></h2>
+  <div style="font-size:13px;color:#9C9288;margin-bottom:18px;line-height:1.8">
+    按 <b>城市 × 险种</b> 维护五险一金的<b>缴费基数下限 / 上限</b>，招募建号测算时自动按对应城市、对应险种各自夹取基数。<br>
+    各地上下限由人社局/医保局每年（通常 7 月）调整一次，官方以公告形式发布、没有统一开放接口；
+    本页支持<b>手工维护</b>与<b>粘贴批量导入</b>，并提供<b>官方查询页直达</b>按钮；每半年未更新会自动红字提醒。
+  </div>
+
+  {# ---- 半年未更新提醒 ---- #}
+  {% if stale %}
+  <div style="background:#FFF4F0;border:1px solid #F3C9BB;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#C0392B;font-size:13px;line-height:1.9">
+    <b>⚠ 数据已过期提醒</b>：{% for s in stale %}<span style="margin-right:16px">「{{ s.city }}」已 <b>{{ s.days }}</b> 天未更新（超过半年）</span>{% endfor %}
+    <br><span style="color:#8C6A5D;font-size:12px">请到当地人社局/医保局官网核对最新上下限后更新，或用下方「粘贴导入」快速录入。</span>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+
+    {# ============ 左：城市列表 ============ #}
+    <div style="background:#fff;border-radius:8px;padding:16px 18px;box-shadow:0 1px 3px rgba(42,42,42,.05);width:250px;flex-shrink:0">
+      <div style="font-size:13px;font-weight:600;color:#6B5D4F;margin-bottom:10px">已维护城市</div>
+      {% if cities %}
+      {% for city, ins in cities.items() %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:6px;font-size:13px;
+                  {{ 'background:#FDF3EA;color:#E6823C;font-weight:600' if city == default_city else 'color:#4A4A4A' }}">
+        <span>{{ city }}{% if city == default_city %} <span style="font-size:11px;font-weight:400">(默认)</span>{% endif %}</span>
+        <span style="font-size:11px;color:#9C9288">{{ ins|length }} 险种</span>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div style="font-size:12px;color:#9C9288;padding:6px 2px">还没有维护任何城市，用右侧表单新增。</div>
+      {% endif %}
+
+      <div style="border-top:1px dashed #EAE2D6;margin:14px 0 12px"></div>
+      <div style="font-size:13px;font-weight:600;color:#6B5D4F;margin-bottom:8px">默认城市</div>
+      <div style="font-size:12px;color:#9C9288;line-height:1.7">
+        员工未填参保城市时，按默认城市取用上下限。
+        当前默认：<b style="color:#E6823C">{{ default_city or '未设置' }}</b>
+      </div>
+      <a href="{{ url_for('hr.social_config') }}" style="display:inline-block;margin-top:10px;font-size:12px;color:#E6823C;text-decoration:none">
+        → 去「五险一金比例配置」
+      </a>
+    </div>
+
+    {# ============ 右：编辑 / 导入 ============ #}
+    <div style="flex:1;min-width:560px">
+
+      {# ---- 手工维护表单 ---- #}
+      <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05);margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;color:#6B5D4F;margin-bottom:4px">手工维护 / 新增城市</div>
+        <div style="font-size:12px;color:#9C9288;margin-bottom:14px">同一城市只需填写「下限 / 上限」两列，留空表示该险种沿用系统后台的共用上下限。</div>
+        <form method="post" action="{{ url_for('hr.social_standard_save') }}">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px 14px;margin-bottom:14px">
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">城市 <span style="color:#C0392B">*</span></div>
+              <input name="city" required placeholder="如：广州" value="{{ default_city or '' }}"
+                     style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">生效起日</div>
+              <input name="eff_start" type="date" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">生效止日</div>
+              <input name="eff_end" type="date" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">数据来源</div>
+              <input name="source" placeholder="如：广州市人社局 2026 年公告" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:#FAF7F2;color:#6B5D4F;font-size:12px">
+                <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">险种</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">缴费基数下限（元）</th>
+                <th style="text-align:right;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">缴费基数上限（元）</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for ins_key, ins_name in ins_map %}
+              {% set rec = cities.get(default_city, {}).get(ins_key) %}
+              <tr>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4">{{ ins_name }}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4">
+                  <input name="lower_{{ ins_key }}" type="number" step="0.01" min="0" placeholder="留空=沿用后台"
+                         value="{{ rec.lower if rec and rec.lower else '' }}"
+                         style="width:100%;padding:6px 8px;border:1px solid #E2D8CA;border-radius:5px;font-size:13px;text-align:right">
+                </td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4">
+                  <input name="upper_{{ ins_key }}" type="number" step="0.01" min="0" placeholder="留空=沿用后台"
+                         value="{{ rec.upper if rec and rec.upper else '' }}"
+                         style="width:100%;padding:6px 8px;border:1px solid #E2D8CA;border-radius:5px;font-size:13px;text-align:right">
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+            <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 24px;border-radius:6px;font-size:14px;cursor:pointer">保存标准</button>
+          </div>
+        </form>
+      </div>
+
+      {# ---- 已维护明细表 ---- #}
+      {% if cities %}
+      <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05);margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;color:#6B5D4F;margin-bottom:12px">已维护明细</div>
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:#FAF7F2;color:#6B5D4F;font-size:12px">
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">城市</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">险种</th>
+              <th style="text-align:right;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">下限</th>
+              <th style="text-align:right;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">上限</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">生效期</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">来源</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #EAE2D6;font-weight:600">更新于</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for city, ins in cities.items() %}
+            {% for ins_key, ins_name in ins_map %}
+              {% set rec = ins.get(ins_key) %}
+              {% if rec %}
+              <tr>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4">{{ city }}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4">{{ ins_name }}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4;text-align:right">{{ '%.2f'|format(rec.lower or 0) }}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4;text-align:right">{{ '%.2f'|format(rec.upper or 0) }}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4;color:#9C9288;font-size:12px">
+                  {{ rec.eff_start or '—' }} ~ {{ rec.eff_end or '长期' }}
+                </td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4;color:#9C9288;font-size:12px">{{ rec.source or '—' }}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #F3EDE4;color:#9C9288;font-size:12px">{{ rec.updated_at.strftime('%Y-%m-%d') if rec.updated_at else '—' }}</td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+          {% for city in cities.keys() %}
+          <form method="post" action="{{ url_for('hr.social_standard_delete') }}" onsubmit="return confirm('确认删除「{{ city }}」的全部基数标准？')">
+            <input type="hidden" name="city" value="{{ city }}">
+            <button type="submit" style="background:#fff;color:#C0392B;border:1px solid #E8B4A6;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer">
+              删除 {{ city }}
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# ---- 粘贴批量导入 ---- #}
+      <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05);margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;color:#6B5D4F;margin-bottom:4px">粘贴批量导入</div>
+        <div style="font-size:12px;color:#9C9288;margin-bottom:12px;line-height:1.8">
+          把公告里的表格内容<b>整块复制粘贴</b>进来即可，系统按险种关键字（养老/医保/失业/工伤/公积金）自动识别，
+          每行取前两个数字作为「下限 / 上限」。<br>
+          示例：<code style="background:#FAF7F2;padding:2px 6px;border-radius:4px;color:#8A6A4F">企业养老保险 5521 27603</code>
+          <code style="background:#FAF7F2;padding:2px 6px;border-radius:4px;color:#8A6A4F">职工基本医疗保险 4546 26421</code>
+        </div>
+        <form method="post" action="{{ url_for('hr.social_standard_import') }}">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px 14px;margin-bottom:12px">
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">城市 <span style="color:#C0392B">*</span></div>
+              <input name="city" required placeholder="如：广州" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">生效起日</div>
+              <input name="eff_start" type="date" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">生效止日</div>
+              <input name="eff_end" type="date" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+            <div>
+              <div style="font-size:12px;color:#9C9288;margin-bottom:4px">数据来源</div>
+              <input name="source" placeholder="如：官网公告标题" style="width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px">
+            </div>
+          </div>
+          <textarea name="paste_text" rows="6" placeholder="在此粘贴公告表格内容，例如：&#10;企业养老保险 5521 27603&#10;职工基本医疗保险 4546 26421&#10;失业保险 2420 2420&#10;工伤保险 0 0&#10;住房公积金 2300 36400"
+                    style="width:100%;padding:10px;border:1px solid #E2D8CA;border-radius:6px;font-size:13px;line-height:1.7;font-family:inherit;resize:vertical"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px">
+            <button type="submit" style="background:#E6823C;color:#fff;border:none;padding:9px 24px;border-radius:6px;font-size:14px;cursor:pointer">解析并导入</button>
+          </div>
+        </form>
+      </div>
+
+      {# ---- 官方查询页直达 ---- #}
+      <div style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 1px 3px rgba(42,42,42,.05)">
+        <div style="font-size:14px;font-weight:600;color:#6B5D4F;margin-bottom:4px">官方查询页直达</div>
+        <div style="font-size:12px;color:#9C9288;margin-bottom:12px">各地没有统一接口，点开官方页面核对最新上下限后手工填入上方表单。</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a href="http://rsj.gz.gov.cn/" target="_blank" rel="noopener"
+             style="background:#FAF7F2;color:#8A6A4F;border:1px solid #E2D8CA;padding:8px 16px;border-radius:6px;font-size:13px;text-decoration:none">广州市人社局</a>
+          <a href="http://www.gd.gov.cn/" target="_blank" rel="noopener"
+             style="background:#FAF7F2;color:#8A6A4F;border:1px solid #E2D8CA;padding:8px 16px;border-radius:6px;font-size:13px;text-decoration:none">广东省人民政府</a>
+          <a href="http://gjj.gz.gov.cn/" target="_blank" rel="noopener"
+             style="background:#FAF7F2;color:#8A6A4F;border:1px solid #E2D8CA;padding:8px 16px;border-radius:6px;font-size:13px;text-decoration:none">广州市公积金中心</a>
+          <a href="http://www.nhsa.gov.cn/" target="_blank" rel="noopener"
+             style="background:#FAF7F2;color:#8A6A4F;border:1px solid #E2D8CA;padding:8px 16px;border-radius:6px;font-size:13px;text-decoration:none">国家医保局</a>
+          <a href="http://www.mohrss.gov.cn/" target="_blank" rel="noopener"
+             style="background:#FAF7F2;color:#8A6A4F;border:1px solid #E2D8CA;padding:8px 16px;border-radius:6px;font-size:13px;text-decoration:none">人力资源社会保障部</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+{% endblock %}

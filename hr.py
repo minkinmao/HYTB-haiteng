@@ -775,8 +775,16 @@ def _parse_idcard(idcard):
 
 def _social_base_limit(city, insurance, cfg, today=None):
     """返回 (lower, upper) 用于某城市某险种的缴费基数上下限。
-    取当前生效期内的记录；无城市/险种标准时回落全局 cfg.base_min/base_max（兜底）。
+
+    优先级（与前端 sbLimit 一致）：
+      ① 特殊人员覆盖的上下限（cfg 带 _ov_base 标记，即该人员的特殊通道填过基数上下限）→ 优先；
+      ② 该城市该险种已维护的标准（当前生效期内）；
+      ③ 回落后台共用的 cfg.base_min / cfg.base_max。
     upper=0 视为无上限（如工伤保险）。"""
+    if cfg is not None and getattr(cfg, '_ov_base', False):
+        lo = float(cfg.base_min or 0)
+        hi = float(cfg.base_max or 0) or float('inf')
+        return lo, hi
     if city and insurance:
         today = today or date.today()
         try:
@@ -890,6 +898,29 @@ def _social_summary(salary, cfg, city=None):
     }
 
 
+def _social_limits_all(cfg):
+    """所有已维护城市 × 险种的基数上下限（供前端切换参保城市时即时取用）。
+    结构：{city: {'pension': {'min':..,'max':..}, ...}}；上限 0 视为无上限。"""
+    out = {}
+    for r in HrSocialBaseLimit.query.all():
+        out.setdefault(r.city, {})[r.insurance] = {
+            'min': float(r.lower or 0),
+            'max': float(r.upper or 0),
+        }
+    return out
+
+
+def _social_cities(cfg):
+    """可选择的参保城市列表：默认城市 + 已维护城市（去重）。"""
+    names = []
+    if cfg and cfg.default_city:
+        names.append(cfg.default_city)
+    for r in HrSocialBaseLimit.query.all():
+        if r.city and r.city not in names:
+            names.append(r.city)
+    return names
+
+
 def _social_cfg_json(cfg, city=None):
     """把配置整理成前端 JS 可用的扁平结构（前端实时测算用，口径与后端一致）。
     额外注入按城市×险种的缴费基数上下限 limits，供前端按险种独立 clamp。"""
@@ -931,7 +962,11 @@ def _cfg_effective(global_cfg, override):
               'base_min', 'base_max')
     for f in fields:
         d.setdefault(f, getattr(global_cfg, f, 0))
-    return types.SimpleNamespace(**d)
+    ns = types.SimpleNamespace(**d)
+    # 特殊通道是否覆盖了缴费基数上下限（覆盖则优先于「城市×险种」标准，与前端一致）
+    ns._ov_base = ('base_min' in d and d['base_min'] != (getattr(global_cfg, 'base_min', 0) or 0)) or \
+                  ('base_max' in d and d['base_max'] != (getattr(global_cfg, 'base_max', 0) or 0))
+    return ns
 
 
 def _load_allowance_items():
@@ -1029,7 +1064,10 @@ def onboard_list():
     return render_template('hr/onboard_list.html', items=items, orgs=orgs, levels=levels,
                            can_manage=can_manage, status_name=ONBOARD_STATUS_NAME,
                            cfg=cfg, allowance_items=_load_allowance_items(),
-                           cfg_json=_social_cfg_json(cfg, cfg.default_city if cfg else None), social_override={})
+                           cfg_json=_social_cfg_json(cfg, cfg.default_city if cfg else None),
+                           social_override={}, social_limits=_social_limits_all(cfg),
+                           social_cities=_social_cities(cfg),
+                           social_city=(cfg.default_city if cfg else None))
 
 
 @bp.route('/hr/onboards/new', methods=['POST'])
@@ -1310,7 +1348,10 @@ def onboard_edit(oid):
                            cfg=cfg, allowance_items=_load_allowance_items(),
                            cfg_json=_social_cfg_json(cfg, o.social_city or (cfg.default_city if cfg else None)),
                            detail_map=detail_map,
-                           social_override=soc_ov)
+                           social_override=soc_ov,
+                           social_limits=_social_limits_all(cfg),
+                           social_cities=_social_cities(cfg),
+                           social_city=(o.social_city or (cfg.default_city if cfg else None)))
 
 
 # ===================== EHR · 社保基数标准（多城市×险种上下限，半自动维护 + 半年提醒）=====================
