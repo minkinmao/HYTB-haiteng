@@ -80,8 +80,8 @@
     .nav .sys.open .sys-hd .ar{transform:rotate(90deg);color:var(--brand)}
     .nav .sys-bd{display:none;padding:2px 0 5px}
     .nav .sys.open .sys-bd{display:block}
-    .nav .sys-bd .sub{display:block;padding:8px 12px 8px 30px;border-radius:8px;color:var(--ink-2);
-                       font-size:13px;margin-bottom:1px;position:relative;transition:.18s}
+    .nav .sys-bd .sub{display:block;padding:8px 12px 8px 30px;border-radius:8px;color:var(--ink);
+                       font-size:13px;font-weight:600;margin-bottom:1px;position:relative;transition:.18s}
     .nav .sys-bd .sub::before{content:"";position:absolute;left:18px;top:50%;width:5px;height:5px;
                               border-radius:50%;background:#CBBFAE;transform:translateY(-50%);transition:.18s}
     .nav .sys-bd .sub:hover{background:rgba(230,130,60,.08);color:var(--ink)}
@@ -93,7 +93,7 @@
        分组标题可展开/收起，三级项比二级再缩进一档，点击同样打开独立页签 */
     .nav .sys-bd .sub-grp{margin:1px 0}
     .nav .sub-grp-hd{display:flex;align-items:center;gap:8px;padding:8px 12px 8px 30px;
-                     border-radius:8px;color:var(--ink-2);font-size:13px;cursor:pointer;user-select:none}
+                     border-radius:8px;color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;user-select:none}
     .nav .sub-grp-hd:hover{background:rgba(230,130,60,.08);color:var(--brand-deep)}
     .nav .sub-grp-hd .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .nav .sub-grp-hd .ar{font-size:10px;color:#A89C8E;transition:transform .2s}
@@ -101,7 +101,7 @@
     .nav .sub-grp.open .sub-grp-hd{color:var(--brand-deep);font-weight:600}
     .nav .sub-grp-bd{display:none;padding:1px 0 4px}
     .nav .sub-grp.open .sub-grp-bd{display:block}
-    .nav .sys-bd .sub.lv3{padding-left:44px;font-size:12.5px}
+    .nav .sys-bd .sub.lv3{padding-left:44px;font-size:12.5px;font-weight:400;color:#9C9288}
     .nav .sys-bd .sub.lv3::before{left:31px;width:4px;height:4px}
     /* 底部用户区 */
     .side-foot{border-top:1px solid var(--line);padding:13px 16px 15px;font-size:12px}
@@ -280,8 +280,8 @@
         <div class="sys-bd">
           {% for m in s.subs %}
           {% if m.children %}
-          {# 三级分组：默认展开（少一次点击），标题可收起；子项各自是独立页面 #}
-          <div class="sub-grp open">
+          {# 三级分组：默认折叠，点击二级标题才展开（威哥 2026-11-05：不要一次全展开） #}
+          <div class="sub-grp">
             <div class="sub-grp-hd" onclick="this.parentNode.classList.toggle('open')">
               <span class="nm">{{ m.name }}</span><span class="ar">▸</span>
             </div>

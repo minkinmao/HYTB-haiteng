@@ -1801,6 +1801,9 @@ def seed():
         p_crm_view = get_or_create(Permission, name='核心业务-查看', code='crm.view')
         p_crm_ins = get_or_create(Permission, name='核心业务-保司档案管理', code='crm.insurer.manage')
         p_crm_ctr = get_or_create(Permission, name='核心业务-产品合约管理', code='crm.contract.manage')
+        # 产品佣金系数管理：导入数据 / 佣金比例系数设置 两个独立权限（威哥 2026-11-05 要求可单独授权）
+        p_comm_imp = get_or_create(Permission, name='核心业务-佣金系数导入数据', code='crm.commission.import')
+        p_comm_coef = get_or_create(Permission, name='核心业务-佣金系数设置', code='crm.commission.coef')
 
         # --- 2. 职级（S/A/B/C/D/E）：按人员职级设定，是权限分配的载体 ---
         lv_s = get_or_create(Level, code='S', name='最高负责人', titles='总经理/老板')
@@ -1828,7 +1831,8 @@ def seed():
                             p_fin_confirm, p_fin_vch_audit,
                             p_fin_vch_view, p_fin_rpt_view, p_fin_audit, p_fin_bank_view, p_fin_cash_view,
                             p_hr, p_emp_del, p_salary, p_org,
-                            p_adm_view, p_crm_view, p_it_sys]
+                            p_adm_view, p_crm_view, p_it_sys,
+                            p_comm_imp, p_comm_coef]
         # A/B 同一套：34 项（一级 / 二级审批靠审批流节点区分）
         _lv_ab = [p_self, p_team,
                   p_approve, p_oa_exp_approve, p_oa_exp_pay,
@@ -1838,7 +1842,8 @@ def seed():
                   p_contract_upload, p_holiday, p_attrule,
                   p_flow, p_announce,
                   p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh, p_adm_exp, p_adm_svc,
-                  p_comm_admin, p_crm_view, p_crm_ins, p_crm_ctr]
+                  p_comm_admin, p_crm_view, p_crm_ins, p_crm_ctr,
+                  p_comm_imp, p_comm_coef]
         lv_a.permissions = list(_lv_ab)
         lv_b.permissions = list(_lv_ab)
         # C 部门主管：14 项 = 二级审批 + 日常操作
@@ -1847,7 +1852,8 @@ def seed():
                             p_attendance, p_contract_upload,
                             p_adm_view, p_adm_ast, p_adm_exp, p_adm_svc,
                             p_crm_view, p_crm_ctr,
-                            p_fin_vch_edit, p_fin_vch_view]
+                            p_fin_vch_edit, p_fin_vch_view,
+                            p_comm_imp, p_comm_coef]
         lv_d.permissions = [p_self, p_adm_view, p_crm_view]
         lv_e.permissions = [p_self, p_adm_view, p_crm_view]
         # IT 系统管理员：独立职级（#40 红线）—— 只管权限流配置 + 看审计 + 做备份，
@@ -1863,7 +1869,8 @@ def seed():
                              p_attendance, p_contract_upload, p_holiday, p_attrule,
                              p_adm_view, p_adm_lic, p_adm_ctr, p_adm_ast, p_adm_veh,
                              p_adm_exp, p_adm_svc, p_crm_view, p_crm_ins, p_crm_ctr,
-                             p_all, p_team, p_self]
+                             p_all, p_team, p_self,
+                             p_comm_imp, p_comm_coef]
         db.session.flush()
 
         # --- 3. 组织（公司 -> 团队，构成树）---

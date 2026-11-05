@@ -106,21 +106,11 @@
   #bkSec{scroll-margin-top:80px}
 </style>
 
-<h2 style="font-size:18px;margin:0 0 6px">产品佣金系数管理
-  <small style="font-size:12px;color:#9C9288;font-weight:400">（一键导入采购成本 → 按渠道设销售系数 → 自动生成 基础佣金 / 销售费用 / 经营费用）</small>
-</h2>
-<div style="font-size:13px;color:#9C9288;margin-bottom:16px">
-  导入「采购成本下发」Excel（<b>E列="是"=互联网产品，空=线下产品</b>），按
-  <span class="ch-tag ch-off">线下</span><b>首年基础佣金 / 首年方案 / 第二年~第五年采购</b>
-  自动计算
-  <b style="color:#C86432">FYC首佣 = 首年佣金 × 基础佣金比例% + Σ各年RYC × 该年RYC佣金比例%</b>、
-  <b style="color:#C86432">销售费用 = 取整规则((FYC+首年方案) × 销售费用比例%)</b>（仅首年）、
-  <b style="color:#C86432">经营费用 = (FYC+首年方案) × 经营费用比例%</b>（仅首年）；
-  RYC 仅计佣金，各层级一致。
-</div>
+<h2 style="font-size:18px;margin:0 0 6px">产品佣金系数管理</h2>
 
-{% if can_manage %}
+{% if can_import or can_coef %}
 <!-- ========== 一、导入 ========== -->
+{% if can_import %}
 <div class="crm-sec">一、一键导入产品合约数据 <span>支持 .xlsx / .xls，按「归属月份」区分，同名月覆盖该月</span></div>
 <div class="crm-card">
   <form method="post" action="{{ url_for('crm.commission_coefficient_import') }}" enctype="multipart/form-data" style="margin:0">
@@ -139,9 +129,11 @@
     </div>
     <div class="hint" style="margin-top:8px">表头须含：保险公司 / 险种名称 / 渠道 / 互联网产品 / 首年基础佣金 / 首年方案 / 第二年~第五年采购 等列。上传文件名含「YYYY年M月」会自动带出归属月份；重复导入同一月份将覆盖该月数据，不同月份互不影响。</div>
   </form>
-</div>
+  </div>
+{% endif %}
 
 <!-- ========== 二、系数设置（弹窗录入 · 统一保存确认） ========== -->
+{% if can_coef %}
 <div class="crm-sec">
   <span class="sec-title">二、销售系数与分配比例设置 <span>线下、互联网各一套 · 点右侧「打开系数设置」弹窗录入，两边填完统一保存确认</span></span>
   <button class="crm-btn pri" type="button" style="margin-left:auto" onclick="openCoefModal()">⚙ 打开系数设置</button>
@@ -255,6 +247,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 <!-- 保存前二次确认弹窗 -->
 <div class="mask" id="cfMask">
@@ -427,7 +420,7 @@
   </table>
   </div>
   {% else %}
-  <div class="crm-empty">尚未导入产品合约数据，或无符合条件的数据。{% if can_manage %}请先在上方「一键导入」。{% endif %}</div>
+  <div class="crm-empty">尚未导入产品合约数据，或无符合条件的数据。{% if can_import %}请先在上方「一键导入」。{% endif %}</div>
   {% endif %}
 </div>
 
@@ -458,7 +451,7 @@
       只有<b>系数已设置完成（销售净费比例 &gt; 0）且当期有产品数据</b>的月份才会归档；访问本页时会自动补齐缺失月份，无需手工触发。<br>
       <b>保护机制</b>：已归档的板块再改系数，必须在确认弹窗勾选「我已确认覆盖已备份系数」，覆盖前的旧快照会留档、覆盖次数 +1，可追溯。
     </div>
-    {% if can_manage %}
+    {% if can_coef %}
     <div class="bk-ops">
       <form method="post" action="{{ url_for('crm.commission_coefficient_backup') }}">
         <input type="hidden" name="month" value="{{ bk_month }}">

@@ -10028,7 +10028,9 @@ def commission_coefficient():
                            counts={'total': total, 'internet': n_int, 'offline': n_off},
                            imported_at=(imported.imported_at if imported else ''),
                            cfgs=cfgs_both, net_ratio_both=net_ratio_both, items=COMM_ITEMS, channels=COMM_CHANNELS,
-                           round_rules=ROUND_RULES, can_manage=_can('crm.contract.manage'),
+                           round_rules=ROUND_RULES, can_import=_can('crm.commission.import'),
+                           can_coef=_can('crm.commission.coef'),
+                           can_manage=_can('crm.commission.import') or _can('crm.commission.coef'),
                            region_opts=region_opts, insurer_opts=insurer_opts,
                            pay_period_opts=pay_period_opts, product_opts=product_opts,
                            backups=backups, backup_lock=backup_lock,
@@ -10114,7 +10116,7 @@ def commission_coefficient_export():
 
 @bp.route('/crm/commission-coefficient/import', methods=['POST'])
 @login_required
-@permission_required('crm.contract.manage')
+@permission_required('crm.commission.import')
 def commission_coefficient_import():
     """一键导入产品合约（采购成本下发 Excel）。解析 Sheet1，按 E 列区分互联网/线下，按「归属月份」覆盖该月数据（不同月份互不影响）。"""
     f = request.files.get('file')
@@ -10251,7 +10253,7 @@ def commission_coefficient_import():
 
 @bp.route('/crm/commission-coefficient/config', methods=['GET', 'POST'])
 @login_required
-@permission_required('crm.contract.manage')
+@permission_required('crm.commission.coef')
 def commission_coefficient_config():
     """系数设置：线下 / 互联网 各一套（各自独立表单）。
     ⚠️ 只保存「本次实际提交」的那个板块，另一板块完全不动 —— 两个板块互不影响。"""
@@ -10330,7 +10332,7 @@ def commission_coefficient_config():
 
 @bp.route('/crm/commission-coefficient/init', methods=['POST'])
 @login_required
-@permission_required('crm.contract.manage')
+@permission_required('crm.commission.coef')
 def commission_coefficient_init():
     """一键生成默认系数：按威哥日常常规比例写入（线下 基础80/销售5/经营4；互联网 基础80/销售0/经营5；取整规则默认「四舍五入后减1%取整」）。"""
     # 保护机制：已归档的渠道不允许「一键初始化」整体覆盖，必须走系数设置弹窗的覆盖确认流程
@@ -10370,7 +10372,7 @@ def commission_coefficient_init():
 
 @bp.route('/crm/commission-coefficient/backup', methods=['POST'])
 @login_required
-@permission_required('crm.contract.manage')
+@permission_required('crm.commission.coef')
 def commission_coefficient_backup():
     """立即备份（手动补档）：对指定归属月份（默认最新月）按渠道各归档一份。
 
