@@ -225,6 +225,7 @@ SYSTEMS = [
             {'name': '组织架构管理', 'en': 'OrgMgr', 'url': 'hr.org_admin', 'done': True},
             {'name': '人员薪资管理', 'en': 'PayMgr', 'url': 'hr.pay_admin', 'done': True},
             {'name': '人员差勤管理', 'en': 'AttMgr', 'url': 'hr.att_admin', 'done': True},
+            {'name': '社保基数标准', 'en': 'SocialBase', 'url': 'hr.social_standards', 'done': True},
         ],
         'settings': [
             {'name': '假期设置', 'en': 'LeaveCfg', 'url': 'hr.leave_types', 'done': True},
@@ -490,6 +491,7 @@ BACK_MAP = {
     'oa.salary_apply_detail':       ('oa.apply_hub', {}, '申请中心'),
     'hr.org_admin':             ('system_detail', {'key': 'ehr'},     None),
     'hr.pay_admin':             ('system_detail', {'key': 'ehr'},     None),
+    'hr.social_standards':      ('system_detail', {'key': 'ehr'},     None),
     'hr.att_admin':             ('system_detail', {'key': 'ehr'},     None),
     'hr.hr_home':               ('system_detail', {'key': 'ehr'},     None),
     # 行政管理系统（ADM 一期）：三本台账列表回 ADM 系统详情页；表单页回对应台账列表

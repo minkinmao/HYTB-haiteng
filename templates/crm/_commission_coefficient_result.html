@@ -78,7 +78,7 @@
     <thead>
       <tr class="grp">
         <th colspan="10">产品信息</th>
-        {% if level == 'all' %}<th colspan="3">首年明细（采购成本 %）</th>{% endif %}
+        {% if level in ('all','shareholder') %}<th colspan="3">首年明细（采购成本 %）</th>{% endif %}
         {% if level in ('all','shareholder') %}<th colspan="4">RYC采购成本（%）</th>{% endif %}
         {% if level in ('all','shareholder') %}<th colspan="2">股东层面</th>{% endif %}
         {% if level in ('all','subsidiary') %}<th colspan="3">子公司层面</th>{% endif %}
@@ -89,7 +89,7 @@
         <th>保险公司</th><th>险种名称</th><th>渠道</th><th>类型</th>
         <th>出单平台</th><th>平台名称</th><th>是否需要补录</th>
         <th>保障期限</th><th>缴费期</th><th>销售分公司</th>
-        {% if level == 'all' %}
+        {% if level in ('all','shareholder') %}
         <th style="text-align:right">FYC</th><th style="text-align:right">首年方案</th>
         <th style="text-align:right;color:#C86432">首年佣金</th>
         {% endif %}
@@ -114,7 +114,7 @@
         <td class="c-term">{{ r.coverage_term or '—' }}</td>
         <td class="c-pay">{{ r.pay_period or '—' }}</td>
         <td class="c-region">{% if region and region != 'all' and region != '全国' %}{{ region }}{% else %}{{ r.region or '—' }}{% endif %}</td>
-        {% if level == 'all' %}
+        {% if level in ('all','shareholder') %}
         <td style="text-align:right" class="mono num">{{ pct(r.fyc) }}</td>
         <td style="text-align:right" class="mono num">{{ pct(r.plan) }}</td>
         <td style="text-align:right;color:#C86432" class="mono num">{{ pct(r.first_year_comm) }}</td>
@@ -153,9 +153,9 @@
 
 <div class="hint" style="margin-top:10px">
   字段统称：首年基础佣金 = <b>FYC</b>，第二年~第五年采购 = <b>RYC2 / RYC3 / RYC4 / RYC5</b>；<b>首年佣金 = FYC + 首年方案</b>；投保区域统称 <b>销售分公司</b>。<br>
-  层级视图：「全部」显示首年明细三列（FYC / 首年方案 / 首年佣金）；选股东 / 子公司 / 团队长层面时不重复展示这三列，只保留该层面的结果。<br>
+  层级视图：「全部」显示首年明细三列（FYC / 首年方案 / 首年佣金）；<b>「股东层面」同样显示首年明细三列</b>（签约费用即取首年佣金）；选子公司 / 团队长层面时不展示这三列，只保留该层面的结果。<br>
   「<b>全部</b>」与「<b>股东层面</b>」额外展示各年 <b>RYC 采购成本</b>（第二年~第五年采购，原始百分点，未经系数折算），与最右侧「RYC续年度佣金」（采购 × RYC 佣金比例%）区分：前者是<b>采购成本</b>、后者是<b>实算佣金</b>；选子公司 / 团队长层面时不展示 RYC 采购成本列。<br>
-  三层口径：<b>股东</b>＝签约费用（Σ各采购项）；<b>销售净费 = 首年佣金 × 净费比例%</b>，其中<b>净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例</b>（按渠道自动测算：当前线下
+  三层口径：<b>股东</b>＝签约费用（<b>= 首年佣金 = FYC + 首年方案，只含首年这一笔，不叠加 RYC2~RYC5 续期采购</b>）；<b>销售净费 = 首年佣金 × 净费比例%</b>，其中<b>净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例</b>（按渠道自动测算：当前线下
   {{ '%.2f'|format(net_ratio_both.offline) }}%、互联网 {{ '%.2f'|format(net_ratio_both.internet) }}%；第三位起直接舍去，保留 2 位小数）；
   <b>子公司</b>＝FYC首佣（首年佣金×基础佣金比例% + Σ各年RYC×该年RYC佣金比例%）+ 销售费用（取整规则((FYC+首年方案)×销售费用比例%)，仅首年）+ 经营费用（(FYC+首年方案)×经营费用比例%，仅首年）；
   <b>团队长</b>＝FYC首佣（与子公司一致）。所有数值均为占保费的百分比；采购成本为 0 时留空。<br>

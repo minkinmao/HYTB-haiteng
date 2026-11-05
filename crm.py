@@ -9715,7 +9715,7 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
     """生成结果行（含三层口径 + 首年/续期明细），并按 销售分公司/归属月份/保司/缴别/产品 过滤。
 
     三层口径：
-      · 股东层面：签约费用 = Σ各采购项；89%净费 = 基础佣金+销售费用+经营费用（净费）
+      · 股东层面：签约费用 = 首年佣金(FYC+首年方案)；89%净费 = 基础佣金+销售费用+经营费用（净费）
       · 子公司层面：基础佣金 / 销售费用 / 经营费用（跨6项求和）
       · 团队长层面：基础佣金 = 子公司基础佣金 × 团队长基础佣金比例%
     销售分公司过滤：选具体省 → 命中该省或全国；选全国 → 仅全国；all → 全部。
@@ -9788,7 +9788,11 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         sales = _comm_apply_round(first_amt * sr / 100.0, cfg.round_rule or '3')
         # 经营费用：仅首年（RYC 只计佣金，不计经营费用）
         op = first_amt * orr / 100.0
-        sign_total = fyc + plan + y2 + y3 + y4 + y5            # 股东·签约费用
+        # 股东·签约费用 = 首年佣金（FYC + 首年方案）
+        #   口径纠正（威哥 2026-11-05）：签约费用就是首年这一笔的采购成本，
+        #   不能把 RYC2~RYC5 的续期采购成本加进来（原口径 Σ六项导致新华 7% 被加成 8%）。
+        #   续期采购成本另有 RYC2~RYC5采购 四列单独展示，不重复计入签约费用。
+        sign_total = first_amt                                  # 股东·签约费用
         # 股东·净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例（随渠道自动测算）
         #   线下默认 80+5+4=89%；互联网默认 80+0+5=85%
         net_ratio = _comm_net_ratio_of(cfg)
@@ -10060,7 +10064,7 @@ def commission_coefficient_export():
 
     ⚠️ 列结构严格跟随 level，各层面不混列：
       · 全部       = 产品信息 10 + 首年明细 3 + RYC采购成本 4 + 股东 2 + 子公司 3 + 团队长 1 + RYC 4
-      · 股东层面   = 产品信息 10 + RYC采购成本 4 + 股东 2 + RYC 4
+      · 股东层面   = 产品信息 10 + 首年明细 3 + RYC采购成本 4 + 股东 2 + RYC 4
       · 子公司层面 = 产品信息 10 + 子公司 3 + RYC 4
       · 团队长层面 = 产品信息 10 + 团队长 1 + RYC 4
     RYC采购成本（第二年~第五年采购，原始百分点，不经系数折算）只在「全部 / 股东层面」导出，与最右侧「RYC续年度佣金」区分。
@@ -10078,7 +10082,7 @@ def commission_coefficient_export():
 
     heads = ['保险公司', '险种名称', '渠道', '类型', '出单平台', '平台名称', '是否需要补录', '保障期限', '缴费期', '销售分公司']
     groups = [('产品信息', 10)]
-    if level == 'all':
+    if level in ('all', 'shareholder'):
         heads += ['FYC', '首年方案', '首年佣金']
         groups.append(('首年明细（采购成本 %）', 3))
     if level in ('all', 'shareholder'):
@@ -10104,7 +10108,7 @@ def commission_coefficient_export():
                 '互联网' if r['is_internet'] else '线下',
                 r['issue_platform'], r['platform_name'], r['need_supplement'],
                 r['coverage_term'], r['pay_period'], reg_disp]
-        if level == 'all':
+        if level in ('all', 'shareholder'):
             line += [_comm_pct_num(r['fyc']), _comm_pct_num(r['plan']),
                      _comm_pct_num(r['first_year_comm'])]
         if level in ('all', 'shareholder'):

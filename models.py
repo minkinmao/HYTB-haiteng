@@ -505,6 +505,8 @@ class Onboarding(db.Model):
     # 键与 HrSocialConfig 一致：pension_pct/medical_pct/unemploy_pct/fund_pct/
     # corp_pension_pct/corp_medical_pct/corp_unemploy_pct/corp_injury_pct/corp_maternity_pct/corp_fund_pct/base_min/base_max
     social_override = db.Column(db.Text, comment='特殊人员五险一金比例覆盖(JSON)；空=按系统后台规则')
+    # 社保参保城市（用于按城市取对应缴费基数上下限；空=用系统默认城市 HrSocialConfig.default_city）
+    social_city = db.Column(db.String(32), comment='社保参保城市（如 广州），空则取系统默认城市')
 
 
 class HrSocialConfig(db.Model):
@@ -524,9 +526,28 @@ class HrSocialConfig(db.Model):
     corp_injury_pct = db.Column(db.Float, default=0.5, comment='工伤保险公司比例（%，仅单位）')
     corp_maternity_pct = db.Column(db.Float, default=0.8, comment='生育保险公司比例（%，仅单位）')
     corp_fund_pct = db.Column(db.Float, default=12, comment='住房公积金公司比例（%）')
-    base_min = db.Column(db.Float, default=0, comment='缴费基数下限（当地社平60%，可填）')
-    base_max = db.Column(db.Float, default=999999, comment='缴费基数上限（当地社平300%，可填）')
+    base_min = db.Column(db.Float, default=0, comment='缴费基数下限（兜底：无城市标准时启用）')
+    base_max = db.Column(db.Float, default=999999, comment='缴费基数上限（兜底：无城市标准时启用）')
+    default_city = db.Column(db.String(32), comment='默认社保城市（员工未填城市时按此取基数上下限）')
     note = db.Column(db.String(200), comment='备注')
+
+
+class HrSocialBaseLimit(db.Model):
+    """EHR · 各地五险一金缴费基数上下限（按城市×险种，参考「附件2」广州2026基数表）。
+    每个城市、每个险种一行；支持同一城市多段生效期（如 1–6 月 / 7–12 月）。
+    数据由 HR 在「社保基数标准」管理页维护：可手工填、可粘贴附件2表格导入、可一键打开官方查询页；
+    系统按当前日期取生效期内的记录用于基数 clamp；超过半年未更新会红字提醒。"""
+    id = db.Column(db.Integer, primary_key=True)
+    city = db.Column(db.String(32), nullable=False, comment='城市（如 广州）')
+    # 险种：pension 养老 / medical 医保（含生育）/ unemploy 失业 / injury 工伤 / fund 公积金
+    insurance = db.Column(db.String(16), nullable=False, comment='险种：pension/medical/unemploy/injury/fund')
+    lower = db.Column(db.Float, default=0, comment='缴费基数下限（元）')
+    upper = db.Column(db.Float, default=0, comment='缴费基数上限（元，0=无上限，如工伤）')
+    eff_start = db.Column(db.Date, comment='生效起始（含）')
+    eff_end = db.Column(db.Date, comment='生效截止（含）')
+    source = db.Column(db.String(100), comment='数据来源备注（如 广东省人社/广州本地宝）')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, comment='最后更新时间（用于半年提醒）')
+    is_default = db.Column(db.Boolean, default=False, comment='是否系统主城市（默认用于无城市员工）')
 
 
 class HrAllowanceItem(db.Model):

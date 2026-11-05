@@ -13,7 +13,7 @@ from datetime import datetime, date, timedelta
 from urllib.parse import quote
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, make_response, send_from_directory, current_app
 from werkzeug.security import generate_password_hash
-from models import db, Employee, Level, Organization, User, Salary, Contract, SalaryField, LeaveType, LeaveTier, Approval, Holiday, AttendanceRule, Onboarding, EmployeeChange, HrSocialConfig, HrAllowanceItem
+from models import db, Employee, Level, Organization, User, Salary, Contract, SalaryField, LeaveType, LeaveTier, Approval, Holiday, AttendanceRule, Onboarding, EmployeeChange, HrSocialConfig, HrAllowanceItem, HrSocialBaseLimit
 from models import (HrEducation, HrFamily, HrTraining, HrTechTitle,
                     HrQualification, HrReward, HrPunishment)
 from app import login_required, permission_required, log_audit
@@ -773,59 +773,90 @@ def _parse_idcard(idcard):
     return b, age
 
 
-def _clamp_base(amount, cfg):
-    """缴费基数 = 金额夹在 [base_min, base_max] 之间（上限为 0 视为未设）。"""
+def _social_base_limit(city, insurance, cfg, today=None):
+    """返回 (lower, upper) 用于某城市某险种的缴费基数上下限。
+    取当前生效期内的记录；无城市/险种标准时回落全局 cfg.base_min/base_max（兜底）。
+    upper=0 视为无上限（如工伤保险）。"""
+    if city and insurance:
+        today = today or date.today()
+        try:
+            row = (HrSocialBaseLimit.query
+                   .filter_by(city=city, insurance=insurance)
+                   .filter(HrSocialBaseLimit.eff_start <= today,
+                           HrSocialBaseLimit.eff_end >= today)
+                   .order_by(HrSocialBaseLimit.updated_at.desc())
+                   .first())
+        except Exception:
+            row = None
+        if row:
+            lo = float(row.lower or 0)
+            hi = float(row.upper or 0) or float('inf')
+            return lo, hi
+    lo = float(cfg.base_min or 0) if cfg else 0
+    hi = float(cfg.base_max or 0) or float('inf') if cfg else float('inf')
+    return lo, hi
+
+
+def _clamp_base(amount, cfg, city=None, insurance=None):
+    """缴费基数 = 金额夹在 [下限, 上限] 之间。有城市险种标准用标准，否则用 cfg.base_min/base_max。"""
     v = float(amount or 0)
-    if not cfg:
+    if not cfg and not city:
         return v
-    lo = float(cfg.base_min or 0)
-    hi = float(cfg.base_max or 0) or float('inf')
+    lo, hi = _social_base_limit(city, insurance, cfg)
     return max(lo, min(v, hi))
 
 
-def _calc_social(total, cfg):
-    """按五险一金配置测算【个人】缴纳额：(养老, 医疗, 失业, 公积金)。基数 = clamp(总薪资)。"""
+def _calc_social(total, cfg, city=None):
+    """按五险一金配置测算【个人】缴纳额：(养老, 医疗, 失业, 公积金)。各险种基数按城市标准独立 clamp。"""
     if not total or total <= 0 or not cfg:
         return 0.0, 0.0, 0.0, 0.0
-    base = _clamp_base(total, cfg)
-    return (round(base * (cfg.pension_pct or 0) / 100.0, 2),
-            round(base * (cfg.medical_pct or 0) / 100.0, 2),
-            round(base * (cfg.unemploy_pct or 0) / 100.0, 2),
-            round(base * (cfg.fund_pct or 0) / 100.0, 2))
+    today = date.today()
+    def bp(ins):
+        lo, hi = _social_base_limit(city, ins, cfg, today)
+        return max(lo, min(float(total), hi))
+    base_p, base_m, base_u, base_f = bp('pension'), bp('medical'), bp('unemploy'), bp('fund')
+    return (round(base_p * (cfg.pension_pct or 0) / 100.0, 2),
+            round(base_m * (cfg.medical_pct or 0) / 100.0, 2),
+            round(base_u * (cfg.unemploy_pct or 0) / 100.0, 2),
+            round(base_f * (cfg.fund_pct or 0) / 100.0, 2))
 
 
-def _calc_corp_social(total, cfg):
+def _calc_corp_social(total, cfg, city=None):
     """测算【单位（企业）】承担的五险一金：(养老, 医疗, 失业, 工伤, 生育, 公积金)。
-    工伤/生育个人不缴，只有单位比例；公积金单位另有自己的比例。"""
+    各险种基数按城市标准独立 clamp；生育随医保基数（医保含生育）。"""
     if not total or total <= 0 or not cfg:
         return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    base = _clamp_base(total, cfg)
-    return (round(base * (cfg.corp_pension_pct or 0) / 100.0, 2),
-            round(base * (cfg.corp_medical_pct or 0) / 100.0, 2),
-            round(base * (cfg.corp_unemploy_pct or 0) / 100.0, 2),
-            round(base * (cfg.corp_injury_pct or 0) / 100.0, 2),
-            round(base * (cfg.corp_maternity_pct or 0) / 100.0, 2),
-            round(base * (cfg.corp_fund_pct or 0) / 100.0, 2))
+    today = date.today()
+    def bc(ins):
+        lo, hi = _social_base_limit(city, ins, cfg, today)
+        return max(lo, min(float(total), hi))
+    base_p, base_m, base_u, base_i, base_f = bc('pension'), bc('medical'), bc('unemploy'), bc('injury'), bc('fund')
+    return (round(base_p * (cfg.corp_pension_pct or 0) / 100.0, 2),
+            round(base_m * (cfg.corp_medical_pct or 0) / 100.0, 2),
+            round(base_u * (cfg.corp_unemploy_pct or 0) / 100.0, 2),
+            round(base_i * (cfg.corp_injury_pct or 0) / 100.0, 2),
+            round(base_m * (cfg.corp_maternity_pct or 0) / 100.0, 2),  # 生育随医保基数
+            round(base_f * (cfg.corp_fund_pct or 0) / 100.0, 2))
 
 
-def _corp_total(total, cfg):
+def _corp_total(total, cfg, city=None):
     """单位五险一金合计"""
-    return round(sum(_calc_corp_social(total, cfg)), 2)
+    return round(sum(_calc_corp_social(total, cfg, city)), 2)
 
 
-def _total_cost(salary, cfg):
+def _total_cost(salary, cfg, city=None):
     """总人力成本 = 总薪资 + 单位五险一金合计"""
     s = float(salary or 0)
-    return round(s + _corp_total(s, cfg), 2)
+    return round(s + _corp_total(s, cfg, city), 2)
 
 
-def _solve_salary_from_cost(cost, cfg):
+def _solve_salary_from_cost(cost, cfg, city=None):
     """已知【总人力成本】反推【总薪资】。单位五险一金按基数分段（区间内按比例、越界按上下限固定），
-    所以分段解析：设单位比例合计 r，
+    分段解析：设单位比例合计 r，
       区间内  ：cost = 薪资 ×(1+r)          → 薪资 = cost / (1+r)
       超上限  ：单位部分固定 = 上限 × r      → 薪资 = cost − 上限 × r
       低于下限：单位部分固定 = 下限 × r      → 薪资 = cost − 下限 × r
-    返回 (总薪资, 单位五险一金合计, 有效基数)。"""
+    返回 (总薪资, 单位五险一金合计, 有效基数)。反推用主险(养老)上下限作代表。"""
     c = float(cost or 0)
     if c <= 0 or not cfg:
         return 0.0, 0.0, 0.0
@@ -833,24 +864,23 @@ def _solve_salary_from_cost(cost, cfg):
          + (cfg.corp_injury_pct or 0) + (cfg.corp_maternity_pct or 0) + (cfg.corp_fund_pct or 0)) / 100.0
     if r <= 0:
         return round(c, 2), 0.0, round(c, 2)
-    lo = float(cfg.base_min or 0)
-    hi = float(cfg.base_max or 0) or float('inf')
+    lo, hi = _social_base_limit(city, 'pension', cfg)
     s = c / (1 + r)
     if s < lo:
         s = max(0.0, c - lo * r)
     elif s > hi:
         s = c - hi * r
     s = max(0.0, round(s, 2))
-    return s, _corp_total(s, cfg), round(_clamp_base(s, cfg), 2)
+    return s, _corp_total(s, cfg, city), round(_clamp_base(s, cfg, city, 'pension'), 2)
 
 
-def _social_summary(salary, cfg):
+def _social_summary(salary, cfg, city=None):
     """一次性测算结果（按总薪资正算），模板/接口共用，保证前后端口径一致。"""
     s = float(salary or 0)
-    pen, med, une, fund = _calc_social(s, cfg)
-    cpen, cmed, cune, cinj, cmat, cfund = _calc_corp_social(s, cfg)
+    pen, med, une, fund = _calc_social(s, cfg, city)
+    cpen, cmed, cune, cinj, cmat, cfund = _calc_corp_social(s, cfg, city)
     return {
-        'salary': round(s, 2), 'base': round(_clamp_base(s, cfg), 2),
+        'salary': round(s, 2), 'base': round(_clamp_base(s, cfg, city, 'pension'), 2),
         'personal': [('养老', pen), ('医疗', med), ('失业', une), ('公积金', fund)],
         'personal_total': round(pen + med + une + fund, 2),
         'corp': [('养老', cpen), ('医疗', cmed), ('失业', cune), ('工伤', cinj),
@@ -860,10 +890,15 @@ def _social_summary(salary, cfg):
     }
 
 
-def _social_cfg_json(cfg):
-    """把配置整理成前端 JS 可用的扁平结构（前端实时测算用，口径与后端一致）。"""
+def _social_cfg_json(cfg, city=None):
+    """把配置整理成前端 JS 可用的扁平结构（前端实时测算用，口径与后端一致）。
+    额外注入按城市×险种的缴费基数上下限 limits，供前端按险种独立 clamp。"""
     if not cfg:
         return {}
+    limits = {}
+    for ins in ('pension', 'medical', 'unemploy', 'injury', 'fund'):
+        lo, hi = _social_base_limit(city, ins, cfg)
+        limits[ins] = {'min': lo, 'max': hi}
     return {
         'person': {'养老': cfg.pension_pct or 0, '医疗': cfg.medical_pct or 0,
                    '失业': cfg.unemploy_pct or 0, '公积金': cfg.fund_pct or 0},
@@ -872,6 +907,7 @@ def _social_cfg_json(cfg):
                  '生育': cfg.corp_maternity_pct or 0, '公积金': cfg.corp_fund_pct or 0},
         'baseMin': cfg.base_min or 0,
         'baseMax': cfg.base_max or 0,
+        'limits': limits,
     }
 
 
@@ -932,6 +968,8 @@ def _apply_salary_form(o, form):
     o.regular_total = round(o.regular_base + o.regular_perf + o.regular_allow, 2)
     pct = float(form.get('probation_salary_pct') or 0) or 0
     o.probation_salary_pct = pct if o.probation == 'Y' else 0
+    # 社保参保城市（空=系统默认城市）
+    o.social_city = (form.get('social_city') or '').strip() or None
     cfg = HrSocialConfig.query.get(1)
     # 特殊五险一金比例覆盖：勾选且任一比例有值才入库，否则清空（走后台规则）
     use_sp = form.get('use_special_social')
@@ -958,10 +996,11 @@ def _apply_salary_form(o, form):
         o.social_override = json.dumps(ov, ensure_ascii=False) if any_v else None
     else:
         o.social_override = None
-    # 个人五险一金按「有效配置」（特殊比例优先，否则后台规则）测算入库
+    # 个人五险一金按「有效配置」（特殊比例优先，否则后台规则）测算入库；基数按员工参保城市取上下限
+    city = o.social_city or (cfg.default_city if cfg else None)
     cfg_eff = _cfg_effective(cfg, o.social_override)
     (o.social_pension, o.social_medical,
-     o.social_unemploy, o.social_fund) = _calc_social(o.regular_total, cfg_eff)
+     o.social_unemploy, o.social_fund) = _calc_social(o.regular_total, cfg_eff, city)
     return cfg
 
 
@@ -990,7 +1029,7 @@ def onboard_list():
     return render_template('hr/onboard_list.html', items=items, orgs=orgs, levels=levels,
                            can_manage=can_manage, status_name=ONBOARD_STATUS_NAME,
                            cfg=cfg, allowance_items=_load_allowance_items(),
-                           cfg_json=_social_cfg_json(cfg), social_override={})
+                           cfg_json=_social_cfg_json(cfg, cfg.default_city if cfg else None), social_override={})
 
 
 @bp.route('/hr/onboards/new', methods=['POST'])
@@ -1269,8 +1308,162 @@ def onboard_edit(oid):
     return render_template('hr/onboard_edit.html', o=o, orgs=orgs, levels=levels,
                            status_name=ONBOARD_STATUS_NAME,
                            cfg=cfg, allowance_items=_load_allowance_items(),
-                           cfg_json=_social_cfg_json(cfg), detail_map=detail_map,
+                           cfg_json=_social_cfg_json(cfg, o.social_city or (cfg.default_city if cfg else None)),
+                           detail_map=detail_map,
                            social_override=soc_ov)
+
+
+# ===================== EHR · 社保基数标准（多城市×险种上下限，半自动维护 + 半年提醒）=====================
+# 威哥需求（2026-11-05）：五险一金每一项具体的上限和下限，给一个能「自动联网查询填入」的功能，
+# 每半年自动更新一次（类似「附件2」广州2026基数表）。因各地无统一开放 API、抓取易失效，
+# 采用「管理模块 + 半自动维护」：手工填 / 粘贴附件2表格导入 / 一键打开官方查询页；超半年未更新红字提醒。
+_INS_MAP = [
+    ('pension', '养老'), ('medical', '医保'), ('unemploy', '失业'),
+    ('injury', '工伤'), ('fund', '公积金'),
+]
+
+
+def _parse_date(s):
+    """宽松解析日期：支持 2026-07-01 / 2026.7.1 / 2026/7/1；失败返回 None。"""
+    s = (s or '').strip()
+    if not s:
+        return None
+    m = re.search(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', s)
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+
+
+@bp.route('/hr/social-standards', methods=['GET'])
+@login_required
+@permission_required('hr.employee.manage')
+def social_standards():
+    """社保基数标准管理页：多城市×险种缴费基数上下限，支持手工维护/粘贴导入/一键打开官方查询页。"""
+    rows = (HrSocialBaseLimit.query.order_by(HrSocialBaseLimit.city, HrSocialBaseLimit.insurance).all())
+    cities = {}
+    for r in rows:
+        cities.setdefault(r.city, {})[r.insurance] = r
+    cfg = HrSocialConfig.query.get(1)
+    # 半年未更新提醒：每城市取最大 updated_at，距今 > 180 天标红
+    today = date.today()
+    seen = {}
+    for r in rows:
+        if r.city not in seen or (r.updated_at and (seen[r.city] is None or r.updated_at > seen[r.city])):
+            seen[r.city] = r.updated_at
+    stale = []
+    for c, ua in seen.items():
+        if ua:
+            try:
+                ua_d = ua.date() if hasattr(ua, 'date') else ua
+                age = (today - ua_d).days
+            except Exception:
+                age = 0
+            if age > 180:
+                stale.append({'city': c, 'days': age})
+    return render_template('hr/social_standards.html', cities=cities, ins_map=_INS_MAP,
+                           default_city=(cfg.default_city if cfg else None), stale=stale)
+
+
+@bp.route('/hr/social-standards/save', methods=['POST'])
+@login_required
+@permission_required('hr.employee.manage')
+def social_standard_save():
+    """手工保存某城市 5 险种的基数上下限（覆盖式 upsert）。"""
+    city = (request.form.get('city') or '').strip()
+    if not city:
+        flash('请填写城市名称')
+        return redirect(url_for('hr.social_standards'))
+    eff_start = _parse_date(request.form.get('eff_start'))
+    eff_end = _parse_date(request.form.get('eff_end'))
+    source = (request.form.get('source') or '').strip()
+    now = datetime.utcnow()
+    for ins_key, _ in _INS_MAP:
+        lo = request.form.get('lower_' + ins_key)
+        hi = request.form.get('upper_' + ins_key)
+        if lo in (None, '') and hi in (None, ''):
+            continue
+        lo_v = float(lo) if lo not in (None, '') else 0.0
+        hi_v = float(hi) if hi not in (None, '') else 0.0
+        row = HrSocialBaseLimit.query.filter_by(city=city, insurance=ins_key).first()
+        if not row:
+            row = HrSocialBaseLimit(city=city, insurance=ins_key)
+            db.session.add(row)
+        row.lower = lo_v
+        row.upper = hi_v
+        row.eff_start = eff_start
+        row.eff_end = eff_end
+        row.source = source
+        row.updated_at = now
+    db.session.commit()
+    flash('已保存「%s」五险一金缴费基数标准' % city)
+    return redirect(url_for('hr.social_standards'))
+
+
+@bp.route('/hr/social-standards/import', methods=['POST'])
+@login_required
+@permission_required('hr.employee.manage')
+def social_standard_import():
+    """粘贴「附件2」式表格批量导入：按险种关键字匹配 + 提取两个数字(下限,上限)。"""
+    city = (request.form.get('city') or '').strip()
+    text = request.form.get('paste_text') or ''
+    eff_start = _parse_date(request.form.get('eff_start'))
+    eff_end = _parse_date(request.form.get('eff_end'))
+    source = (request.form.get('source') or '').strip()
+    if not city:
+        flash('请填写城市名称')
+        return redirect(url_for('hr.social_standards'))
+    parsed = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        key = None
+        for ins_key, kw in _INS_MAP:
+            if kw in line:
+                key = ins_key
+                break
+        if not key:
+            continue
+        nums = re.findall(r'\d+(?:\.\d+)?', line)
+        if len(nums) >= 2:
+            parsed[key] = (float(nums[0]), float(nums[1]))
+    if not parsed:
+        flash('未能从粘贴内容解析出任何险种数据（请按「险种 下限 上限」格式粘贴，如：企业养老保险 5521 27603）')
+        return redirect(url_for('hr.social_standards'))
+    now = datetime.utcnow()
+    for ins_key, _ in _INS_MAP:
+        if ins_key not in parsed:
+            continue
+        lo, hi = parsed[ins_key]
+        row = HrSocialBaseLimit.query.filter_by(city=city, insurance=ins_key).first()
+        if not row:
+            row = HrSocialBaseLimit(city=city, insurance=ins_key)
+            db.session.add(row)
+        row.lower = lo
+        row.upper = hi
+        row.eff_start = eff_start
+        row.eff_end = eff_end
+        row.source = source
+        row.updated_at = now
+    db.session.commit()
+    flash('已从粘贴内容导入「%s」%d 个险种基数：%s' % (city, len(parsed), '、'.join(k for k, _ in _INS_MAP if k in parsed)))
+    return redirect(url_for('hr.social_standards'))
+
+
+@bp.route('/hr/social-standards/delete', methods=['POST'])
+@login_required
+@permission_required('hr.employee.manage')
+def social_standard_delete():
+    """删除某城市的全部基数标准。"""
+    city = (request.form.get('city') or '').strip()
+    if city:
+        HrSocialBaseLimit.query.filter_by(city=city).delete()
+        db.session.commit()
+        flash('已删除「%s」的基数标准' % city)
+    return redirect(url_for('hr.social_standards'))
 
 
 @bp.route('/hr/onboards/<int:oid>/edit', methods=['POST'])
