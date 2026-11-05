@@ -1,6 +1,24 @@
 {# 产品佣金系数 · 结果清单片段（AJAX 局部刷新用，可被主模板 include，也可被路由 partial 单独渲染） #}
 {% from 'crm/_commission_macros.html' import pct, ryc_pct %}
 
+<style>
+/* ===== 结果清单：表格区固定窗口独立滚动 + 表头吸顶（2026-11-05 威哥要求：
+   数据行多时不必把整页拉到最底部就能左右滑动浏览） ===== */
+.res-scroll{max-height:min(58vh, calc(100vh - 420px));min-height:260px;overflow:auto;border-radius:10px}
+.res-scroll .res-tb thead th{position:sticky;z-index:2;background:#FAF7F2}
+.res-scroll .res-tb thead tr.grp th{top:0;z-index:3;box-shadow:inset 0 -1px 0 #EAE2D6}
+.res-scroll .res-tb thead tr.sub th{top:29px;z-index:2;
+  box-shadow:inset 0 -1px 0 #EAE2D6,inset 0 -2px 4px rgba(42,42,42,.05)}
+.res-scroll .res-tb tbody tr:hover td{background:#FFFCF8}
+/* 首列（保险公司）横向吸附：左右滑动时始终知道是哪家保司/哪个产品 */
+.res-scroll .res-tb th:first-child,.res-scroll .res-tb td:first-child{
+  position:sticky;left:0;z-index:1;background:#fff;min-width:88px;
+  box-shadow:2px 0 4px rgba(42,42,42,.06)}
+.res-scroll .res-tb thead th:first-child{z-index:4;background:#FAF7F2}
+.res-scroll .res-tb tbody tr:hover td:first-child{background:#FFFCF8}
+@media (max-height:720px){.res-scroll{max-height:min(52vh, calc(100vh - 360px))}}
+</style>
+
 <div class="crm-sec">销售费用结果清单 <span>可按 渠道 / 组织层面 / 归属月份 / 销售分公司 / 保司 / 缴别 / 产品 筛选</span></div>
 
 <div class="ch-filters">
@@ -73,7 +91,7 @@
 
 <div class="crm-card">
   {% if rows %}
-  <div style="overflow-x:auto">
+  <div class="res-scroll">
   <table class="crm-table res-tb">
     <thead>
       <tr class="grp">
