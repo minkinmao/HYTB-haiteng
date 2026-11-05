@@ -135,8 +135,8 @@
         {% endif %}
         {% if level in ('all','shareholder') %}<th style="text-align:right">RYC2采购</th><th style="text-align:right">RYC3采购</th><th style="text-align:right">RYC4采购</th><th style="text-align:right">RYC5采购</th>{% endif %}
         {% if level in ('all','shareholder') %}<th style="text-align:right">签约费用</th><th style="text-align:right">销售净费<br><span style="font-weight:400;font-size:10.5px;color:#9C9288">线下{{ '%.2f'|format(net_ratio_both.offline) }}% / 互联网{{ '%.2f'|format(net_ratio_both.internet) }}%</span></th>{% endif %}
-        {% if level in ('all','subsidiary') %}<th style="text-align:right" title="= 销售费用合计 × 基础佣金比例%，保留1位直接舍去">FYC首佣</th><th style="text-align:right" title="= 销售费用合计 × 销售费用比例%，保留1位直接舍去">销售费用</th><th style="text-align:right" title="= 销售费用合计 × 经营费用比例%，保留1位直接舍去">经营费用</th><th style="text-align:right;color:#C86432" title="= 签约费用 × 净费比例% → 减1 → 直接舍去">销售费用合计</th>{% endif %}
-        {% if level in ('all','team') %}<th style="text-align:right" title="= 子公司层面 FYC首佣">FYC首佣</th>{% endif %}
+        {% if level in ('all','subsidiary') %}<th style="text-align:right" title="= 销售净费 × 基础佣金比例%">FYC首佣</th><th style="text-align:right" title="= 销售净费 × 销售费用比例%">销售费用</th><th style="text-align:right" title="= 销售净费 × 经营费用比例%">经营费用</th><th style="text-align:right;color:#C86432" title="= FYC首佣 + 销售费用 + 经营费用">销售费用合计</th>{% endif %}
+        {% if level in ('all','team') %}<th style="text-align:right" title="= 签约费用 × 净费比例% → 减1% → 直接舍去（整数百分点；趸交保留1位小数）">FYC首佣</th>{% endif %}
         <th style="text-align:right">RYC2佣金</th><th style="text-align:right">RYC3佣金</th>
         <th style="text-align:right">RYC4佣金</th><th style="text-align:right">RYC5佣金</th>
       </tr>
@@ -170,13 +170,13 @@
         <td style="text-align:right" class="mono num" title="销售净费 = 签约费用 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营），股东层面不取整">{{ pct(r.net) }}</td>
         {% endif %}
         {% if level in ('all','subsidiary') %}
-        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 基础佣金比例 {{ '%.0f'|format(r.base_ratio) }}% ÷ 净费比例 {{ '%.2f'|format(r.net_ratio) }}%，四舍五入保留1位">{{ pct(r.base) }}</td>
-        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 销售费用比例 {{ '%.0f'|format(r.sales_ratio) }}% ÷ 净费比例 {{ '%.2f'|format(r.net_ratio) }}%，四舍五入保留1位">{{ pct(r.sales) }}</td>
-        <td style="text-align:right" class="mono num" title="经营费用兜底平衡 = 销售费用合计 − FYC首佣 − 销售费用">{{ pct(r.op) }}</td>
-        <td style="text-align:right;color:#C86432" class="mono num" title="销售费用合计 = 签约费用 {{ '%.2f'|format(r.sign_total*100) }}% × 净费比例 {{ '%.2f'|format(r.net_ratio) }}% → 减1 → 直接舍去">{{ pct(r.sub_total) }}</td>
+        <td style="text-align:right" class="mono num" title="销售净费 {{ '%.2f'|format(r.net*100) }}% × 基础佣金比例 {{ '%.0f'|format(r.base_ratio) }}%">{{ pct(r.base) }}</td>
+        <td style="text-align:right" class="mono num" title="销售净费 {{ '%.2f'|format(r.net*100) }}% × 销售费用比例 {{ '%.0f'|format(r.sales_ratio) }}%">{{ pct(r.sales) }}</td>
+        <td style="text-align:right" class="mono num" title="销售净费 {{ '%.2f'|format(r.net*100) }}% × 经营费用比例 {{ '%.0f'|format(r.op_ratio) }}%">{{ pct(r.op) }}</td>
+        <td style="text-align:right;color:#C86432" class="mono num" title="销售费用合计 = FYC首佣 + 销售费用 + 经营费用">{{ pct(r.sub_total) }}</td>
         {% endif %}
         {% if level in ('all','team') %}
-        <td style="text-align:right" class="mono num" title="团队长FYC首佣 = 子公司层面FYC首佣">{{ pct(r.team) }}</td>
+        <td style="text-align:right" class="mono num" title="团队长FYC首佣 = 签约费用 {{ '%.2f'|format(r.sign_total*100) }}% × 净费比例 {{ '%.2f'|format(r.net_ratio) }}% → 减1% → 直接舍去{% if r.team_stub %}（趸交保留1位）{% endif %}">{{ ('%.1f'|format(r.team*100) ~ '%') if r.team else '' }}</td>
         {% endif %}
         <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y2, r.ryc_hide_lt1) }}</td>
         <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y3, r.ryc_hide_lt1) }}</td>
