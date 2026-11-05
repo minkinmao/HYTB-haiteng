@@ -9799,20 +9799,20 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         sales = _comm_apply_round(first_amt * sr / 100.0, COMM_ROUND_RULE)
         # 经营费用：仅首年（RYC 只计佣金，不计经营费用）
         op = first_amt * orr / 100.0
-        # 股东·签约费用 = 销售净费 = 首佣合计 × 净费比例% → 减1% → 第三位起直接舍去
-        #   口径统一（威哥 2026-11-05）：签约费用与销售净费同值，
-        #   与「销售费用取整规则」一致 —— 减1%后数据取整（直接舍去）。
+        # 股东·签约费用 = 首佣合计（FYC + 首年方案）
+        #   口径（威哥 2026-11-05 定稿）：签约费用就是首佣合计本身，
         #   续期采购成本（RYC2~RYC5）另有四列单独展示，不并入。
-        #   例：5.50% × 89% = 4.895% → ×99% = 4.84605% → 4.84%
-        #       20.50% × 89% = 18.245% → ×99% = 18.06255% → 18.06%
+        sign_total = first_amt                                  # 股东·签约费用
+        # 股东·净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例（随渠道自动测算）
+        #   线下默认 80+5+4=89%；互联网默认 80+0+5=85%
         net_ratio = _comm_net_ratio_of(cfg)
+        # 股东·销售净费 = 签约费用 × 净费比例% → 取整（直接舍去小数）→ 减1
+        #   口径（威哥 2026-11-05 定稿）：例 5.50% × 89% = 4.895% → 取整 4 → 减1 → 3.0%
+        #   线下 89% / 互联网 85%，按渠道自动取值
         _pct_first = Decimal(str(round(first_amt * 100, 4)))
-        _net_pct = float(
-            (_pct_first * Decimal(str(net_ratio)) / Decimal('100') * Decimal('0.99'))
-            .quantize(Decimal('0.01'), rounding=ROUND_DOWN)
-        ) / 100.0
-        net = _net_pct                                    # 股东·销售净费
-        sign_total = _net_pct                            # 股东·签约费用（= 销售净费）
+        _net_int = int((_pct_first * Decimal(str(net_ratio)) / Decimal('100'))
+                       .quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
+        net = float(max(0, _net_int - 1)) / 100.0              # 股东·销售净费
         team = base                                              # 团队长·基础佣金 = 子公司基础佣金（统一口径）
         out.append({
             'id': r.id, 'insurer': r.insurer or '', 'product': r.product or '',

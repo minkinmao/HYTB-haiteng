@@ -144,8 +144,8 @@
         <td style="text-align:right" class="mono num" title="第五年采购（原始百分点，未经系数折算）">{{ pct(r.y5) }}</td>
         {% endif %}
         {% if level in ('all','shareholder') %}
-        <td style="text-align:right" class="mono num" title="签约费用 = 销售净费 = 首佣合计 × 净费比例% → 减1% → 直接舍去">{{ pct(r.sign_total) }}</td>
-        <td style="text-align:right" class="mono num" title="销售净费 = 首佣合计 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营）→ 减1% → 直接舍去">{{ pct(r.net) }}</td>
+        <td style="text-align:right" class="mono num" title="签约费用 = 首佣合计 = FYC + 首年方案">{{ pct(r.sign_total) }}</td>
+        <td style="text-align:right" class="mono num" title="销售净费 = 签约费用 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营）→ 取整 → 减1">{{ pct(r.net) }}</td>
         {% endif %}
         {% if level in ('all','subsidiary') %}
         <td style="text-align:right" class="mono num">{{ pct(r.base) }}</td>
@@ -171,10 +171,11 @@
 
 <div class="hint" style="margin-top:10px">
   字段统称：首年基础佣金 = <b>FYC</b>，第二年~第五年采购 = <b>RYC2 / RYC3 / RYC4 / RYC5</b>；<b>首佣合计 = FYC + 首年方案</b>；投保区域统称 <b>销售分公司</b>。<br>
-  层级视图：「全部」显示首年明细三列（FYC / 首年方案 / 首佣合计）；<b>「股东层面」同样显示首年明细三列</b>（签约费用即取首佣合计）；选子公司 / 团队长层面时不展示这三列，只保留该层面的结果。<br>
+  层级视图：「全部」显示首年明细三列（FYC / 首年方案 / 首佣合计）；<b>「股东层面」同样显示首年明细三列</b>（<b>签约费用 = 首佣合计</b>）；选子公司 / 团队长层面时不展示这三列，只保留该层面的结果。<br>
   「<b>全部</b>」与「<b>股东层面</b>」额外展示各年 <b>RYC 采购成本</b>（第二年~第五年采购，原始百分点，未经系数折算），与最右侧「RYC续年度佣金」（采购 × RYC 佣金比例%）区分：前者是<b>采购成本</b>、后者是<b>实算佣金</b>；选子公司 / 团队长层面时不展示 RYC 采购成本列。<br>
-  三层口径：<b>股东</b>＝<b>签约费用 ＝ 销售净费 ＝ 首佣合计 × 净费比例% → 减1% → 直接舍去</b>（首佣合计 = FYC + 首年方案，只含首年这一笔，不叠加 RYC2~RYC5 续期采购；取整规则已写死为「减1%后数据取整（直接舍去）」）；其中<b>净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例</b>（按渠道自动测算：当前线下
-  {{ '%.2f'|format(net_ratio_both.offline) }}%、互联网 {{ '%.2f'|format(net_ratio_both.internet) }}%；第三位起直接舍去，保留 2 位小数）；
+  三层口径：<b>股东</b>＝<b>签约费用 = 首佣合计</b>（= FYC + 首年方案，只含首年这一笔，不叠加 RYC2~RYC5 续期采购）；<b>销售净费 = 签约费用 × 净费比例% → 取整（直接舍去小数）→ 减1</b>（例：签约 5.50% × 89% = 4.895% → 取整 4 → 减1 → 3.0%）；
+  其中<b>净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例</b>（按渠道自动测算：当前线下
+  {{ '%.2f'|format(net_ratio_both.offline) }}%、互联网 {{ '%.2f'|format(net_ratio_both.internet) }}%）；
   <b>子公司</b>＝FYC首佣（首佣合计×基础佣金比例% + Σ各年RYC×该年RYC佣金比例%）+ 销售费用（(FYC+首年方案)×销售费用比例% → 减1% → 直接舍去，仅首年）+ 经营费用（(FYC+首年方案)×经营费用比例%，仅首年）；
   <b>团队长</b>＝FYC首佣（与子公司一致）。所有数值均为占保费的百分比；采购成本为 0 时留空。<br>
   报表最右侧四列为 RYC续年度佣金（各年 RYC × 该年 RYC 佣金比例%，<b>0 表示该年续期佣金为 0%、不再沿用基础佣金比例</b>；分年期、每年可不同；各层级一致）。<br>
