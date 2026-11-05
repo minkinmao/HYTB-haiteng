@@ -9604,10 +9604,12 @@ def _comm_trunc_pct(v):
 
 def _comm_pct_num(v):
     """导 Excel 用：占保费比例 → 百分比数值（保留 2 位，第三位起直接舍去，与页面显示同口径）。
+    先 round 到 6 位消掉浮点尾差（如 5.6/100 → 0.055999999999999994 会误截成 5.59）。
     0/空 → None（与页面留空一致）。"""
     if not v:
         return None
-    return float((Decimal(str(v)) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_DOWN))
+    d = Decimal(str(round(float(v) * 100, 6)))      # 百分点（已消尾差）
+    return float(d.quantize(Decimal('0.01'), rounding=ROUND_DOWN))
 
 
 def _comm_ryc_pct_num(v, hide=False):
@@ -9724,11 +9726,11 @@ def _comm_valid_insurer(s):
 def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_period=None, product=None):
     """生成结果行（含三层口径 + 首年/续期明细），并按 销售分公司/归属月份/保司/缴别/产品 过滤。
 
-    三层口径（2026-11-05 定稿）：
+    三层口径（2026-11-05 最终定稿）：
       · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；销售净费 = 签约费用 × 净费比例% → 取整 → 减1
-      · 子公司层面：由销售净费拆分 —— FYC首佣 = 净费×(基础佣金比例/净费比例)（截断1位）；
-                    经营费用 = 净费×(经营费用比例/净费比例)（截断1位）；销售费用 = 净费 − 两者
-      · 团队长层面：FYC首佣 = 总公司（股东）层面首佣合计
+      · 子公司层面：销售费用合计 = 销售净费（同源同值）；FYC首佣/销售费用/经营费用
+                    = 销售费用合计 × 对应设置比例%（各截断1位）
+      · 团队长层面：FYC首佣 = 子公司层面 FYC首佣
     销售分公司过滤：选具体省 → 命中该省或全国；选全国 → 仅全国；all → 全部。
     归属月份过滤：month 非空时只取该月数据。
     保司/缴别/产品：非空时按精确/模糊匹配。
@@ -9806,41 +9808,31 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         _net_int = int((_pct_first * Decimal(str(net_ratio)) / Decimal('100'))
                        .quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
         net = float(max(0, _net_int - 1)) / 100.0              # 股东·销售净费
-        # ---- 子公司层面（威哥 2026-11-05 定稿：由股东·销售净费反算拆分）----
-        #   FYC首佣 = 销售净费 × (基础佣金比例 / 净费比例) → 保留1位小数、直接舍去
-        #   余额（= 销售净费 − FYC首佣）由「非基础佣金」项吸收：
-        #     · 线下（销售费用比例 5% > 0）：经营费用按比例算出（截断1位），销售费用吃余额
-        #     · 互联网（销售费用比例 0）：销售费用 = 0，经营费用吃余额
-        #   例（线下 80/5/4、净费比例 89%，净费 7%）：
-        #       7 × 80/89 = 6.29% → 6.2%；7 × 4/89 = 0.31% → 0.3%；销售 = 7 − 6.2 − 0.3 = 0.5%
-        #   例（互联网 80/0/5、净费比例 85%，净费 7%）：
-        #       7 × 80/85 = 6.58% → 6.5%；无销售费用，经营费用 = 7 − 6.5 = 0.5%
-        if net_ratio:
-            _net_pct = Decimal(str(round(net * 100, 4)))        # 净费已是整数百分点
-            _d_base = (_net_pct * Decimal(str(br)) / Decimal(str(net_ratio))) \
+        # ---- 子公司层面（威哥 2026-11-05 最终定稿：以「销售费用合计」为基数，各按设置比例计提）----
+        #   销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（与股东·销售净费同源同值）
+        #   FYC首佣  = 销售费用合计 × 基础佣金比例%
+        #   销售费用 = 销售费用合计 × 销售费用比例%
+        #   经营费用 = 销售费用合计 × 经营费用比例%
+        #   三项各自「保留1位小数、直接舍去」，页面/导出统一显示 2 位小数。
+        #   例（净费比例 89%、80/5/4，签约费用 5.50%）：
+        #       销售费用合计 5.50×89% = 4.895 → 减1 → 3.895 → 舍去 3.00%
+        #       FYC = 3.00×80% = 2.40%；销售 = 3.00×5% = 0.15% → 0.1%；经营 = 3.00×4% = 0.12% → 0.1%
+        _sub_pct = Decimal(str(round(net * 100, 4)))             # 销售费用合计（整数百分点）
+        if net_ratio and _sub_pct:
+            _d_base = (_sub_pct * Decimal(str(br)) / Decimal('100')) \
                 .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-            _rest = max(Decimal('0'), _net_pct - _d_base)       # 余额
-            if (sr or 0) > 0:
-                # 线下：经营费用按比例截断，销售费用吃剩余余额
-                _d_op = (_net_pct * Decimal(str(orr)) / Decimal(str(net_ratio))) \
-                    .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-                _d_op = min(_d_op, _rest)
-                _d_sales = _rest - _d_op
-            elif (orr or 0) > 0:
-                # 互联网：无销售费用，经营费用吃全部余额
-                _d_sales = Decimal('0')
-                _d_op = _rest
-            else:
-                _d_sales = Decimal('0')
-                _d_op = Decimal('0')
+            _d_sales = (_sub_pct * Decimal(str(sr)) / Decimal('100')) \
+                .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+            _d_op = (_sub_pct * Decimal(str(orr)) / Decimal('100')) \
+                .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
         else:
             _d_base = _d_op = _d_sales = Decimal('0')
         base = float(_d_base) / 100.0                            # 子公司·FYC首佣
         op = float(_d_op) / 100.0                                # 子公司·经营费用
         sales = float(_d_sales) / 100.0                          # 子公司·销售费用
-        sub_total = base + sales + op                            # 子公司·销售费用合计（= 销售净费，尾差已由余额吸收）
-        # 团队长·FYC首佣 = 总公司（股东）层面 FYC首佣 = 首佣合计（签约费用）
-        team = sign_total
+        sub_total = net                                          # 子公司·销售费用合计（= 股东·销售净费）
+        # 团队长·FYC首佣 = 子公司·FYC首佣（保持不变）
+        team = base
         out.append({
             'id': r.id, 'insurer': r.insurer or '', 'product': r.product or '',
             'channel_name': r.channel or '', 'issue_platform': r.issue_platform or '',
@@ -10142,14 +10134,14 @@ def commission_coefficient_export():
     if level in ('all', 'subsidiary'):
         heads += ['FYC首佣', '销售费用', '经营费用', '销售费用合计']
         groups.append(('子公司层面', 4))
-        col += 1; pct_cols[col] = 1     # FYC首佣：1 位小数（截断）
-        col += 1; pct_cols[col] = 1     # 销售费用：1 位小数（截断）
-        col += 1; pct_cols[col] = 1     # 经营费用：1 位小数（截断）
-        col += 1; pct_cols[col] = 2     # 销售费用合计：与「首佣合计」一致，2 位小数
+        col += 1; pct_cols[col] = 2     # FYC首佣：值截断1位，显示2位（威哥要求）
+        col += 1; pct_cols[col] = 2     # 销售费用：同上
+        col += 1; pct_cols[col] = 2     # 经营费用：同上
+        col += 1; pct_cols[col] = 2     # 销售费用合计：2 位小数
     if level in ('all', 'team'):
         heads += ['FYC首佣']
         groups.append(('团队长层面', 1))
-        col += 1; pct_cols[col] = 1
+        col += 1; pct_cols[col] = 2     # 团队长FYC首佣：值截断1位，显示2位
     heads += ['RYC2佣金', 'RYC3佣金', 'RYC4佣金', 'RYC5佣金']
     groups.append(('RYC续年度佣金', 4))
     for _ in range(4):
@@ -10172,10 +10164,11 @@ def commission_coefficient_export():
         if level in ('all', 'shareholder'):
             line += [_comm_pct_num(r['sign_total']), _comm_pct_num(r['net'])]
         if level in ('all', 'subsidiary'):
-            line += [_comm_pct_num(r['base']), _comm_pct_num(r['sales']),
-                     _comm_pct_num(r['op']), _comm_pct_num(r['sub_total'])]
+            # 子公司四项 0 也输出 0.0（页面显示 0.00%，导出保持一致）
+            line += [_comm_pct_num(r['base']) or 0.0, _comm_pct_num(r['sales']) or 0.0,
+                     _comm_pct_num(r['op']) or 0.0, _comm_pct_num(r['sub_total']) or 0.0]
         if level in ('all', 'team'):
-            line += [_comm_pct_num(r['team'])]
+            line += [_comm_pct_num(r['team']) or 0.0]
         line += [_comm_ryc_pct_num(r['ryc_comm']['y2'], r['ryc_hide_lt1']),
                  _comm_ryc_pct_num(r['ryc_comm']['y3'], r['ryc_hide_lt1']),
                  _comm_ryc_pct_num(r['ryc_comm']['y4'], r['ryc_hide_lt1']),
