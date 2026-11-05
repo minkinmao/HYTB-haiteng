@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import types
 import uuid
 from datetime import datetime, date, timedelta
 from urllib.parse import quote
@@ -874,6 +875,29 @@ def _social_cfg_json(cfg):
     }
 
 
+def _cfg_effective(global_cfg, override):
+    """返回有效配置：override 有内容（dict 或 JSON 字符串）则覆盖全局；否则用全局。
+    返回对象属性需与 HrSocialConfig 一致（pension_pct 等 12 字段 + base_min/base_max），
+    供 _calc_social / _clamp_base 复用。"""
+    if not override:
+        return global_cfg
+    d = override if isinstance(override, dict) else None
+    if d is None:
+        try:
+            d = json.loads(override)
+        except Exception:
+            d = None
+    if not d:
+        return global_cfg
+    fields = ('pension_pct', 'medical_pct', 'unemploy_pct', 'fund_pct',
+              'corp_pension_pct', 'corp_medical_pct', 'corp_unemploy_pct',
+              'corp_injury_pct', 'corp_maternity_pct', 'corp_fund_pct',
+              'base_min', 'base_max')
+    for f in fields:
+        d.setdefault(f, getattr(global_cfg, f, 0))
+    return types.SimpleNamespace(**d)
+
+
 def _load_allowance_items():
     """取启用的岗位补贴项（按 sort 排序），建号页据此预填金额。"""
     return (HrAllowanceItem.query.filter_by(enabled=True)
@@ -909,8 +933,35 @@ def _apply_salary_form(o, form):
     pct = float(form.get('probation_salary_pct') or 0) or 0
     o.probation_salary_pct = pct if o.probation == 'Y' else 0
     cfg = HrSocialConfig.query.get(1)
+    # 特殊五险一金比例覆盖：勾选且任一比例有值才入库，否则清空（走后台规则）
+    use_sp = form.get('use_special_social')
+    ov = {}
+    _sp_map = [('pension_pct', 'sp_pension_pct'), ('medical_pct', 'sp_medical_pct'),
+               ('unemploy_pct', 'sp_unemploy_pct'), ('fund_pct', 'sp_fund_pct'),
+               ('corp_pension_pct', 'sp_corp_pension_pct'), ('corp_medical_pct', 'sp_corp_medical_pct'),
+               ('corp_unemploy_pct', 'sp_corp_unemploy_pct'), ('corp_injury_pct', 'sp_corp_injury_pct'),
+               ('corp_maternity_pct', 'sp_corp_maternity_pct'), ('corp_fund_pct', 'sp_corp_fund_pct'),
+               ('base_min', 'sp_base_min'), ('base_max', 'sp_base_max')]
+    if use_sp:
+        any_v = False
+        for dst, src in _sp_map:
+            raw = form.get(src)
+            if raw is None or raw == '':
+                continue   # 未填写 → 留空沿用后台规则，不覆盖
+            try:
+                v = float(raw) or 0
+            except (ValueError, TypeError):
+                continue
+            ov[dst] = v
+            if v:
+                any_v = True
+        o.social_override = json.dumps(ov, ensure_ascii=False) if any_v else None
+    else:
+        o.social_override = None
+    # 个人五险一金按「有效配置」（特殊比例优先，否则后台规则）测算入库
+    cfg_eff = _cfg_effective(cfg, o.social_override)
     (o.social_pension, o.social_medical,
-     o.social_unemploy, o.social_fund) = _calc_social(o.regular_total, cfg)
+     o.social_unemploy, o.social_fund) = _calc_social(o.regular_total, cfg_eff)
     return cfg
 
 
@@ -939,7 +990,7 @@ def onboard_list():
     return render_template('hr/onboard_list.html', items=items, orgs=orgs, levels=levels,
                            can_manage=can_manage, status_name=ONBOARD_STATUS_NAME,
                            cfg=cfg, allowance_items=_load_allowance_items(),
-                           cfg_json=_social_cfg_json(cfg))
+                           cfg_json=_social_cfg_json(cfg), social_override={})
 
 
 @bp.route('/hr/onboards/new', methods=['POST'])
@@ -1208,10 +1259,18 @@ def onboard_edit(oid):
                 detail_map[r['name']] = float(r.get('amount') or 0)
             except (TypeError, ValueError):
                 detail_map[r['name']] = 0.0
+    # 已保存的特殊五险一金比例覆盖（扁平 dict），无则空 dict
+    soc_ov = {}
+    if o.social_override:
+        try:
+            soc_ov = json.loads(o.social_override)
+        except Exception:
+            soc_ov = {}
     return render_template('hr/onboard_edit.html', o=o, orgs=orgs, levels=levels,
                            status_name=ONBOARD_STATUS_NAME,
                            cfg=cfg, allowance_items=_load_allowance_items(),
-                           cfg_json=_social_cfg_json(cfg), detail_map=detail_map)
+                           cfg_json=_social_cfg_json(cfg), detail_map=detail_map,
+                           social_override=soc_ov)
 
 
 @bp.route('/hr/onboards/<int:oid>/edit', methods=['POST'])

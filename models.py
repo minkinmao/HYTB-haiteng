@@ -501,6 +501,10 @@ class Onboarding(db.Model):
     social_medical = db.Column(db.Float, default=0, comment='医疗保险（个人，按配置测算）')
     social_unemploy = db.Column(db.Float, default=0, comment='失业保险（个人，按配置测算）')
     social_fund = db.Column(db.Float, default=0, comment='住房公积金（个人，按配置测算）')
+    # 特殊五险一金比例覆盖（JSON，扁平12字段+base_min/base_max；空=走系统后台规则）
+    # 键与 HrSocialConfig 一致：pension_pct/medical_pct/unemploy_pct/fund_pct/
+    # corp_pension_pct/corp_medical_pct/corp_unemploy_pct/corp_injury_pct/corp_maternity_pct/corp_fund_pct/base_min/base_max
+    social_override = db.Column(db.Text, comment='特殊人员五险一金比例覆盖(JSON)；空=按系统后台规则')
 
 
 class HrSocialConfig(db.Model):

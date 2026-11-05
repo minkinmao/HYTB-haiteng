@@ -4,6 +4,7 @@
      sb.prob_start / sb.prob_end / sb.total_show / sb.detail（dict：补贴项名 → 金额）
    上下文依赖：cfg_json（五险一金配置，hr._social_cfg_json）、allowance_items（启用的补贴项）
    口径：总薪资 = 基本薪资 + 绩效薪资 + 岗位补贴；测算逻辑与后端 hr._social_summary 完全一致。 #}
+{% set social_override = social_override if social_override is defined else {} %}
 <style>
   .sblk .lbl{font-size:12px;color:#9C9288;margin-bottom:4px}
   .sblk .in{width:100%;padding:8px 10px;border:1px solid #E2D8CA;border-radius:6px;font-size:14px;box-sizing:border-box}
@@ -30,6 +31,17 @@
   .sblk .cost-card .ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;
     border-top:1px solid #F3EDE3;background:#FCFAF7;border-radius:0 0 10px 10px;flex-wrap:wrap}
   .sblk .cost-card .ft button{font-size:13px;padding:8px 18px;border-radius:6px;cursor:pointer}
+  /* 人力成本明细列表（弹窗内 + 主表单下方共用，2026-11-05 威哥要求以列表形式列出） */
+  .sblk .cost-list{font-size:12.5px;color:#6B5D4F}
+  .sblk .cost-list .crow{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;padding:6px 0}
+  .sblk .cost-list .crow b{font-size:15px;color:#2A2A2A}
+  .sblk .cost-list .crow.total{border-top:1px dashed #EAE2D6;margin-top:4px;padding-top:8px}
+  .sblk .cost-list .crow.total b{color:#C86432}
+  .sblk .cost-list .sec{font-size:12px;font-weight:600;color:#9C4E2C;margin:8px 0 2px}
+  .sblk .cost-list .grid{display:flex;flex-wrap:wrap;gap:4px 14px}
+  .sblk .cost-list .grid span{color:#9C9288}
+  .sblk .cost-list .grid b{color:#6B5D4F;font-weight:600}
+  .sblk .sp-note{font-size:12.5px;color:#9C9288;margin-bottom:8px}
 </style>
 
 <div class="sblk" style="grid-column:1/-1;background:#FCFAF7;border:1px dashed #E2D8CA;border-radius:8px;padding:14px">
@@ -104,6 +116,32 @@
              value="{{ sb.pct }}" class="in"></div>
   </div>
 
+  {# ---------- 特殊人员五险一金比例专属通道（2026-11-05 威哥要求：常规走后台规则，特殊人员单独设比例）---------- #}
+  <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #EAE2D6">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#6B5D4F;cursor:pointer">
+      <input type="checkbox" name="use_special_social" id="sp_on" value="1" onchange="onSpToggle()">
+      <b>本人员使用特殊五险一金比例</b>
+      <span style="font-weight:400;color:#9C9288">（勾选后下方比例生效，否则按系统后台规则测算）</span>
+    </label>
+    <div id="sp_box" style="display:none;margin-top:10px;padding:12px;background:#fff;border:1px solid #E2D8CA;border-radius:8px">
+      <div class="sp-note">仅填写与后台<b>不同</b>的险种即可；留空项沿用后台比例（缴费基数上下限同理）。保存后该人员独立按此比例测算人力成本。</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px">
+        <div><div class="lbl">个人·养老(%)</div><input id="sp_pension_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">个人·医疗(%)</div><input id="sp_medical_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">个人·失业(%)</div><input id="sp_unemploy_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">个人·公积金(%)</div><input id="sp_fund_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">单位·养老(%)</div><input id="sp_corp_pension_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">单位·医疗(%)</div><input id="sp_corp_medical_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">单位·失业(%)</div><input id="sp_corp_unemploy_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">单位·工伤(%)</div><input id="sp_corp_injury_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">单位·生育(%)</div><input id="sp_corp_maternity_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">单位·公积金(%)</div><input id="sp_corp_fund_pct" type="number" step="0.1" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">缴费基数下限</div><input id="sp_base_min" type="number" step="0.01" min="0" class="in" oninput="refreshCfg()"></div>
+        <div><div class="lbl">缴费基数上限</div><input id="sp_base_max" type="number" step="0.01" min="0" class="in" oninput="refreshCfg()"></div>
+      </div>
+    </div>
+  </div>
+
   {# ---------- 人力成本测算（弹窗模式：平时收起，点按钮才弹出，关闭即隐藏）---------- #}
   <div style="margin-top:12px;border-top:1px dashed #EAE2D6;padding-top:12px;
               display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -141,13 +179,17 @@
       </div>
     </div>
   </div>
+
+  {# ---------- 人力成本明细列表（常驻：按当前总薪资实时测算，点「填到基本薪资」后同步）---------- #}
+  <div id="costSummary" style="margin-top:14px;padding-top:12px;border-top:1px dashed #EAE2D6"></div>
 </div>
 
 <script>
   // 五险一金配置（后端 _social_cfg_json 注入，前端口径与后端 _social_summary 保持一致）
-  var SB_CFG = {{ cfg_json | tojson }};
-  var SB_PERSON = SB_CFG.person || {};
-  var SB_CORP = SB_CFG.corp || {};
+  var SB_CFG_GLOBAL = {{ cfg_json | tojson }};
+  var SB_OVERRIDE = {{ social_override | tojson }};
+  var SB_CFG = SB_CFG_GLOBAL;            // 当前生效配置（开关切换时改为特殊比例）
+  var SB_LAST_SALARY = 0;               // 最近一次测算出的总薪资（applyCalc 回填用）
 
   // 缴费基数 = 金额夹在 [baseMin, baseMax] 之间（上限 0 视为未设）
   function sbClamp(v){
@@ -172,6 +214,7 @@
     var m = document.querySelector('input[name=calc_mode][value=bySalary]');
     if (m && m.checked) document.getElementById('calc_input').value = t ? sbFmt(t) : '';
     runCalc();
+    if (t > 0) renderCostSummary(t);   // 主表单下方明细始终按「已填总薪资」实时更新
   }
   // 补贴明细合计 → 自动填入「岗位补贴」
   function calcAllow(){
@@ -245,28 +288,94 @@
     personal = sbSocial(base, SB_PERSON);
     cost = Math.round((salary + corp.sum) * 100) / 100;
     document.getElementById('calc_cost').value = x > 0 ? sbFmt(cost) : '';
-    var html = '';
-    html += '<div class="mini">总薪资（税前应发）<br><b style="font-size:16px">' + sbFmt(salary) + '</b> 元'
-          + '<br><span style="color:#9C9288">缴费基数 ' + sbFmt(base) + '</span></div>';
-    html += '<div class="mini">个人五险一金合计 <span class="sum">' + sbFmt(personal.sum) + '</span> 元<br>';
-    for (var k in personal.det) html += '<span style="color:#9C9288">' + k + ' ' + sbFmt(personal.det[k]) + '　</span>';
-    html += '</div>';
-    html += '<div class="mini">单位五险一金合计 <span class="sum">' + sbFmt(corp.sum) + '</span> 元<br>';
-    for (var k2 in corp.det) html += '<span style="color:#9C9288">' + k2 + ' ' + sbFmt(corp.det[k2]) + '　</span>';
-    html += '</div>';
-    html += '<div class="mini">总人力成本（总薪资+单位五险一金）<br><b style="font-size:16px;color:#C86432">'
-          + sbFmt(cost) + '</b> 元</div>';
+    SB_LAST_SALARY = salary;
+    var html = buildCostHtml(salary, base, personal, corp, cost);
     document.getElementById('calc_out').innerHTML = html;
+    var cs = document.getElementById('costSummary');
+    if (cs) cs.innerHTML = html;
+  }
+  // 渲染人力成本明细列表（弹窗内 calc_out 与主表单下方 costSummary 共用）
+  function buildCostHtml(salary, base, personal, corp, cost){
+    var h = '<div class="cost-list">';
+    h += '<div class="crow"><span>个人薪资（税前应发）</span><b>' + sbFmt(salary) + '</b> 元'
+       + '<span>缴费基数 ' + sbFmt(base) + '</span></div>';
+    h += '<div class="sec">个人五险一金明细（合计 ' + sbFmt(personal.sum) + ' 元）</div><div class="grid">';
+    for (var k in personal.det) h += '<span>' + k + ' <b>' + sbFmt(personal.det[k]) + '</b></span>';
+    h += '</div>';
+    h += '<div class="sec">公司五险一金明细（合计 ' + sbFmt(corp.sum) + ' 元）</div><div class="grid">';
+    for (var k2 in corp.det) h += '<span>' + k2 + ' <b>' + sbFmt(corp.det[k2]) + '</b></span>';
+    h += '</div>';
+    h += '<div class="crow total"><span>人力总成本（总薪资 + 单位五险一金）</span><b>' + sbFmt(cost) + '</b> 元</div>';
+    h += '</div>';
+    return h;
+  }
+  // 按「已填总薪资」刷新主表单下方明细（不随弹窗反推模式变化）
+  function renderCostSummary(salary){
+    salary = Math.round(salary * 100) / 100;
+    var base = sbClamp(salary);
+    var corp = sbSocial(base, SB_CFG.corp);
+    var pers = sbSocial(base, SB_CFG.person);
+    var cost = Math.round((salary + corp.sum) * 100) / 100;
+    var html = buildCostHtml(salary, base, pers, corp, cost);
+    var cs = document.getElementById('costSummary');
+    if (cs) cs.innerHTML = html;
   }
   // 把测算出的总薪资填到「基本薪资」（其余构成清零，由 HR 再分配）
   function applyCalc(){
-    var v = document.getElementById('calc_input').value;
-    if (!v) return;
-    document.getElementById('sb_base').value = v;
+    var v = SB_LAST_SALARY;             // 填「测算出的总薪资」，而非输入框原值（byCost 模式下输入框是总人力成本）
+    if (!(v > 0)) return;
+    document.getElementById('sb_base').value = sbFmt(v);
     calcTotal();
   }
   // 初始化：明细合计 → 总薪资 → 试用期联动 → 测算
+  function onSpToggle(){
+    var on = document.getElementById('sp_on').checked;
+    document.getElementById('sp_box').style.display = on ? 'block' : 'none';
+    refreshCfg();
+  }
+  function refreshCfg(){
+    SB_CFG = document.getElementById('sp_on').checked ? buildOverride() : SB_CFG_GLOBAL;
+    runCalc();
+  }
+  function buildOverride(){
+    var g = SB_CFG_GLOBAL;
+    function pickPerson(cn, id){ var el = document.getElementById(id);
+      if (!el || el.value === '') return g.person[cn];
+      var x = parseFloat(el.value); return isNaN(x) ? g.person[cn] : x; }
+    function pickCorp(cn, id){ var el = document.getElementById(id);
+      if (!el || el.value === '') return g.corp[cn];
+      var x = parseFloat(el.value); return isNaN(x) ? g.corp[cn] : x; }
+    function pickBase(id, fb){ var el = document.getElementById(id);
+      if (!el || el.value === '') return fb;
+      var x = parseFloat(el.value); return isNaN(x) ? fb : x; }
+    return {
+      person: {'养老': pickPerson('养老','sp_pension_pct'), '医疗': pickPerson('医疗','sp_medical_pct'),
+               '失业': pickPerson('失业','sp_unemploy_pct'), '公积金': pickPerson('公积金','sp_fund_pct')},
+      corp: {'养老': pickCorp('养老','sp_corp_pension_pct'), '医疗': pickCorp('医疗','sp_corp_medical_pct'),
+             '失业': pickCorp('失业','sp_corp_unemploy_pct'), '工伤': pickCorp('工伤','sp_corp_injury_pct'),
+             '生育': pickCorp('生育','sp_corp_maternity_pct'), '公积金': pickCorp('公积金','sp_corp_fund_pct')},
+      baseMin: pickBase('sp_base_min', g.baseMin || 0),
+      baseMax: pickBase('sp_base_max', g.baseMax || 0)
+    };
+  }
   (function(){
+    // 特殊比例回显：已保存的覆盖值回填到专属通道并切到生效
+    var ov = SB_OVERRIDE || {};
+    var has = ov && (ov.pension_pct || ov.medical_pct || ov.unemploy_pct || ov.fund_pct
+      || ov.corp_pension_pct || ov.corp_medical_pct || ov.corp_unemploy_pct || ov.corp_injury_pct
+      || ov.corp_maternity_pct || ov.corp_fund_pct || ov.base_min || ov.base_max);
+    if (has){
+      document.getElementById('sp_on').checked = true;
+      function setv(id, val){ var el = document.getElementById(id); if (el && val != null) el.value = val; }
+      setv('sp_pension_pct', ov.pension_pct); setv('sp_medical_pct', ov.medical_pct);
+      setv('sp_unemploy_pct', ov.unemploy_pct); setv('sp_fund_pct', ov.fund_pct);
+      setv('sp_corp_pension_pct', ov.corp_pension_pct); setv('sp_corp_medical_pct', ov.corp_medical_pct);
+      setv('sp_corp_unemploy_pct', ov.corp_unemploy_pct); setv('sp_corp_injury_pct', ov.corp_injury_pct);
+      setv('sp_corp_maternity_pct', ov.corp_maternity_pct); setv('sp_corp_fund_pct', ov.corp_fund_pct);
+      setv('sp_base_min', ov.base_min); setv('sp_base_max', ov.base_max);
+      document.getElementById('sp_box').style.display = 'block';
+      SB_CFG = buildOverride();
+    }
     calcAllow();
     onProbChange();
     runCalc();
