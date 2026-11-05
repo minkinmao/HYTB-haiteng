@@ -9800,7 +9800,8 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         out.append({
             'id': r.id, 'insurer': r.insurer or '', 'product': r.product or '',
             'channel_name': r.channel or '', 'issue_platform': r.issue_platform or '',
-            'platform_name': r.platform_name or '', 'coverage_term': r.coverage_term or '',
+            'platform_name': r.platform_name or '', 'need_supplement': r.need_supplement or '',
+            'coverage_term': r.coverage_term or '',
             'pay_period': r.pay_period or '', 'region': r.region or '',
             'is_internet': r.is_internet, 'channel': ct,
             'fyc': fyc, 'plan': plan, 'y2': y2, 'y3': y3, 'y4': y4, 'y5': y5,
@@ -10041,10 +10042,10 @@ def commission_coefficient_export():
     """一键导出：按当前所选组织层面导出对应列（与页面所见完全一致）。
 
     ⚠️ 列结构严格跟随 level，各层面不混列：
-      · 全部       = 产品信息 9 + 首年明细 3 + RYC采购成本 4 + 股东 2 + 子公司 3 + 团队长 1 + RYC 4
-      · 股东层面   = 产品信息 9 + RYC采购成本 4 + 股东 2 + RYC 4
-      · 子公司层面 = 产品信息 9 + 子公司 3 + RYC 4
-      · 团队长层面 = 产品信息 9 + 团队长 1 + RYC 4
+      · 全部       = 产品信息 10 + 首年明细 3 + RYC采购成本 4 + 股东 2 + 子公司 3 + 团队长 1 + RYC 4
+      · 股东层面   = 产品信息 10 + RYC采购成本 4 + 股东 2 + RYC 4
+      · 子公司层面 = 产品信息 10 + 子公司 3 + RYC 4
+      · 团队长层面 = 产品信息 10 + 团队长 1 + RYC 4
     RYC采购成本（第二年~第五年采购，原始百分点，不经系数折算）只在「全部 / 股东层面」导出，与最右侧「RYC续年度佣金」区分。
     数值均为百分点数值（保留 2 位、第三位起舍去；RYC续年度佣金列保留 1 位小数、且开启「<1%自动置空」时该列 0 值留空），口径与页面一致。
     """
@@ -10058,8 +10059,8 @@ def commission_coefficient_export():
         None if pay_period == 'all' else pay_period,
         product or None)
 
-    heads = ['保险公司', '险种名称', '渠道', '类型', '出单平台', '平台名称', '保障期限', '缴费期', '销售分公司']
-    groups = [('产品信息', 9)]
+    heads = ['保险公司', '险种名称', '渠道', '类型', '出单平台', '平台名称', '是否需要补录', '保障期限', '缴费期', '销售分公司']
+    groups = [('产品信息', 10)]
     if level == 'all':
         heads += ['FYC', '首年方案', '首年佣金']
         groups.append(('首年明细（采购成本 %）', 3))
@@ -10084,7 +10085,7 @@ def commission_coefficient_export():
         reg_disp = region if (region and region not in ('all', '全国')) else r['region']
         line = [r['insurer'], r['product'], r['channel_name'],
                 '互联网' if r['is_internet'] else '线下',
-                r['issue_platform'], r['platform_name'],
+                r['issue_platform'], r['platform_name'], r['need_supplement'],
                 r['coverage_term'], r['pay_period'], reg_disp]
         if level == 'all':
             line += [_comm_pct_num(r['fyc']), _comm_pct_num(r['plan']),
@@ -10204,6 +10205,7 @@ def commission_coefficient_import():
                 'region': (str(g(r, '投保区域') or '')).strip(),
                 'issue_platform': (str(g(r, '出单平台') or '')).strip(),
                 'platform_name': (str(g(r, '平台名称') or '')).strip(),
+                'need_supplement': (str(g(r, '是否需要补录') or '')).strip(),
                 'coverage_term': (str(g(r, '保障期限') or '')).strip(),
                 'pay_period': (str(g(r, '缴费期') or '')).strip(),
                 'purchase_y1': purchase_y1,

@@ -3065,6 +3065,7 @@ class CrmProductCommission(db.Model):
     region = db.Column(db.String(128), default='', comment='投保区域')
     issue_platform = db.Column(db.String(128), default='', comment='出单平台')
     platform_name = db.Column(db.String(128), default='', comment='平台名称')
+    need_supplement = db.Column(db.String(64), default='', comment='是否需要补录')
     coverage_term = db.Column(db.String(64), default='', comment='保障期限')
     pay_period = db.Column(db.String(16), default='', comment='缴费期')
     purchase_y1 = db.Column(db.Float, default=0, comment='首年采购')

@@ -357,7 +357,7 @@
   <table class="crm-table res-tb">
     <thead>
       <tr class="grp">
-        <th colspan="9">产品信息</th>
+        <th colspan="10">产品信息</th>
         {% if level == 'all' %}<th colspan="3">首年明细（采购成本 %）</th>{% endif %}
         {% if level in ('all','shareholder') %}<th colspan="4">RYC采购成本（%）</th>{% endif %}
         {% if level in ('all','shareholder') %}<th colspan="2">股东层面</th>{% endif %}
@@ -367,7 +367,7 @@
       </tr>
       <tr class="sub">
         <th>保险公司</th><th>险种名称</th><th>渠道</th><th>类型</th>
-        <th>出单平台</th><th>平台名称</th>
+        <th>出单平台</th><th>平台名称</th><th>是否需要补录</th>
         <th>保障期限</th><th>缴费期</th><th>销售分公司</th>
         {% if level == 'all' %}
         <th style="text-align:right">FYC</th><th style="text-align:right">首年方案</th>
@@ -390,6 +390,7 @@
         <td>{% if r.is_internet %}<span class="ch-tag ch-int">互联网</span>{% else %}<span class="ch-tag ch-off">线下</span>{% endif %}</td>
         <td style="white-space:nowrap">{{ r.issue_platform or '—' }}</td>
         <td style="white-space:nowrap">{{ r.platform_name or '—' }}</td>
+        <td style="white-space:nowrap">{{ r.need_supplement or '—' }}</td>
         <td class="c-term">{{ r.coverage_term or '—' }}</td>
         <td class="c-pay">{{ r.pay_period or '—' }}</td>
         <td class="c-region">{% if region and region != 'all' and region != '全国' %}{{ region }}{% else %}{{ r.region or '—' }}{% endif %}</td>
