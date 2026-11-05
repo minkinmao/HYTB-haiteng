@@ -9766,10 +9766,10 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
 
     三层口径（2026-11-05 第4次定稿）：
       · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；销售净费 = 签约费用 × 净费比例%（不取整）
-      · 子公司层面：以销售净费为基数乘设置比例 ——
-                    FYC首佣 = 销售净费 × 基础佣金比例%（2位，四舍五入）；
-                    销售费用 = 销售净费 × 销售费用比例%；
-                    经营费用 = 销售净费 × 经营费用比例%；
+      · 子公司层面：以签约费用为基数乘设置比例 ——
+                    FYC首佣 = 签约费用 × 基础佣金比例%（2位，四舍五入）；
+                    销售费用 = 签约费用 × 销售费用比例%；
+                    经营费用 = 签约费用 × 经营费用比例%；
                     销售费用合计 = 三者之和
       · 团队长层面：FYC首佣 = 签约费用 × 净费比例% → 减1% → 直接舍去（整数百分点；
                     趸交缴别保留1位小数）
@@ -9857,21 +9857,21 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         _pct_first = Decimal(str(round(first_amt * 100, 4)))
         _net_pct_raw = _pct_first * Decimal(str(net_ratio)) / Decimal('100')   # 百分点，如 4.895
         net = float(_net_pct_raw.quantize(Decimal('0.01'), rounding=ROUND_DOWN)) / 100.0
-        # ---- 子公司层面（威哥 2026-11-05 第四次定稿：直接以「股东·销售净费」为基数乘设置比例）----
-        #   FYC首佣  = 销售净费 × 基础佣金比例%
-        #   销售费用 = 销售净费 × 销售费用比例%
-        #   经营费用 = 销售净费 × 经营费用比例%
+        # ---- 子公司层面（威哥 2026-11-05 第五次定稿：以「签约费用」为基数乘设置比例）----
+        #   FYC首佣  = 签约费用 × 基础佣金比例%
+        #   销售费用 = 签约费用 × 销售费用比例%
+        #   经营费用 = 签约费用 × 经营费用比例%
         #   销售费用合计 = 三者之和（不再套用取整规则，也不做兜底平衡）
-        #   例（净费 6.23%、互联网 80/0/9）：
-        #       FYC = 6.23×80% = 4.984 → 4.98%；销售 = 0；经营 = 6.23×9% = 0.5607 → 0.56%
-        #       合计 = 4.98 + 0 + 0.56 = 5.54%
-        _net_p2 = Decimal(str(round(net * 100, 2)))              # 销售净费（百分点，2位）
-        if net_ratio and _net_p2:
-            _d_base = (_net_p2 * Decimal(str(br)) / Decimal('100')).quantize(
+        #   例（签约 7.00%、互联网 80/0/9）：
+        #       FYC = 7×80% = 5.60%；销售 = 0；经营 = 7×9% = 0.63%
+        #       合计 = 5.60 + 0 + 0.63 = 6.23%（三项比例之和正好等于净费比例，故合计 = 销售净费）
+        _sign_p2 = Decimal(str(round(first_amt * 100, 2)))       # 签约费用（百分点，2位）
+        if net_ratio and _sign_p2:
+            _d_base = (_sign_p2 * Decimal(str(br)) / Decimal('100')).quantize(
                 Decimal('0.01'), rounding=ROUND_HALF_UP)
-            _d_sales = (_net_p2 * Decimal(str(sr)) / Decimal('100')).quantize(
+            _d_sales = (_sign_p2 * Decimal(str(sr)) / Decimal('100')).quantize(
                 Decimal('0.01'), rounding=ROUND_HALF_UP)
-            _d_op = (_net_p2 * Decimal(str(orr)) / Decimal('100')).quantize(
+            _d_op = (_sign_p2 * Decimal(str(orr)) / Decimal('100')).quantize(
                 Decimal('0.01'), rounding=ROUND_HALF_UP)
         else:
             _d_base = _d_op = _d_sales = Decimal('0')
