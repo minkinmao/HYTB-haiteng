@@ -290,8 +290,6 @@
           {% else %}
           <a class="sub {{ 'on' if request.endpoint == m.url else '' }}" href="{{ url_for(m.url) }}">{{ m.name }}</a>
           {% endif %}
-          {% else %}
-          <div class="sub empty">（暂无可用模块）</div>
           {% endfor %}
         </div>
       </div>

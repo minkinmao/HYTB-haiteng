@@ -441,7 +441,10 @@ def build_menu_tree(allowed):
                     subs.append({'name': m['name'], 'url': m['url'], 'en': m.get('en', ''),
                                  'children': []})
         n_leaf = sum(len(x['children']) if x['children'] else 1 for x in subs)
-        tree.append({'name': s['name'], 'key': s['key'], 'subs': subs, 'n': n_leaf})
+        # 一级系统只有存在「用户可访问的子项」时才进入左侧菜单；
+        # 否则整块（一级菜单 + 子菜单）自动屏蔽，避免空壳分组（如"暂无可用模块"）。
+        if subs:
+            tree.append({'name': s['name'], 'key': s['key'], 'subs': subs, 'n': n_leaf})
     return tree
 
 
