@@ -1,0 +1,4 @@
+{# 佣金系数页共用宏：主模板与结果片段子模板都 import 它，保证 partial 单独渲染时宏可用 #}
+{% macro pct(v) %}{% if v %}{{ v|trunc_pct }}{% endif %}{% endmacro %}
+{# RYC续年度佣金（二改 2026-11-03）：数据为整数值、显示 1 位小数；开启「<1% 自动置空」且值<1 → 留空 #}
+{% macro ryc_pct(v, hide=False) %}{% if v is none or (hide and v < 1) %}-{% else %}{{ '%.1f'|format(v) }}%{% endif %}{% endmacro %}

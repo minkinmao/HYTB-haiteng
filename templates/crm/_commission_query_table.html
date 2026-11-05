@@ -1,0 +1,48 @@
+{# 佣金查询 · 结果表格片段（AJAX 局部刷新用，不继承 base） #}
+{% macro pct(v) %}{% if v %}{{ '%.2f'|format(v) }}%{% else %}-{% endif %}{% endmacro %}
+<div id="qMeta" data-count="{{ n }}" hidden></div>
+<div class="crm-card">
+  {% if rows %}
+  <div style="overflow-x:auto">
+  <table class="crm-table" style="white-space:nowrap;min-width:1240px">
+    <thead>
+      <tr>
+        <th rowspan="2">保司简称</th>
+        <th rowspan="2" style="min-width:120px">所属定制产品</th>
+        <th rowspan="2" style="min-width:132px">产品名称</th>
+        <th rowspan="2">产品缴别</th>
+        <th colspan="4" class="grp">首年度销售费用</th>
+        <th colspan="9" class="grp">续年期销售费用</th>
+      </tr>
+      <tr>
+        <th style="text-align:right">佣金总计</th>
+        <th style="text-align:right">总总FYC</th>
+        <th style="text-align:right">分分FYC</th>
+        <th style="text-align:right">方案加佣</th>
+        {% for y in range(2, 11) %}<th style="text-align:right" class="{{ 'sep' if y == 2 else '' }}">RYC-{{ y }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.insurer_short or '—' }}</td>
+        <td>{% if r.custom_name %}<span class="crm-tag t-plan" style="font-size:10.5px">{{ r.custom_name }}</span>{% else %}—{% endif %}</td>
+        <td>{{ r.product_name or '—' }}</td>
+        <td>{{ r.pay_period or '—' }}</td>
+        <td style="text-align:right" class="mono"><b>{{ pct(r.total) }}</b></td>
+        <td style="text-align:right" class="mono">{{ pct(r.tt_fyc) }}</td>
+        <td style="text-align:right" class="mono">{{ pct(r.ff_fyc) }}</td>
+        <td style="text-align:right" class="mono">{{ pct(r.plan_comm) }}</td>
+        {% for y in range(2, 11) %}
+        <td style="text-align:right" class="mono{{ ' sep' if y == 2 else '' }}">{{ pct(r.ryc.get(y)) }}{% if y in (r.ryc_step or []) %}<b style="color:#B5532A">＊</b>{% endif %}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+    {# 十六改微调：底部「合计」行已按威哥要求删除（百分比系数求和无业务意义） #}
+  </table>
+  </div>
+  {% else %}
+  <div class="crm-empty">当前筛选条件下没有缴别记录。可把「数据月度」切回「全部月份」，或换一个保司再试。</div>
+  {% endif %}
+</div>

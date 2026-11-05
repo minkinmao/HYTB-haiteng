@@ -1,0 +1,166 @@
+{# 产品佣金系数 · 结果清单片段（AJAX 局部刷新用，可被主模板 include，也可被路由 partial 单独渲染） #}
+{% from 'crm/_commission_macros.html' import pct, ryc_pct %}
+
+<div class="crm-sec">销售费用结果清单 <span>可按 渠道 / 组织层面 / 归属月份 / 销售分公司 / 保司 / 缴别 / 产品 筛选</span></div>
+
+<div class="ch-filters">
+  <a class="comm-filter-link {{ 'on' if channel=='all' else '' }}" href="{{ url_for('crm.commission_coefficient', channel='all', region=region, month=month, level=level, insurer=insurer, pay_period=pay_period, product=product) }}">全部（{{ counts.total }}）</a>
+  <a class="comm-filter-link {{ 'on' if channel=='offline' else '' }}" href="{{ url_for('crm.commission_coefficient', channel='offline', region=region, month=month, level=level, insurer=insurer, pay_period=pay_period, product=product) }}">线下（{{ counts.offline }}）</a>
+  <a class="comm-filter-link {{ 'on' if channel=='internet' else '' }}" href="{{ url_for('crm.commission_coefficient', channel='internet', region=region, month=month, level=level, insurer=insurer, pay_period=pay_period, product=product) }}">互联网（{{ counts.internet }}）</a>
+
+  <span class="lvl-filters">
+    <span style="font-size:13px;color:#6B5D4F">组织层面：</span>
+    <a class="comm-filter-link {{ 'on' if level=='all' else '' }}" href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='all', insurer=insurer, pay_period=pay_period, product=product) }}">全部</a>
+    <a class="comm-filter-link {{ 'on' if level=='shareholder' else '' }}" href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='shareholder', insurer=insurer, pay_period=pay_period, product=product) }}">股东层面</a>
+    <a class="comm-filter-link {{ 'on' if level=='subsidiary' else '' }}" href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='subsidiary', insurer=insurer, pay_period=pay_period, product=product) }}">子公司层面</a>
+    <a class="comm-filter-link {{ 'on' if level=='team' else '' }}" href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='team', insurer=insurer, pay_period=pay_period, product=product) }}">团队长层面</a>
+  </span>
+
+  <form method="get" action="{{ url_for('crm.commission_coefficient') }}" class="filter-form" id="commFilterForm">
+    <label>归属月份</label>
+    <select name="month" class="comm-sel" onchange="hyCommQuery(this.form)">
+      <option value="all" {{ 'selected' if month=='all' else '' }}>全部月份</option>
+      {% for mo in month_options %}
+      <option value="{{ mo }}" {{ 'selected' if month==mo else '' }}>{{ mo }}</option>
+      {% endfor %}
+    </select>
+    <label>销售分公司</label>
+    <select name="region" class="comm-sel" onchange="hyCommQuery(this.form)">
+      <option value="all" {{ 'selected' if region=='all' else '' }}>全部</option>
+      <option value="全国" {{ 'selected' if region=='全国' else '' }}>全国</option>
+      {% for rg in region_opts %}
+      <option value="{{ rg }}" {{ 'selected' if region==rg else '' }}>{{ rg }}</option>
+      {% endfor %}
+    </select>
+    <label>保司</label>
+    <select name="insurer" class="comm-sel" onchange="onInsurerChange(this)" title="{{ insurer if insurer != 'all' else '全部保司' }}">
+      <option value="all" {{ 'selected' if insurer=='all' else '' }}>全部</option>
+      {% for ins in insurer_opts %}
+      <option value="{{ ins }}" {{ 'selected' if insurer==ins else '' }}>{{ ins }}</option>
+      {% endfor %}
+    </select>
+    <label>缴别</label>
+    <select name="pay_period" class="comm-sel" onchange="hyCommQuery(this.form)">
+      <option value="all" {{ 'selected' if pay_period=='all' else '' }}>全部</option>
+      {% for pp in pay_period_opts %}
+      <option value="{{ pp }}" {{ 'selected' if pay_period==pp else '' }}>{{ pp }}</option>
+      {% endfor %}
+    </select>
+    <label>产品</label>
+    <select name="product" class="comm-sel" onchange="hyCommQuery(this.form)" title="{{ product or '' }}">
+      <option value="all" {{ 'selected' if product=='all' or not product else '' }}>全部产品{% if insurer!='all' %}（{{ insurer }}）{% endif %}</option>
+      {% for p in product_opts %}
+      <option value="{{ p }}" {{ 'selected' if product==p else '' }}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="crm-btn">查询</button>
+    <input type="hidden" name="channel" value="{{ channel }}">
+    <input type="hidden" name="level" value="{{ level }}">
+  </form>
+  <span class="stat">共 <b>{{ rows|length }}</b> 条</span>
+</div>
+
+{# ---- 一键导出栏（结果表上方，右对齐，随筛选栏一起可见） ---- #}
+{% set lv_name = {'all': '全部层级', 'shareholder': '股东层面', 'subsidiary': '子公司层面', 'team': '团队长层面'}.get(level, '全部层级') %}
+{% if rows %}
+<div class="export-bar">
+  <span class="hint">当前视图：<b>{{ lv_name }}</b> · 共 {{ rows|length }} 条 · 导出列与当前组织层面完全一致</span>
+  <a class="crm-btn pri" href="{{ url_for('crm.commission_coefficient_export',
+        channel=channel, region=region, level=level, insurer=insurer,
+        pay_period=pay_period, product=product, month=month) }}">⬇ 一键导出（{{ lv_name }}）</a>
+</div>
+{% endif %}
+
+<div class="crm-card">
+  {% if rows %}
+  <div style="overflow-x:auto">
+  <table class="crm-table res-tb">
+    <thead>
+      <tr class="grp">
+        <th colspan="10">产品信息</th>
+        {% if level == 'all' %}<th colspan="3">首年明细（采购成本 %）</th>{% endif %}
+        {% if level in ('all','shareholder') %}<th colspan="4">RYC采购成本（%）</th>{% endif %}
+        {% if level in ('all','shareholder') %}<th colspan="2">股东层面</th>{% endif %}
+        {% if level in ('all','subsidiary') %}<th colspan="3">子公司层面</th>{% endif %}
+        {% if level in ('all','team') %}<th colspan="1">团队长层面</th>{% endif %}
+        <th colspan="4">RYC续年度佣金</th>
+      </tr>
+      <tr class="sub">
+        <th>保险公司</th><th>险种名称</th><th>渠道</th><th>类型</th>
+        <th>出单平台</th><th>平台名称</th><th>是否需要补录</th>
+        <th>保障期限</th><th>缴费期</th><th>销售分公司</th>
+        {% if level == 'all' %}
+        <th style="text-align:right">FYC</th><th style="text-align:right">首年方案</th>
+        <th style="text-align:right;color:#C86432">首年佣金</th>
+        {% endif %}
+        {% if level in ('all','shareholder') %}<th style="text-align:right">RYC2采购</th><th style="text-align:right">RYC3采购</th><th style="text-align:right">RYC4采购</th><th style="text-align:right">RYC5采购</th>{% endif %}
+        {% if level in ('all','shareholder') %}<th style="text-align:right">签约费用</th><th style="text-align:right">销售净费<br><span style="font-weight:400;font-size:10.5px;color:#9C9288">线下{{ '%.2f'|format(net_ratio_both.offline) }}% / 互联网{{ '%.2f'|format(net_ratio_both.internet) }}%</span></th>{% endif %}
+        {% if level in ('all','subsidiary') %}<th style="text-align:right">FYC首佣</th><th style="text-align:right;color:#C86432">销售费用</th><th style="text-align:right">经营费用</th>{% endif %}
+        {% if level in ('all','team') %}<th style="text-align:right">FYC首佣</th>{% endif %}
+        <th style="text-align:right">RYC2佣金</th><th style="text-align:right">RYC3佣金</th>
+        <th style="text-align:right">RYC4佣金</th><th style="text-align:right">RYC5佣金</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="c-ins">{{ r.insurer or '—' }}</td>
+        <td class="c-prod" title="{{ r.product }}"><span class="ell">{{ r.product or '—' }}</span></td>
+        <td class="c-chan">{{ r.channel_name or '—' }}</td>
+        <td>{% if r.is_internet %}<span class="ch-tag ch-int">互联网</span>{% else %}<span class="ch-tag ch-off">线下</span>{% endif %}</td>
+        <td style="white-space:nowrap">{{ r.issue_platform or '—' }}</td>
+        <td style="white-space:nowrap">{{ r.platform_name or '—' }}</td>
+        <td style="white-space:nowrap">{{ r.need_supplement or '—' }}</td>
+        <td class="c-term">{{ r.coverage_term or '—' }}</td>
+        <td class="c-pay">{{ r.pay_period or '—' }}</td>
+        <td class="c-region">{% if region and region != 'all' and region != '全国' %}{{ region }}{% else %}{{ r.region or '—' }}{% endif %}</td>
+        {% if level == 'all' %}
+        <td style="text-align:right" class="mono num">{{ pct(r.fyc) }}</td>
+        <td style="text-align:right" class="mono num">{{ pct(r.plan) }}</td>
+        <td style="text-align:right;color:#C86432" class="mono num">{{ pct(r.first_year_comm) }}</td>
+        {% endif %}
+        {% if level in ('all','shareholder') %}
+        <td style="text-align:right" class="mono num" title="第二年采购（原始百分点，未经系数折算）">{{ pct(r.y2) }}</td>
+        <td style="text-align:right" class="mono num" title="第三年采购（原始百分点，未经系数折算）">{{ pct(r.y3) }}</td>
+        <td style="text-align:right" class="mono num" title="第四年采购（原始百分点，未经系数折算）">{{ pct(r.y4) }}</td>
+        <td style="text-align:right" class="mono num" title="第五年采购（原始百分点，未经系数折算）">{{ pct(r.y5) }}</td>
+        {% endif %}
+        {% if level in ('all','shareholder') %}
+        <td style="text-align:right" class="mono num">{{ pct(r.sign_total) }}</td>
+        <td style="text-align:right" class="mono num" title="首年佣金 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营）">{{ pct(r.net) }}</td>
+        {% endif %}
+        {% if level in ('all','subsidiary') %}
+        <td style="text-align:right" class="mono num">{{ pct(r.base) }}</td>
+        <td style="text-align:right;color:#C86432" class="mono num">{{ pct(r.sales) }}</td>
+        <td style="text-align:right" class="mono num">{{ pct(r.op) }}</td>
+        {% endif %}
+        {% if level in ('all','team') %}
+        <td style="text-align:right" class="mono num">{{ pct(r.team) }}</td>
+        {% endif %}
+        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y2, r.ryc_hide_lt1) }}</td>
+        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y3, r.ryc_hide_lt1) }}</td>
+        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y4, r.ryc_hide_lt1) }}</td>
+        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y5, r.ryc_hide_lt1) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="crm-empty">尚未导入产品合约数据，或无符合条件的数据。{% if can_import %}请先在「销售系数数据管理」中导入。{% endif %}</div>
+  {% endif %}
+</div>
+
+<div class="hint" style="margin-top:10px">
+  字段统称：首年基础佣金 = <b>FYC</b>，第二年~第五年采购 = <b>RYC2 / RYC3 / RYC4 / RYC5</b>；<b>首年佣金 = FYC + 首年方案</b>；投保区域统称 <b>销售分公司</b>。<br>
+  层级视图：「全部」显示首年明细三列（FYC / 首年方案 / 首年佣金）；选股东 / 子公司 / 团队长层面时不重复展示这三列，只保留该层面的结果。<br>
+  「<b>全部</b>」与「<b>股东层面</b>」额外展示各年 <b>RYC 采购成本</b>（第二年~第五年采购，原始百分点，未经系数折算），与最右侧「RYC续年度佣金」（采购 × RYC 佣金比例%）区分：前者是<b>采购成本</b>、后者是<b>实算佣金</b>；选子公司 / 团队长层面时不展示 RYC 采购成本列。<br>
+  三层口径：<b>股东</b>＝签约费用（Σ各采购项）；<b>销售净费 = 首年佣金 × 净费比例%</b>，其中<b>净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例</b>（按渠道自动测算：当前线下
+  {{ '%.2f'|format(net_ratio_both.offline) }}%、互联网 {{ '%.2f'|format(net_ratio_both.internet) }}%；第三位起直接舍去，保留 2 位小数）；
+  <b>子公司</b>＝FYC首佣（首年佣金×基础佣金比例% + Σ各年RYC×该年RYC佣金比例%）+ 销售费用（取整规则((FYC+首年方案)×销售费用比例%)，仅首年）+ 经营费用（(FYC+首年方案)×经营费用比例%，仅首年）；
+  <b>团队长</b>＝FYC首佣（与子公司一致）。所有数值均为占保费的百分比；采购成本为 0 时留空。<br>
+  报表最右侧四列为 RYC续年度佣金（各年 RYC × 该年 RYC 佣金比例%，<b>0 表示该年续期佣金为 0%、不再沿用基础佣金比例</b>；分年期、每年可不同；各层级一致）。<br>
+  <b>RYC续年度佣金取值规则（二改 2026-11-03）：</b>① 所有 RYC续年度佣金数据<b>取整数值</b>（直接舍去小数，非四舍五入），展示时保留 <b>1 位小数</b>（如 2 → 2.0%）；② 系数设置弹窗勾选「RYC续年度佣金 &lt; 1% 自动置空」后，<b>低于 1% 的自动留空</b>（线下 / 互联网统一生效，月度备份一并记录）。<br>
+  销售费用取整规则（一律直接舍去，四舍五也舍）：① 保留2位小数（第三位起舍去） ② 取整（小数舍去） ③ 减1%后保留2位（默认）——即先 ×99%（减 1%），再由第三位起舍去（如 2.15% → 2.12%）。
+  销售分公司筛选：选具体省/市会同时带出标注「全国」的产品（全国含该省）；选中具体省份后，列表中该列只显示所选省份。
+</div>

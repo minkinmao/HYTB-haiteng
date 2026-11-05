@@ -4867,6 +4867,9 @@ def commission_query():
     month = (request.args.get('month') or '').strip()
     iid = (request.args.get('insurer_id') or '').strip()
     rows = _commission_rows(month, int(iid) if iid.isdigit() else None)
+    # 局部刷新：仅返回结果表格片段（AJAX），不整页渲染
+    if request.args.get('partial') == '1':
+        return render_template('crm/_commission_query_table.html', rows=rows, n=len(rows))
     return render_template('crm/commission_query.html', rows=rows, month=month,
                            iid=iid, months=_month_options(),
                            insurers=Insurer.query.order_by(Insurer.name).all(),
@@ -10021,6 +10024,18 @@ def commission_coefficient():
             except (ValueError, TypeError):
                 b.prev_summary = ''
     cur_month = datetime.now().strftime('%Y-%m')
+    # 局部刷新：仅返回结果清单片段（AJAX），不整页渲染
+    if request.args.get('partial') == '1':
+        return render_template('crm/_commission_coefficient_result.html',
+                               rows=rows, channel=channel, region=region, level=level,
+                               insurer=insurer, pay_period=pay_period, product=product,
+                               month=month, month_options=month_options,
+                               counts={'total': total, 'internet': n_int, 'offline': n_off},
+                               net_ratio_both=net_ratio_both,
+                               region_opts=region_opts, insurer_opts=insurer_opts,
+                               pay_period_opts=pay_period_opts, product_opts=product_opts,
+                               can_import=_can('crm.commission.import'),
+                               can_coef=_can('crm.commission.coef'))
     return render_template('crm/commission_coefficient.html',
                            rows=rows, channel=channel, region=region, level=level,
                            insurer=insurer, pay_period=pay_period, product=product,

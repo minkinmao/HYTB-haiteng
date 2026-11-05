@@ -33,7 +33,7 @@
 </div>
 
 
-<form class="crm-tool" method="get">
+<form class="crm-tool" method="get" id="qForm">
   <label>数据月度</label>
   <select name="month">
     <option value="">全部月份</option>
@@ -51,7 +51,7 @@
   <button class="crm-btn pri" type="submit">查询</button>
   <a class="crm-btn" href="{{ url_for('crm.commission_query') }}">重置</a>
   <span class="crm-spacer"></span>
-  <span style="font-size:12.5px;color:#9C9288">共 {{ n }} 条记录（按产品＋缴别合并）</span>
+  <span style="font-size:12.5px;color:#9C9288">共 <b id="qCount">{{ n }}</b> 条记录（按产品＋缴别合并）</span>
   <a class="crm-btn" href="{{ url_for('crm.commission_export', month=month, insurer_id=iid) }}">导出 Excel</a>
 </form>
 
@@ -60,49 +60,34 @@
   尚未登记日期的记录按<b>当月自然月</b>初始化（只在查当月时出现）。
 </div>
 
-<div class="crm-card">
-  {% if rows %}
-  <div style="overflow-x:auto">
-  <table class="crm-table" style="white-space:nowrap;min-width:1240px">
-    <thead>
-      <tr>
-        <th rowspan="2">保司简称</th>
-        <th rowspan="2" style="min-width:120px">所属定制产品</th>
-        <th rowspan="2" style="min-width:132px">产品名称</th>
-        <th rowspan="2">产品缴别</th>
-        <th colspan="4" class="grp">首年度销售费用</th>
-        <th colspan="9" class="grp">续年期销售费用</th>
-      </tr>
-      <tr>
-        <th style="text-align:right">佣金总计</th>
-        <th style="text-align:right">总总FYC</th>
-        <th style="text-align:right">分分FYC</th>
-        <th style="text-align:right">方案加佣</th>
-        {% for y in range(2, 11) %}<th style="text-align:right" class="{{ 'sep' if y == 2 else '' }}">RYC-{{ y }}</th>{% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-    {% for r in rows %}
-      <tr>
-        <td>{{ r.insurer_short or '—' }}</td>
-        <td>{% if r.custom_name %}<span class="crm-tag t-plan" style="font-size:10.5px">{{ r.custom_name }}</span>{% else %}—{% endif %}</td>
-        <td>{{ r.product_name or '—' }}</td>
-        <td>{{ r.pay_period or '—' }}</td>
-        <td style="text-align:right" class="mono"><b>{{ pct(r.total) }}</b></td>
-        <td style="text-align:right" class="mono">{{ pct(r.tt_fyc) }}</td>
-        <td style="text-align:right" class="mono">{{ pct(r.ff_fyc) }}</td>
-        <td style="text-align:right" class="mono">{{ pct(r.plan_comm) }}</td>
-        {% for y in range(2, 11) %}
-        <td style="text-align:right" class="mono{{ ' sep' if y == 2 else '' }}">{{ pct(r.ryc.get(y)) }}{% if y in (r.ryc_step or []) %}<b style="color:#B5532A">＊</b>{% endif %}</td>
-        {% endfor %}
-      </tr>
-    {% endfor %}
-    </tbody>
-    {# 十六改微调：底部「合计」行已按威哥要求删除（百分比系数求和无业务意义） #}
-  </table>
-  </div>
-  {% else %}
-  <div class="crm-empty">当前筛选条件下没有缴别记录。可把「数据月度」切回「全部月份」，或换一个保司再试。</div>
-  {% endif %}
+<div id="qResult">
+  {% include 'crm/_commission_query_table.html' %}
 </div>
 {% endblock %}
+
+<script>
+(function(){
+  var f = document.getElementById('qForm');
+  if(!f) return;
+  // 拦截表单提交：改为 AJAX 局部刷新结果表，不再整页跳转
+  f.addEventListener('submit', function(e){ e.preventDefault(); hyQuery(); });
+  // 下拉切换即查询（同样走 AJAX，不整页刷新）
+  f.querySelectorAll('select').forEach(function(s){
+    s.addEventListener('change', function(){ hyQuery(); });
+  });
+  function hyQuery(){
+    var qs = new URLSearchParams(new FormData(f)).toString();
+    fetch(location.pathname + '?partial=1&' + qs, {headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function(r){ return r.text(); })
+      .then(function(html){
+        var pane = document.getElementById('qResult');
+        pane.innerHTML = html;
+        var meta = pane.querySelector('#qMeta');
+        if(meta){ var c = document.getElementById('qCount'); if(c) c.textContent = meta.dataset.count; }
+        history.replaceState(null, '', location.pathname + '?' + qs);
+      })
+      .catch(function(){ f.submit(); });   // 兜底：AJAX 失败再整页提交
+  }
+  window.hyQuery = hyQuery;
+})();
+</script>

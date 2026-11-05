@@ -3,11 +3,7 @@
 {% block pagename %}核心业务管理系统 · 产品佣金系数{% endblock %}
 {% block content %}
 {% include 'crm/_crm_css.html' %}
-
-{# 百分比格式化：值为 0 时留空；第三位起直接舍去（四舍五也舍，不四舍五入） #}
-{% macro pct(v) %}{% if v %}{{ v|trunc_pct }}{% endif %}{% endmacro %}
-{# RYC续年度佣金（二改 2026-11-03）：数据为整数值、显示 1 位小数；开启「<1% 自动置空」且值<1 → 留空 #}
-{% macro ryc_pct(v, hide=False) %}{% if v is none or (hide and v < 1) %}-{% else %}{{ '%.1f'|format(v) }}%{% endif %}{% endmacro %}
+{% from 'crm/_commission_macros.html' import pct, ryc_pct %}
 
 <style>
   .qwrap{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
@@ -104,150 +100,175 @@
         border:1px solid #E6B33C;background:#FFF8E6;border-radius:8px;font-size:12.5px;color:#8A5A12}
   /* 锚点跳转时避开顶部导航 */
   #bkSec{scroll-margin-top:80px}
+  /* ---- 销售系数数据管理：弹窗入口与模块卡片 ---- */
+  .mgr-entry{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .mgr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;padding:6px 2px 2px}
+  .mgr-card{display:flex;flex-direction:column;gap:6px;padding:16px;background:#FFFDFA;border:1px solid #EADFCF;
+            border-radius:12px;cursor:pointer;transition:.15s;box-shadow:0 2px 8px rgba(42,42,42,.04)}
+  .mgr-card:hover{background:#FFF4E8;border-color:#E0A96A;transform:translateY(-2px);box-shadow:0 6px 16px rgba(180,90,30,.14)}
+  .mgr-card .mgr-ic{font-size:24px;line-height:1}
+  .mgr-card b{font-size:14px;color:#9C4E2C}
+  .mgr-card span{font-size:12px;color:#9C9288;line-height:1.5}
+  .msec{font-size:14px;font-weight:600;color:#9C4E2C;margin:0 0 12px}
+  /* 弹窗内卡片去边框阴影，融入弹窗 */
+  .mask .mbd .crm-card{box-shadow:none;border:none;padding:0}
 </style>
 
 <h2 style="font-size:18px;margin:0 0 6px">产品佣金系数管理</h2>
 
 {% if can_import or can_coef %}
-<!-- ========== 一、导入 ========== -->
-{% if can_import %}
-<div class="crm-sec">一、一键导入产品合约数据 <span>支持 .xlsx / .xls，按「归属月份」区分，同名月覆盖该月</span></div>
-<div class="crm-card">
-  <form method="post" action="{{ url_for('crm.commission_coefficient_import') }}" enctype="multipart/form-data" style="margin:0">
-    <div class="importbox">
-      <input type="file" name="file" accept=".xlsx,.xls" required id="impFile"
-             style="font-size:13px;flex:1;min-width:240px">
-      <label style="font-size:13px;color:#6B5D4F;white-space:nowrap">归属月份：</label>
-      <input type="month" name="month" id="impMonth" value="{{ cur_month }}"
-             style="font-size:13px;padding:4px 8px;border:1px solid #E0D5C4;border-radius:8px;background:#fff">
-      <button class="crm-btn pri" type="submit">导入数据</button>
-      {% if imported_at %}
-      <span class="hint">已导入 {{ counts.total }} 条（互联网 {{ counts.internet }} / 线下 {{ counts.offline }}）· 时间 {{ imported_at }}</span>
-      {% else %}
-      <span class="hint">尚未导入数据</span>
-      {% endif %}
-    </div>
-    <div class="hint" style="margin-top:8px">表头须含：保险公司 / 险种名称 / 渠道 / 互联网产品 / 首年基础佣金 / 首年方案 / 第二年~第五年采购 等列。上传文件名含「YYYY年M月」会自动带出归属月份；重复导入同一月份将覆盖该月数据，不同月份互不影响。</div>
-  </form>
-  </div>
-{% endif %}
-
-<!-- ========== 二、系数设置（弹窗录入 · 统一保存确认） ========== -->
-{% if can_coef %}
-<div class="crm-sec">
-  <span class="sec-title">二、销售系数与分配比例设置 <span>线下、互联网各一套 · 点右侧「打开系数设置」弹窗录入，两边填完统一保存确认</span></span>
-  <button class="crm-btn pri" type="button" style="margin-left:auto" onclick="openCoefModal()">⚙ 打开系数设置</button>
+<div class="mgr-entry">
+  <button class="crm-btn pri" type="button" onclick="openSalesMgr()">⚙ 销售系数数据管理</button>
+  <span class="hint">导入 / 系数设置 / 月度备份 集中管理 · 点击弹出对应操作</span>
 </div>
-<div class="crm-card">
-  <div class="qwrap" style="margin-bottom:0">
-    {% for ct, ct_name in [('offline','线下产品'),('internet','互联网产品')] %}
-    {% set cfg = cfgs[ct] %}
-    <div class="qbox">
-      <h3>{{ ct_name }} · 当前生效系数</h3>
-      <div class="coefline"><span>1、基础佣金比例</span><b class="pc">{{ '%.2f'|format(cfg.base_ratio or 0) }}%</b></div>
-      <div class="coefline"><span>2、销售费用比例</span><b class="pc">{{ '%.2f'|format(cfg.sales_ratio or 0) }}%</b></div>
-      <div class="coefline"><span>3、经营费用比例</span><b class="pc">{{ '%.2f'|format(cfg.operate_ratio or 0) }}%</b></div>
-      <div class="coefline"><span>→ 销售净费比例 <i style="font-style:normal;color:#9C9288;font-size:11.5px">（自动＝基础+销售+经营）</i></span><b class="pc">{{ '%.2f'|format(net_ratio_both[ct]) }}%</b></div>
-      <div class="coefline"><span>4、销售费用取整规则</span><b class="pc" style="font-size:12.5px">
-        {% for rc, rn in round_rules %}{% if rc == (cfg.round_rule or '3') %}{{ rn }}{% endif %}{% endfor %}</b></div>
-      <div class="coefline"><span>5、RYC 佣金比例</span><b class="pc" style="font-size:12.5px">
-        {% for yn, ys in [('y2','RYC2'),('y3','RYC3'),('y4','RYC4'),('y5','RYC5')] %}{% set v = cfg|attr('ryc_ratio_' ~ yn) %}{{ ys }} {% if v is none %}沿用{% elif v == 0 %}0.00%{% else %}{{ '%.2f'|format(v) }}%{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</b></div>
+
+<!-- ========== 一级弹窗：销售系数数据管理 ========== -->
+<div class="mask" id="salesMgrMask">
+  <div class="mcard" style="max-width:720px">
+    <div class="mhd"><b>销售系数数据管理</b><span>选择要操作的模块</span><button type="button" class="mx" onclick="closeSalesMgr()">✕</button></div>
+    <div class="mbd">
+      <div class="mgr-grid">
+        {% if can_import %}<div class="mgr-card" onclick="openImp()"><div class="mgr-ic">📥</div><b>一键导入产品合约数据</b><span>上传 Excel，按归属月份归档，同名月覆盖</span></div>{% endif %}
+        {% if can_coef %}<div class="mgr-card" onclick="openCoefSet()"><div class="mgr-ic">⚙</div><b>销售系数与分配比例设置</b><span>线下/互联网系数录入与一键生成</span></div>{% endif %}
+        {% if can_coef %}<div class="mgr-card" onclick="openBk()"><div class="mgr-ic">🗄</div><b>月度系数备份</b><span>查看归档快照与手动备份</span></div>{% endif %}
+      </div>
     </div>
-    {% endfor %}
-  </div>
-  {% set any_locked = backup_lock.offline is not none or backup_lock.internet is not none %}
-  <form method="post" action="{{ url_for('crm.commission_coefficient_init') }}" style="margin:12px 0 0">
-    <button class="crm-btn" type="submit"{% if any_locked %} disabled title="系数已归档保护：请在「打开系数设置」弹窗内调整，并在确认弹窗勾选覆盖"{% endif %}
-            onclick="return confirm('确定按常规比例一键生成线下/互联网两套系数？将覆盖当前已保存系数。')">⚡ 一键设置生成（按常规比例）</button>
-    {% if any_locked %}
-    <span class="hint" style="color:#B05A26">系数已进入<b>归档保护</b>（{{ backup_lock.offline.month if backup_lock.offline is not none else '' }}{{ ' / ' if backup_lock.offline is not none and backup_lock.internet is not none else '' }}{{ backup_lock.internet.month if backup_lock.internet is not none else '' }}）：一键初始化已停用，如需调整请点「打开系数设置」，并在确认弹窗勾选「我已确认覆盖已备份系数」。</span>
-    {% else %}
-    <span class="hint">线下 基础80/销售5/经营4 ｜ 互联网 基础80/销售0/经营5 ｜ RYC2~5佣金比例默认＝基础佣金比例 ｜ 取整规则默认＝减1%后保留2位（直接舍去）</span>
-    {% endif %}
-  </form>
-  <div style="margin-top:12px">
-    <a class="crm-btn" href="#bkSec" style="text-decoration:none;display:inline-block">🗄 查看月度备份台账</a>
-    <span class="hint">每月自动归档系数快照；已归档即受保护，改系数需在确认弹窗勾选覆盖。点此跳到页面下方备份明细。</span>
   </div>
 </div>
 
-<!-- 系数设置弹窗：线下 + 互联网 同一表单，统一「保存确认」 -->
-<div class="mask" id="coefMask">
+<!-- ========== 二级弹窗：一键导入产品合约数据 ========== -->
+<div class="mask" id="impMask">
   <div class="mcard">
-    <div class="mhd">
-      <b>销售系数与分配比例设置</b>
-      <span>线下、互联网各一套 · 两边填完后点「保存确认」统一提交</span>
-      <button type="button" class="mx" title="关闭" onclick="closeCoefModal()">✕</button>
-    </div>
-    <form id="coefForm" method="post" action="{{ url_for('crm.commission_coefficient_config') }}">
-      <div class="mbd">
-        <div class="coefline" style="display:block;border:1px solid #EAD9C0;background:#FFF8EF;border-radius:9px;padding:9px 12px;margin-bottom:10px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#7A5230">
-            <input type="checkbox" name="ryc_hide_lt1" value="1" {{ 'checked' if cfgs.offline.ryc_hide_lt1 else '' }}>
-            <span>RYC续年度佣金 &lt; 1% 自动置空（线下 / 互联网 统一规则）</span>
-          </label>
-          <i style="display:block;font-style:normal;color:#9C9288;font-size:12px;margin-top:4px;line-height:1.6">
-            勾选后，各年 RYC续年度佣金按整数呈现；低于 1% 的自动留空（不计入清单展示）。该开关对线下、互联网产品统一生效。
-          </i>
-        </div>
-        <div class="qwrap" style="margin-bottom:0">
-          {% for ct, ct_name in [('offline','线下产品'),('internet','互联网产品')] %}
-          {% set cfg = cfgs[ct] %}
-          <div class="qbox">
-            <h3>{{ ct_name }} · 系数设置
-              {% if backup_lock[ct] %}<span class="bak-tag ovr" title="该板块已归档 {{ backup_lock[ct].month }} 月度备份：保存时需在确认弹窗勾选「我已确认覆盖已备份系数」">已归档 {{ backup_lock[ct].month }}</span>{% endif %}
-            </h3>
-            <div class="coefline"><span>1、基础佣金比例(%)</span>
-              <input class="mono num" type="number" step="0.01" name="{{ ct }}_base_ratio"
-                     value="{{ '%.2f'|format(cfg.base_ratio or 0) }}" style="width:90px"></div>
-            <div class="coefline"><span>2、销售费用比例(%)</span>
-              <input class="mono num" type="number" step="0.01" name="{{ ct }}_sales_ratio"
-                     value="{{ '%.2f'|format(cfg.sales_ratio or 0) }}" style="width:90px"></div>
-            <div class="coefline"><span>3、经营费用比例(%)</span>
-              <input class="mono num" type="number" step="0.01" name="{{ ct }}_operate_ratio"
-                     value="{{ '%.2f'|format(cfg.operate_ratio or 0) }}" style="width:90px"></div>
-            <div class="coefline"><span>→ 销售净费比例(%) <i style="font-style:normal;color:#9C9288">自动＝基础+销售+经营</i></span>
-              <b class="pc" id="{{ ct }}_net_show">{{ '%.2f'|format(net_ratio_both[ct]) }}%</b></div>
-            <div class="coefline"><span>4、销售费用取整规则</span>
-              <select name="{{ ct }}_round_rule" style="width:auto">
-                {% for rc, rn in round_rules %}
-                <option value="{{ rc }}" {{ 'selected' if cfg.round_rule == rc else '' }}>{{ rn }}</option>
-                {% endfor %}
-              </select></div>
-            <div class="coefline" style="display:block"><span>5、RYC 佣金比例(%) <i style="font-style:normal;color:#9C9288">（第二~五年分年期设定，每年可不同 · 留空/0＝沿用基础佣金比例）</i></span></div>
-            <div class="ryc-grid">
-              {% for yn, ylabel in [('y2','RYC2 第2年'),('y3','RYC3 第3年'),('y4','RYC4 第4年'),('y5','RYC5 第5年')] %}
-              <label>{{ ylabel }}
-                <input class="mono num" type="number" step="0.01" name="{{ ct }}_ryc_ratio_{{ yn }}"
-                       value="{{ '%.2f'|format((cfg|attr('ryc_ratio_' ~ yn)) or 0) }}"></label>
-              {% endfor %}
-            </div>
-            <div class="ch-tip">
-              {% if ct == 'offline' %}
-              默认：基础佣金 80% / 销售费用 5% / 经营费用 4%（销售净费比例自动＝80+5+4＝89%）。
-              {% else %}
-              默认：基础佣金 80% / 销售费用 0 / 经营费用 5%（销售净费比例自动＝80+0+5＝85%）。
-              {% endif %}
-              <br>销售净费 = 首年佣金 ×（基础佣金比例 + 销售费用比例 + 经营费用比例）%，改任一比例自动重算。
-              <br>销售费用 =（FYC + 首年方案）× 销售费用比例%（仅首年）；默认取整规则「减1%后保留2位，直接舍去」。
-              经营费用 =（FYC + 首年方案）× 经营费用比例%（仅首年）。
-              <br>RYC 分年期：RYC2佣金 = RYC2 × RYC2佣金比例%，RYC3/4/5 同理（留空沿用基础佣金比例）。
-            </div>
-            <input type="hidden" name="{{ ct }}_note" value="{{ cfg.note or '' }}">
+    <div class="mhd"><b>一键导入产品合约数据</b><span>支持 .xlsx / .xls，按「归属月份」区分，同名月覆盖该月</span><button type="button" class="mx" onclick="closeImp()">✕</button></div>
+    <div class="mbd">
+      <div class="crm-card">
+        <form method="post" action="{{ url_for('crm.commission_coefficient_import') }}" enctype="multipart/form-data" style="margin:0">
+          <div class="importbox">
+            <input type="file" name="file" accept=".xlsx,.xls" required id="impFile"
+                   style="font-size:13px;flex:1;min-width:240px">
+            <label style="font-size:13px;color:#6B5D4F;white-space:nowrap">归属月份：</label>
+            <input type="month" name="month" id="impMonth" value="{{ cur_month }}"
+                   style="font-size:13px;padding:4px 8px;border:1px solid #E0D5C4;border-radius:8px;background:#fff">
+            <button class="crm-btn pri" type="submit">导入数据</button>
+            {% if imported_at %}
+            <span class="hint">已导入 {{ counts.total }} 条（互联网 {{ counts.internet }} / 线下 {{ counts.offline }}）· 时间 {{ imported_at }}</span>
+            {% else %}
+            <span class="hint">尚未导入数据</span>
+            {% endif %}
           </div>
-          {% endfor %}
-        </div>
+          <div class="hint" style="margin-top:8px">表头须含：保险公司 / 险种名称 / 渠道 / 互联网产品 / 首年基础佣金 / 首年方案 / 第二年~第五年采购 等列。上传文件名含「YYYY年M月」会自动带出归属月份；重复导入同一月份将覆盖该月数据，不同月份互不影响。</div>
+        </form>
       </div>
-      <input type="hidden" name="overwrite_backup" id="owBk" value="">
-      <div class="mft">
-        <span class="hint" style="margin-right:auto">线下、互联网 同表提交，一次保存两边同时生效</span>
-        <button type="button" class="crm-btn" onclick="closeCoefModal()">取消</button>
-        <button type="button" class="crm-btn pri" onclick="askConfirmCoef()">保存确认</button>
-      </div>
-    </form>
+    </div>
   </div>
 </div>
-{% endif %}
+
+<!-- ========== 二级弹窗：销售系数与分配比例设置 ========== -->
+<div class="mask" id="coefSetMask">
+  <div class="mcard">
+    <div class="mhd"><b>销售系数与分配比例设置</b><span>线下、互联网各一套 · 两边填完统一保存确认</span><button type="button" class="mx" onclick="closeCoefSet()">✕</button></div>
+    <div class="mbd">
+      <div class="qwrap" style="margin-bottom:12px">
+        {% for ct, ct_name in [('offline','线下产品'),('internet','互联网产品')] %}
+        {% set cfg = cfgs[ct] %}
+        <div class="qbox">
+          <h3>{{ ct_name }} · 当前生效系数</h3>
+          <div class="coefline"><span>1、基础佣金比例</span><b class="pc">{{ '%.2f'|format(cfg.base_ratio or 0) }}%</b></div>
+          <div class="coefline"><span>2、销售费用比例</span><b class="pc">{{ '%.2f'|format(cfg.sales_ratio or 0) }}%</b></div>
+          <div class="coefline"><span>3、经营费用比例</span><b class="pc">{{ '%.2f'|format(cfg.operate_ratio or 0) }}%</b></div>
+          <div class="coefline"><span>→ 销售净费比例 <i style="font-style:normal;color:#9C9288;font-size:11.5px">（自动＝基础+销售+经营）</i></span><b class="pc">{{ '%.2f'|format(net_ratio_both[ct]) }}%</b></div>
+          <div class="coefline"><span>4、销售费用取整规则</span><b class="pc" style="font-size:12.5px">
+            {% for rc, rn in round_rules %}{% if rc == (cfg.round_rule or '3') %}{{ rn }}{% endif %}{% endfor %}</b></div>
+          <div class="coefline"><span>5、RYC 佣金比例</span><b class="pc" style="font-size:12.5px">
+            {% for yn, ys in [('y2','RYC2'),('y3','RYC3'),('y4','RYC4'),('y5','RYC5')] %}{% set v = cfg|attr('ryc_ratio_' ~ yn) %}{{ ys }} {% if v is none %}沿用{% elif v == 0 %}0.00%{% else %}{{ '%.2f'|format(v) }}%{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</b></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% set any_locked = backup_lock.offline is not none or backup_lock.internet is not none %}
+      <form method="post" action="{{ url_for('crm.commission_coefficient_init') }}" style="margin:0 0 14px">
+        <button class="crm-btn" type="submit"{% if any_locked %} disabled title="系数已归档保护：请在系数录入区调整，并在确认弹窗勾选覆盖"{% endif %}
+                onclick="return confirm('确定按常规比例一键生成线下/互联网两套系数？将覆盖当前已保存系数。')">⚡ 一键设置生成（按常规比例）</button>
+        {% if any_locked %}
+        <span class="hint" style="color:#B05A26">系数已进入<b>归档保护</b>（{{ backup_lock.offline.month if backup_lock.offline is not none else '' }}{{ ' / ' if backup_lock.offline is not none and backup_lock.internet is not none else '' }}{{ backup_lock.internet.month if backup_lock.internet is not none else '' }}）：一键初始化已停用，如需调整请在下方录入区修改，并在确认弹窗勾选「我已确认覆盖已备份系数」。</span>
+        {% else %}
+        <span class="hint">线下 基础80/销售5/经营4 ｜ 互联网 基础80/销售0/经营5 ｜ RYC2~5佣金比例默认＝基础佣金比例 ｜ 取整规则默认＝减1%后保留2位（直接舍去）</span>
+        {% endif %}
+      </form>
+      <div style="margin-bottom:10px">
+        <button type="button" class="crm-btn" onclick="closeCoefSet();openBk()">🗄 查看月度备份台账</button>
+        <span class="hint">每月自动归档系数快照；已归档即受保护，改系数需在确认弹窗勾选覆盖。</span>
+      </div>
+
+      <div class="msec">系数录入（线下 / 互联网 同表，统一保存确认）</div>
+      <form id="coefForm" method="post" action="{{ url_for('crm.commission_coefficient_config') }}">
+        <div class="mbd" style="padding:0">
+          <div class="coefline" style="display:block;border:1px solid #EAD9C0;background:#FFF8EF;border-radius:9px;padding:9px 12px;margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#7A5230">
+              <input type="checkbox" name="ryc_hide_lt1" value="1" {{ 'checked' if cfgs.offline.ryc_hide_lt1 else '' }}>
+              <span>RYC续年度佣金 &lt; 1% 自动置空（线下 / 互联网 统一规则）</span>
+            </label>
+            <i style="display:block;font-style:normal;color:#9C9288;font-size:12px;margin-top:4px;line-height:1.6">
+              勾选后，各年 RYC续年度佣金按整数呈现；低于 1% 的自动留空（不计入清单展示）。该开关对线下、互联网产品统一生效。
+            </i>
+          </div>
+          <div class="qwrap" style="margin-bottom:0">
+            {% for ct, ct_name in [('offline','线下产品'),('internet','互联网产品')] %}
+            {% set cfg = cfgs[ct] %}
+            <div class="qbox">
+              <h3>{{ ct_name }} · 系数设置
+                {% if backup_lock[ct] %}<span class="bak-tag ovr" title="该板块已归档 {{ backup_lock[ct].month }} 月度备份：保存时需在确认弹窗勾选「我已确认覆盖已备份系数」">已归档 {{ backup_lock[ct].month }}</span>{% endif %}
+              </h3>
+              <div class="coefline"><span>1、基础佣金比例(%)</span>
+                <input class="mono num" type="number" step="0.01" name="{{ ct }}_base_ratio"
+                       value="{{ '%.2f'|format(cfg.base_ratio or 0) }}" style="width:90px"></div>
+              <div class="coefline"><span>2、销售费用比例(%)</span>
+                <input class="mono num" type="number" step="0.01" name="{{ ct }}_sales_ratio"
+                       value="{{ '%.2f'|format(cfg.sales_ratio or 0) }}" style="width:90px"></div>
+              <div class="coefline"><span>3、经营费用比例(%)</span>
+                <input class="mono num" type="number" step="0.01" name="{{ ct }}_operate_ratio"
+                       value="{{ '%.2f'|format(cfg.operate_ratio or 0) }}" style="width:90px"></div>
+              <div class="coefline"><span>→ 销售净费比例(%) <i style="font-style:normal;color:#9C9288">自动＝基础+销售+经营</i></span>
+                <b class="pc" id="{{ ct }}_net_show">{{ '%.2f'|format(net_ratio_both[ct]) }}%</b></div>
+              <div class="coefline"><span>4、销售费用取整规则</span>
+                <select name="{{ ct }}_round_rule" style="width:auto">
+                  {% for rc, rn in round_rules %}
+                  <option value="{{ rc }}" {{ 'selected' if cfg.round_rule == rc else '' }}>{{ rn }}</option>
+                  {% endfor %}
+                </select></div>
+              <div class="coefline" style="display:block"><span>5、RYC 佣金比例(%) <i style="font-style:normal;color:#9C9288">（第二~五年分年期设定，每年可不同 · 留空/0＝沿用基础佣金比例）</i></span></div>
+              <div class="ryc-grid">
+                {% for yn, ylabel in [('y2','RYC2 第2年'),('y3','RYC3 第3年'),('y4','RYC4 第4年'),('y5','RYC5 第5年')] %}
+                <label>{{ ylabel }}
+                  <input class="mono num" type="number" step="0.01" name="{{ ct }}_ryc_ratio_{{ yn }}"
+                         value="{{ '%.2f'|format((cfg|attr('ryc_ratio_' ~ yn)) or 0) }}"></label>
+                {% endfor %}
+              </div>
+              <div class="ch-tip">
+                {% if ct == 'offline' %}
+                默认：基础佣金 80% / 销售费用 5% / 经营费用 4%（销售净费比例自动＝80+5+4＝89%）。
+                {% else %}
+                默认：基础佣金 80% / 销售费用 0 / 经营费用 5%（销售净费比例自动＝80+0+5＝85%）。
+                {% endif %}
+                <br>销售净费 = 首年佣金 ×（基础佣金比例 + 销售费用比例 + 经营费用比例）%，改任一比例自动重算。
+                <br>销售费用 =（FYC + 首年方案）× 销售费用比例%（仅首年）；默认取整规则「减1%后保留2位，直接舍去」。
+                经营费用 =（FYC + 首年方案）× 经营费用比例%（仅首年）。
+                <br>RYC 分年期：RYC2佣金 = RYC2 × RYC2佣金比例%，RYC3/4/5 同理（留空沿用基础佣金比例）。
+              </div>
+              <input type="hidden" name="{{ ct }}_note" value="{{ cfg.note or '' }}">
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <input type="hidden" name="overwrite_backup" id="owBk" value="">
+        <div class="mft">
+          <span class="hint" style="margin-right:auto">线下、互联网 同表提交，一次保存两边同时生效</span>
+          <button type="button" class="crm-btn" onclick="closeCoefSet()">取消</button>
+          <button type="button" class="crm-btn pri" onclick="askConfirmCoef()">保存确认</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- 保存前二次确认弹窗 -->
 <div class="mask" id="cfMask">
@@ -269,244 +290,100 @@
     </div>
   </div>
 </div>
-{% else %}
-<div class="crm-empty" style="margin-bottom:14px">当前账号无系数管理权限，仅可查看结果清单。</div>
-{% endif %}
 
-<!-- ========== 三、结果清单 ========== -->
-<div class="crm-sec">三、销售费用结果清单 <span>可按 渠道 / 组织层面 / 归属月份 / 销售分公司 / 保司 / 缴别 / 产品 筛选</span></div>
-
-<div class="ch-filters">
-  <a href="{{ url_for('crm.commission_coefficient', channel='all', region=region, month=month, level=level, insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if channel=='all' else '' }}">全部（{{ counts.total }}）</a>
-  <a href="{{ url_for('crm.commission_coefficient', channel='offline', region=region, month=month, level=level, insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if channel=='offline' else '' }}">线下（{{ counts.offline }}）</a>
-  <a href="{{ url_for('crm.commission_coefficient', channel='internet', region=region, month=month, level=level, insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if channel=='internet' else '' }}">互联网（{{ counts.internet }}）</a>
-
-  <span class="lvl-filters">
-    <span style="font-size:13px;color:#6B5D4F">组织层面：</span>
-    <a href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='all', insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if level=='all' else '' }}">全部</a>
-    <a href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='shareholder', insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if level=='shareholder' else '' }}">股东层面</a>
-    <a href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='subsidiary', insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if level=='subsidiary' else '' }}">子公司层面</a>
-    <a href="{{ url_for('crm.commission_coefficient', channel=channel, region=region, month=month, level='team', insurer=insurer, pay_period=pay_period, product=product) }}" class="{{ 'on' if level=='team' else '' }}">团队长层面</a>
-  </span>
-
-  <form method="get" action="{{ url_for('crm.commission_coefficient') }}" class="filter-form">
-    <label>归属月份</label>
-    <select name="month" class="comm-sel" onchange="this.form.submit()">
-      <option value="all" {{ 'selected' if month=='all' else '' }}>全部月份</option>
-      {% for mo in month_options %}
-      <option value="{{ mo }}" {{ 'selected' if month==mo else '' }}>{{ mo }}</option>
-      {% endfor %}
-    </select>
-    <label>销售分公司</label>
-    <select name="region" class="comm-sel" onchange="this.form.submit()">
-      <option value="all" {{ 'selected' if region=='all' else '' }}>全部</option>
-      <option value="全国" {{ 'selected' if region=='全国' else '' }}>全国</option>
-      {% for rg in region_opts %}
-      <option value="{{ rg }}" {{ 'selected' if region==rg else '' }}>{{ rg }}</option>
-      {% endfor %}
-    </select>
-    <label>保司</label>
-    <select name="insurer" class="comm-sel" onchange="onInsurerChange(this)" title="{{ insurer if insurer != 'all' else '全部保司' }}">
-      <option value="all" {{ 'selected' if insurer=='all' else '' }}>全部</option>
-      {% for ins in insurer_opts %}
-      <option value="{{ ins }}" {{ 'selected' if insurer==ins else '' }}>{{ ins }}</option>
-      {% endfor %}
-    </select>
-    <label>缴别</label>
-    <select name="pay_period" class="comm-sel" onchange="this.form.submit()">
-      <option value="all" {{ 'selected' if pay_period=='all' else '' }}>全部</option>
-      {% for pp in pay_period_opts %}
-      <option value="{{ pp }}" {{ 'selected' if pay_period==pp else '' }}>{{ pp }}</option>
-      {% endfor %}
-    </select>
-    <label>产品</label>
-    <select name="product" class="comm-sel" onchange="this.form.submit()" title="{{ product or '' }}">
-      <option value="all" {{ 'selected' if product=='all' or not product else '' }}>全部产品{% if insurer!='all' %}（{{ insurer }}）{% endif %}</option>
-      {% for p in product_opts %}
-      <option value="{{ p }}" {{ 'selected' if product==p else '' }}>{{ p }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="crm-btn">查询</button>
-    <input type="hidden" name="channel" value="{{ channel }}">
-    <input type="hidden" name="level" value="{{ level }}">
-  </form>
-  <span class="stat">共 <b>{{ rows|length }}</b> 条</span>
-</div>
-
-{# ---- 一键导出：放在结果表上方（不必滚到表尾），按当前所选组织层面导出，列结构与当前视图严格一致 ---- #}
-{% set lv_name = {'all': '全部层级', 'shareholder': '股东层面', 'subsidiary': '子公司层面', 'team': '团队长层面'}.get(level, '全部层级') %}
-{% if rows %}
-<div class="export-bar">
-  <span class="hint">当前视图：<b>{{ lv_name }}</b> · 共 {{ rows|length }} 条 · 导出列与当前组织层面完全一致</span>
-  <a class="crm-btn pri" href="{{ url_for('crm.commission_coefficient_export',
-        channel=channel, region=region, level=level, insurer=insurer,
-        pay_period=pay_period, product=product, month=month) }}">⬇ 一键导出（{{ lv_name }}）</a>
-</div>
-{% endif %}
-
-<div class="crm-card">
-  {% if rows %}
-  <div style="overflow-x:auto">
-  <table class="crm-table res-tb">
-    <thead>
-      <tr class="grp">
-        <th colspan="10">产品信息</th>
-        {% if level == 'all' %}<th colspan="3">首年明细（采购成本 %）</th>{% endif %}
-        {% if level in ('all','shareholder') %}<th colspan="4">RYC采购成本（%）</th>{% endif %}
-        {% if level in ('all','shareholder') %}<th colspan="2">股东层面</th>{% endif %}
-        {% if level in ('all','subsidiary') %}<th colspan="3">子公司层面</th>{% endif %}
-        {% if level in ('all','team') %}<th colspan="1">团队长层面</th>{% endif %}
-        <th colspan="4">RYC续年度佣金</th>
-      </tr>
-      <tr class="sub">
-        <th>保险公司</th><th>险种名称</th><th>渠道</th><th>类型</th>
-        <th>出单平台</th><th>平台名称</th><th>是否需要补录</th>
-        <th>保障期限</th><th>缴费期</th><th>销售分公司</th>
-        {% if level == 'all' %}
-        <th style="text-align:right">FYC</th><th style="text-align:right">首年方案</th>
-        <th style="text-align:right;color:#C86432">首年佣金</th>
+<!-- ========== 二级弹窗：月度系数备份 ========== -->
+<div class="mask" id="bkMask">
+  <div class="mcard">
+    <div class="mhd"><b>月度系数备份</b><span>每月自动归档 · 已归档数据受保护，修改须二次确认覆盖</span><button type="button" class="mx" onclick="closeBk()">✕</button></div>
+    <div class="mbd">
+      {% set bk_month = month or cur_month %}
+      {% set rule_short = {'1': '① 保留2位', '2': '② 取整', '3': '③ 减1%后保2位'} %}
+      <div class="bk-bar">
+        <div class="hint">
+          <b>归档口径</b>：按「归属月份 × 渠道」各存一份系数快照（基础佣金 / 销售费用 / 经营费用 / 销售净费比例、取整规则、RYC 分年期比例）
+          与当期计算结果汇总（产品行数，FYC首佣 / 销售费用 / 经营费用 / 销售净费 合计）。<br>
+          只有<b>系数已设置完成（销售净费比例 &gt; 0）且当期有产品数据</b>的月份才会归档；访问本页时会自动补齐缺失月份，无需手工触发。<br>
+          <b>保护机制</b>：已归档的板块再改系数，必须在确认弹窗勾选「我已确认覆盖已备份系数」，覆盖前的旧快照会留档、覆盖次数 +1，可追溯。
+        </div>
+        {% if can_coef %}
+        <div class="bk-ops">
+          <form method="post" action="{{ url_for('crm.commission_coefficient_backup') }}">
+            <input type="hidden" name="month" value="{{ bk_month }}">
+            <button type="submit" class="crm-btn pri">🗄 立即备份 {{ bk_month }}</button>
+          </form>
+          {% if bk_month in (backup_lock_months.offline, backup_lock_months.internet) %}
+          <form method="post" action="{{ url_for('crm.commission_coefficient_backup') }}"
+                onsubmit="return confirm('将用当前系数覆盖 {{ bk_month }} 的备份（覆盖前快照留档、覆盖次数 +1）。确认继续？');">
+            <input type="hidden" name="month" value="{{ bk_month }}">
+            <input type="hidden" name="overwrite" value="1">
+            <button type="submit" class="crm-btn">↻ 覆盖本月备份</button>
+          </form>
+          {% endif %}
+        </div>
         {% endif %}
-        {% if level in ('all','shareholder') %}<th style="text-align:right">RYC2采购</th><th style="text-align:right">RYC3采购</th><th style="text-align:right">RYC4采购</th><th style="text-align:right">RYC5采购</th>{% endif %}
-        {% if level in ('all','shareholder') %}<th style="text-align:right">签约费用</th><th style="text-align:right">销售净费<br><span style="font-weight:400;font-size:10.5px;color:#9C9288">线下{{ '%.2f'|format(net_ratio_both.offline) }}% / 互联网{{ '%.2f'|format(net_ratio_both.internet) }}%</span></th>{% endif %}
-        {% if level in ('all','subsidiary') %}<th style="text-align:right">FYC首佣</th><th style="text-align:right;color:#C86432">销售费用</th><th style="text-align:right">经营费用</th>{% endif %}
-        {% if level in ('all','team') %}<th style="text-align:right">FYC首佣</th>{% endif %}
-        <th style="text-align:right">RYC2佣金</th><th style="text-align:right">RYC3佣金</th>
-        <th style="text-align:right">RYC4佣金</th><th style="text-align:right">RYC5佣金</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for r in rows %}
-      <tr>
-        <td class="c-ins">{{ r.insurer or '—' }}</td>
-        <td class="c-prod" title="{{ r.product }}"><span class="ell">{{ r.product or '—' }}</span></td>
-        <td class="c-chan">{{ r.channel_name or '—' }}</td>
-        <td>{% if r.is_internet %}<span class="ch-tag ch-int">互联网</span>{% else %}<span class="ch-tag ch-off">线下</span>{% endif %}</td>
-        <td style="white-space:nowrap">{{ r.issue_platform or '—' }}</td>
-        <td style="white-space:nowrap">{{ r.platform_name or '—' }}</td>
-        <td style="white-space:nowrap">{{ r.need_supplement or '—' }}</td>
-        <td class="c-term">{{ r.coverage_term or '—' }}</td>
-        <td class="c-pay">{{ r.pay_period or '—' }}</td>
-        <td class="c-region">{% if region and region != 'all' and region != '全国' %}{{ region }}{% else %}{{ r.region or '—' }}{% endif %}</td>
-        {% if level == 'all' %}
-        <td style="text-align:right" class="mono num">{{ pct(r.fyc) }}</td>
-        <td style="text-align:right" class="mono num">{{ pct(r.plan) }}</td>
-        <td style="text-align:right;color:#C86432" class="mono num">{{ pct(r.first_year_comm) }}</td>
-        {% endif %}
-        {% if level in ('all','shareholder') %}
-        <td style="text-align:right" class="mono num" title="第二年采购（原始百分点，未经系数折算）">{{ pct(r.y2) }}</td>
-        <td style="text-align:right" class="mono num" title="第三年采购（原始百分点，未经系数折算）">{{ pct(r.y3) }}</td>
-        <td style="text-align:right" class="mono num" title="第四年采购（原始百分点，未经系数折算）">{{ pct(r.y4) }}</td>
-        <td style="text-align:right" class="mono num" title="第五年采购（原始百分点，未经系数折算）">{{ pct(r.y5) }}</td>
-        {% endif %}
-        {% if level in ('all','shareholder') %}
-        <td style="text-align:right" class="mono num">{{ pct(r.sign_total) }}</td>
-        <td style="text-align:right" class="mono num" title="首年佣金 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营）">{{ pct(r.net) }}</td>
-        {% endif %}
-        {% if level in ('all','subsidiary') %}
-        <td style="text-align:right" class="mono num">{{ pct(r.base) }}</td>
-        <td style="text-align:right;color:#C86432" class="mono num">{{ pct(r.sales) }}</td>
-        <td style="text-align:right" class="mono num">{{ pct(r.op) }}</td>
-        {% endif %}
-        {% if level in ('all','team') %}
-        <td style="text-align:right" class="mono num">{{ pct(r.team) }}</td>
-        {% endif %}
-        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y2, r.ryc_hide_lt1) }}</td>
-        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y3, r.ryc_hide_lt1) }}</td>
-        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y4, r.ryc_hide_lt1) }}</td>
-        <td style="text-align:right" class="mono num">{{ ryc_pct(r.ryc_comm.y5, r.ryc_hide_lt1) }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% else %}
-  <div class="crm-empty">尚未导入产品合约数据，或无符合条件的数据。{% if can_import %}请先在上方「一键导入」。{% endif %}</div>
-  {% endif %}
-</div>
-
-<div class="hint" style="margin-top:10px">
-  字段统称：首年基础佣金 = <b>FYC</b>，第二年~第五年采购 = <b>RYC2 / RYC3 / RYC4 / RYC5</b>；<b>首年佣金 = FYC + 首年方案</b>；投保区域统称 <b>销售分公司</b>。<br>
-  层级视图：「全部」显示首年明细三列（FYC / 首年方案 / 首年佣金）；选股东 / 子公司 / 团队长层面时不重复展示这三列，只保留该层面的结果。<br>
-  「<b>全部</b>」与「<b>股东层面</b>」额外展示各年 <b>RYC 采购成本</b>（第二年~第五年采购，原始百分点，未经系数折算），与最右侧「RYC续年度佣金」（采购 × RYC 佣金比例%）区分：前者是<b>采购成本</b>、后者是<b>实算佣金</b>；选子公司 / 团队长层面时不展示 RYC 采购成本列。<br>
-  三层口径：<b>股东</b>＝签约费用（Σ各采购项）；<b>销售净费 = 首年佣金 × 净费比例%</b>，其中<b>净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例</b>（按渠道自动测算：当前线下
-  {{ '%.2f'|format(net_ratio_both.offline) }}%、互联网 {{ '%.2f'|format(net_ratio_both.internet) }}%；第三位起直接舍去，保留 2 位小数）；
-  <b>子公司</b>＝FYC首佣（首年佣金×基础佣金比例% + Σ各年RYC×该年RYC佣金比例%）+ 销售费用（取整规则((FYC+首年方案)×销售费用比例%)，仅首年）+ 经营费用（(FYC+首年方案)×经营费用比例%，仅首年）；
-  <b>团队长</b>＝FYC首佣（与子公司一致）。所有数值均为占保费的百分比；采购成本为 0 时留空。<br>
-  报表最右侧四列为 RYC续年度佣金（各年 RYC × 该年 RYC 佣金比例%，<b>0 表示该年续期佣金为 0%、不再沿用基础佣金比例</b>；分年期、每年可不同；各层级一致）。<br>
-  <b>RYC续年度佣金取值规则（二改 2026-11-03）：</b>① 所有 RYC续年度佣金数据<b>取整数值</b>（直接舍去小数，非四舍五入），展示时保留 <b>1 位小数</b>（如 2 → 2.0%）；② 系数设置弹窗勾选「RYC续年度佣金 &lt; 1% 自动置空」后，<b>低于 1% 的自动留空</b>（线下 / 互联网统一生效，月度备份一并记录）。<br>
-  销售费用取整规则（一律直接舍去，四舍五也舍）：① 保留2位小数（第三位起舍去） ② 取整（小数舍去） ③ 减1%后保留2位（默认）——即先 ×99%（减 1%），再由第三位起舍去（如 2.15% → 2.12%）。
-  销售分公司筛选：选具体省/市会同时带出标注「全国」的产品（全国含该省）；选中具体省份后，列表中该列只显示所选省份。
-</div>
-
-<!-- ========== 四、月度系数备份（自动归档 + 覆盖保护） ========== -->
-{% set bk_month = month or cur_month %}
-{% set rule_short = {'1': '① 保留2位', '2': '② 取整', '3': '③ 减1%后保2位'} %}
-<div class="crm-sec" id="bkSec">四、月度系数备份
-  <span>每月自动归档 · 系数设置完成且能算出销售费用即留痕 · 已归档数据受保护，修改须二次确认覆盖</span></div>
-<div class="crm-card">
-  <div class="bk-bar">
-    <div class="hint">
-      <b>归档口径</b>：按「归属月份 × 渠道」各存一份系数快照（基础佣金 / 销售费用 / 经营费用 / 销售净费比例、取整规则、RYC 分年期比例）
-      与当期计算结果汇总（产品行数，FYC首佣 / 销售费用 / 经营费用 / 销售净费 合计）。<br>
-      只有<b>系数已设置完成（销售净费比例 &gt; 0）且当期有产品数据</b>的月份才会归档；访问本页时会自动补齐缺失月份，无需手工触发。<br>
-      <b>保护机制</b>：已归档的板块再改系数，必须在确认弹窗勾选「我已确认覆盖已备份系数」，覆盖前的旧快照会留档、覆盖次数 +1，可追溯。
-    </div>
-    {% if can_coef %}
-    <div class="bk-ops">
-      <form method="post" action="{{ url_for('crm.commission_coefficient_backup') }}">
-        <input type="hidden" name="month" value="{{ bk_month }}">
-        <button type="submit" class="crm-btn pri">🗄 立即备份 {{ bk_month }}</button>
-      </form>
-      {% if bk_month in (backup_lock_months.offline, backup_lock_months.internet) %}
-      <form method="post" action="{{ url_for('crm.commission_coefficient_backup') }}"
-            onsubmit="return confirm('将用当前系数覆盖 {{ bk_month }} 的备份（覆盖前快照留档、覆盖次数 +1）。确认继续？');">
-        <input type="hidden" name="month" value="{{ bk_month }}">
-        <input type="hidden" name="overwrite" value="1">
-        <button type="submit" class="crm-btn">↻ 覆盖本月备份</button>
-      </form>
+      </div>
+      {% if backups %}
+      <div style="overflow-x:auto">
+        <table class="crm-table bk-tb">
+          <thead>
+            <tr>
+              <th>备份月份</th><th>渠道</th>
+              <th class="num">基础佣金</th><th class="num">销售费用</th><th class="num">经营费用</th>
+              <th class="num">销售净费</th><th>取整规则</th><th title="0 表示沿用基础佣金比例">RYC2 / RYC3 / RYC4 / RYC5</th>
+              <th class="num">产品行数</th>
+              <th>备份时间</th><th>来源</th><th>覆盖</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for b in backups %}
+            <tr>
+              <td class="bk-month">{{ b.month }}</td>
+              <td>{% if b.channel_type == 'internet' %}<span class="ch-tag ch-int">互联网</span>{% else %}<span class="ch-tag ch-off">线下</span>{% endif %}</td>
+              <td class="num">{{ '%.2f'|format(b.base_ratio or 0) }}%</td>
+              <td class="num">{{ '%.2f'|format(b.sales_ratio or 0) }}%</td>
+              <td class="num">{{ '%.2f'|format(b.operate_ratio or 0) }}%</td>
+              <td class="num" style="color:#C86432">{{ '%.2f'|format(b.net_ratio or 0) }}%</td>
+              <td>{{ rule_short.get(b.round_rule, b.round_rule or '—') }}</td>
+              <td title="0 表示沿用基础佣金比例">{{ '%g'|format(b.ryc_ratio_y2 or 0) }} / {{ '%g'|format(b.ryc_ratio_y3 or 0) }} / {{ '%g'|format(b.ryc_ratio_y4 or 0) }} / {{ '%g'|format(b.ryc_ratio_y5 or 0) }} %</td>
+              <td class="num">{{ b.row_count or 0 }}</td>
+              <td>{{ b.updated_at or b.created_at }}{% if b.created_at and b.updated_at and b.created_at != b.updated_at %}<br><span style="font-size:11px;color:#9C9288">首次 {{ b.created_at }}</span>{% endif %}</td>
+              <td><span class="bak-tag {{ 'auto' if b.source == 'auto' else 'manual' }}">{{ '自动' if b.source == 'auto' else '手动' }}</span></td>
+              <td>{% if b.override_count %}<span class="bak-tag ovr" title="最近覆盖：{{ b.last_override_at or '—' }}{% if b.prev_summary %}｜覆盖前系数：{{ b.prev_summary }}{% endif %}">已覆盖 {{ b.override_count }} 次</span>{% else %}<span class="bak-tag keep">原始</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="crm-empty">暂无月度备份。导入产品数据并完成系数设置后，系统会自动生成当月备份；也可点右上「立即备份」手动留档。</div>
       {% endif %}
     </div>
-    {% endif %}
   </div>
-  {% if backups %}
-  <div style="overflow-x:auto">
-    <table class="crm-table bk-tb">
-      <thead>
-        <tr>
-          <th>备份月份</th><th>渠道</th>
-          <th class="num">基础佣金</th><th class="num">销售费用</th><th class="num">经营费用</th>
-          <th class="num">销售净费</th><th>取整规则</th><th title="0 表示沿用基础佣金比例">RYC2 / RYC3 / RYC4 / RYC5</th>
-          <th class="num">产品行数</th>
-          <th>备份时间</th><th>来源</th><th>覆盖</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for b in backups %}
-        <tr>
-          <td class="bk-month">{{ b.month }}</td>
-          <td>{% if b.channel_type == 'internet' %}<span class="ch-tag ch-int">互联网</span>{% else %}<span class="ch-tag ch-off">线下</span>{% endif %}</td>
-          <td class="num">{{ '%.2f'|format(b.base_ratio or 0) }}%</td>
-          <td class="num">{{ '%.2f'|format(b.sales_ratio or 0) }}%</td>
-          <td class="num">{{ '%.2f'|format(b.operate_ratio or 0) }}%</td>
-          <td class="num" style="color:#C86432">{{ '%.2f'|format(b.net_ratio or 0) }}%</td>
-          <td>{{ rule_short.get(b.round_rule, b.round_rule or '—') }}</td>
-          <td title="0 表示沿用基础佣金比例">{{ '%g'|format(b.ryc_ratio_y2 or 0) }} / {{ '%g'|format(b.ryc_ratio_y3 or 0) }} / {{ '%g'|format(b.ryc_ratio_y4 or 0) }} / {{ '%g'|format(b.ryc_ratio_y5 or 0) }} %</td>
-          <td class="num">{{ b.row_count or 0 }}</td>
-          <td>{{ b.updated_at or b.created_at }}{% if b.created_at and b.updated_at and b.created_at != b.updated_at %}<br><span style="font-size:11px;color:#9C9288">首次 {{ b.created_at }}</span>{% endif %}</td>
-          <td><span class="bak-tag {{ 'auto' if b.source == 'auto' else 'manual' }}">{{ '自动' if b.source == 'auto' else '手动' }}</span></td>
-          <td>{% if b.override_count %}<span class="bak-tag ovr" title="最近覆盖：{{ b.last_override_at or '—' }}{% if b.prev_summary %}｜覆盖前系数：{{ b.prev_summary }}{% endif %}">已覆盖 {{ b.override_count }} 次</span>{% else %}<span class="bak-tag keep">原始</span>{% endif %}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <div class="crm-empty">暂无月度备份。导入产品数据并完成系数设置后，系统会自动生成当月备份；也可点右上「立即备份」手动留档。</div>
-  {% endif %}
+</div>
+{% else %}
+<div class="crm-empty" style="margin-bottom:14px">当前账号无系数管理权限，仅可浏览查询销售费用结果清单。</div>
+{% endif %}
+
+<div id="commResult">
+  {% include 'crm/_commission_coefficient_result.html' %}
 </div>
 
 <script>
 var BAK_LOCK = {offline: '{{ backup_lock_months.offline }}', internet: '{{ backup_lock_months.internet }}'};
+
+/* 弹窗开关 */
+function showMask(id){ var m=document.getElementById(id); if(m) m.classList.add('on'); }
+function hideMask(id){ var m=document.getElementById(id); if(m) m.classList.remove('on'); }
+function openSalesMgr(){ showMask('salesMgrMask'); }
+function closeSalesMgr(){ hideMask('salesMgrMask'); }
+function openImp(){ showMask('impMask'); }
+function closeImp(){ hideMask('impMask'); }
+function openCoefSet(){ showMask('coefSetMask'); }
+function closeCoefSet(){ hideMask('coefSetMask'); }
+function openBk(){ showMask('bkMask'); }
+function closeBk(){ hideMask('bkMask'); }
+
+/* 导入文件名校验：YYYY年M月 自动带出归属月份 */
 (function(){
   var fileEl = document.getElementById('impFile');
   if (fileEl) {
@@ -521,7 +398,8 @@ var BAK_LOCK = {offline: '{{ backup_lock_months.offline }}', internet: '{{ backu
     });
   }
 })();
-/* ===== 系数设置弹窗：线下 + 互联网 同表录入，提交前二次确认 ===== */
+
+/* 系数录入：实时计算销售净费比例 */
 function syncNetRatio(){
   var f = document.getElementById('coefForm');
   if (!f) return;
@@ -543,18 +421,8 @@ function syncNetRatio(){
   });
   syncNetRatio();
 })();
-function openCoefModal(){
-  var m = document.getElementById('coefMask');
-  if (m) m.classList.add('on');
-}
-function closeCoefModal(){
-  var m = document.getElementById('coefMask');
-  if (m) m.classList.remove('on');
-}
-function backToCoef(){
-  var m = document.getElementById('cfMask');
-  if (m) m.classList.remove('on');
-}
+
+/* 打开系数设置确认弹窗：汇总两套系数 → 二次确认 */
 function askConfirmCoef(){
   var f = document.getElementById('coefForm');
   if (!f) return;
@@ -587,7 +455,6 @@ function askConfirmCoef(){
           + '<br><span>' + ryc.join(' ／ ') + '</span></div>';
   }
   document.getElementById('cfBody').innerHTML = html;
-  // 覆盖保护：已归档板块需勾选确认才能保存
   var lockNames = [];
   var names = {offline: '线下产品', internet: '互联网产品'};
   ['offline', 'internet'].forEach(function(ct){
@@ -607,8 +474,9 @@ function askConfirmCoef(){
       lk.style.display = 'none';
     }
   }
-  document.getElementById('cfMask').classList.add('on');
+  showMask('cfMask');
 }
+function backToCoef(){ hideMask('cfMask'); }
 function doSaveCoef(){
   var f = document.getElementById('coefForm');
   var lk = document.getElementById('cfLock');
@@ -621,22 +489,59 @@ function doSaveCoef(){
   var ow = document.getElementById('owBk');
   if (ow) ow.value = (need && chk && chk.checked) ? '1' : '';
   backToCoef();
-  closeCoefModal();
+  closeCoefSet();
   if (f) f.submit();
 }
-// 点遮罩空白处 / ESC 关闭
+
+/* 结果清单：渠道/层面链接 + 查询表单 + 下拉，全部走 AJAX 局部刷新（不整页刷新） */
+function hyCommQuery(form){
+  var qs = new URLSearchParams(new FormData(form)).toString();
+  fetch(location.pathname + '?partial=1&' + qs, {headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+      var res = document.getElementById('commResult');
+      if (res) res.innerHTML = html;
+      history.replaceState(null, '', location.pathname + '?' + qs);
+    })
+    .catch(function(){ form.submit(); });
+}
+function hyCommQueryUrl(href){
+  var sep = href.indexOf('?') >= 0 ? '&' : '?';
+  fetch(href + sep + 'partial=1', {headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+      var res = document.getElementById('commResult');
+      if (res) res.innerHTML = html;
+      history.replaceState(null, '', href);
+    })
+    .catch(function(){ window.location.href = href; });
+}
+function onInsurerChange(sel){
+  var pf = document.querySelector('#commFilterForm select[name="product"]');
+  if(pf) pf.value = 'all';
+  if(sel && sel.form) hyCommQuery(sel.form);
+}
+/* 事件委托：筛选表单提交 / 筛选链接点击 / 遮罩空白关闭 / ESC */
+document.addEventListener('submit', function(e){
+  if (e.target && e.target.id === 'commFilterForm') { e.preventDefault(); hyCommQuery(e.target); }
+});
 document.addEventListener('click', function(e){
-  if (e.target && e.target.id === 'coefMask') closeCoefModal();
-  if (e.target && e.target.id === 'cfMask') backToCoef();
+  if (e.target && e.target.classList && e.target.classList.contains('mask')) {
+    var id = e.target.id;
+    if (id === 'cfMask') backToCoef();
+    else e.target.classList.remove('on');
+    return;
+  }
+  var link = e.target.closest ? e.target.closest('.comm-filter-link') : null;
+  if (link) { e.preventDefault(); hyCommQueryUrl(link.getAttribute('href')); }
 });
 document.addEventListener('keydown', function(e){
-  if (e.key === 'Escape') { backToCoef(); closeCoefModal(); }
+  if (e.key === 'Escape') {
+    var cf = document.getElementById('cfMask');
+    if (cf && cf.classList.contains('on')) { backToCoef(); return; }
+    var masks = document.querySelectorAll('.mask.on');
+    for (var i = masks.length - 1; i >= 0; i--) { masks[i].classList.remove('on'); break; }
+  }
 });
-function onInsurerChange(sel){
-  // 切换保司时重置产品筛选项，避免旧产品值过滤不到新保司数据
-  var pf = document.querySelector('.filter-form select[name="product"]');
-  if(pf) pf.value = 'all';
-  sel.form.submit();
-}
 </script>
 {% endblock %}
