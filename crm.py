@@ -37,7 +37,7 @@ from models import (db, Insurer, InsurerBranch, InsurerContact, InsurerLinkman, 
                     CrmTaxConfig, CrmCustomer, CrmPolicyOrder, CrmPremiumFactor, CrmProposal,
                     CrmProposalProduct, CrmFetchConfig,
                     CrmProductCommission, CrmCommCoefConfig, CrmCommCoefBackup,
-                    COMM_CHANNELS, COMM_ITEMS, ROUND_RULES)
+                    COMM_CHANNELS, COMM_ITEMS, ROUND_RULES, COMM_ROUND_RULE)
 from app import login_required, permission_required
 
 bp = Blueprint('crm', __name__)
@@ -9795,24 +9795,24 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         #   ryc 已为整数百分比（如 2 表 2%），汇总时 ÷100 还原占保费比例
         base = first_amt * br / 100.0 + (ryc['y2'] + ryc['y3'] + ryc['y4'] + ryc['y5']) / 100.0
         # 销售费用：仅首年
-        sales = _comm_apply_round(first_amt * sr / 100.0, cfg.round_rule or '3')
+        #   取整规则已写死（威哥 2026-11-05）：统一「减1%后数据取整（直接舍去）」，不再提供其它选项
+        sales = _comm_apply_round(first_amt * sr / 100.0, COMM_ROUND_RULE)
         # 经营费用：仅首年（RYC 只计佣金，不计经营费用）
         op = first_amt * orr / 100.0
-        # 股东·签约费用 = 首佣合计（FYC + 首年方案）
-        #   口径纠正（威哥 2026-11-05）：签约费用就是首年这一笔的采购成本，
-        #   不能把 RYC2~RYC5 的续期采购成本加进来（原口径 Σ六项导致新华 7% 被加成 8%）。
-        #   续期采购成本另有 RYC2~RYC5采购 四列单独展示，不重复计入签约费用。
-        sign_total = first_amt                                  # 股东·签约费用
-        # 股东·净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例（随渠道自动测算）
-        #   线下默认 80+5+4=89%；互联网默认 80+0+5=85%
+        # 股东·签约费用 = 销售净费 = 首佣合计 × 净费比例% → 减1% → 第三位起直接舍去
+        #   口径统一（威哥 2026-11-05）：签约费用与销售净费同值，
+        #   与「销售费用取整规则」一致 —— 减1%后数据取整（直接舍去）。
+        #   续期采购成本（RYC2~RYC5）另有四列单独展示，不并入。
+        #   例：5.50% × 89% = 4.895% → ×99% = 4.84605% → 4.84%
+        #       20.50% × 89% = 18.245% → ×99% = 18.06255% → 18.06%
         net_ratio = _comm_net_ratio_of(cfg)
-        # 股东·净费 = 首佣合计 × 净费比例%，第三位起直接舍去（四舍五也舍，不四舍五入）
-        # 例：22.5% × 89% = 20.025% → 20.02%；47.5% × 89% = 42.275% → 42.27%
         _pct_first = Decimal(str(round(first_amt * 100, 4)))
-        net = float(
-            (_pct_first * Decimal(str(net_ratio)) / Decimal('100'))
+        _net_pct = float(
+            (_pct_first * Decimal(str(net_ratio)) / Decimal('100') * Decimal('0.99'))
             .quantize(Decimal('0.01'), rounding=ROUND_DOWN)
         ) / 100.0
+        net = _net_pct                                    # 股东·销售净费
+        sign_total = _net_pct                            # 股东·签约费用（= 销售净费）
         team = base                                              # 团队长·基础佣金 = 子公司基础佣金（统一口径）
         out.append({
             'id': r.id, 'insurer': r.insurer or '', 'product': r.product or '',
@@ -10339,8 +10339,8 @@ def commission_coefficient_config():
             cfg.team_base_ratio = cfg.base_ratio  # 团队长基础佣金比例 = 基础佣金比例（统一）
             # RYC续年度佣金<1%自动置空（线下/互联网统一规则）：任一板块提交即同步两套配置
             cfg.ryc_hide_lt1 = (request.form.get('ryc_hide_lt1') == '1')
-            if ('%s_round_rule' % ct) in request.form:
-                cfg.round_rule = (_f('%s_round_rule' % ct) or '3')
+            # 取整规则已写死（威哥 2026-11-05）：统一「减1%后数据取整（直接舍去）」，忽略表单传值
+            cfg.round_rule = COMM_ROUND_RULE
             cfg.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
             cfg.note = _f('%s_note' % ct)
             saved.append(ct_name)
@@ -10388,10 +10388,10 @@ def commission_coefficient_init():
     defaults = {
         'offline': {'base_ratio': 80.0, 'operate_ratio': 4.0, 'sales_ratio': 5.0,
                     'ryc_base_ratio': 80.0, 'ryc': {'y2': 80.0, 'y3': 80.0, 'y4': 80.0, 'y5': 80.0},
-                    'round_rule': '3', 'team_base_ratio': 80.0},
+                    'round_rule': COMM_ROUND_RULE, 'team_base_ratio': 80.0},
         'internet': {'base_ratio': 80.0, 'operate_ratio': 5.0, 'sales_ratio': 0.0,
                      'ryc_base_ratio': 80.0, 'ryc': {'y2': 80.0, 'y3': 80.0, 'y4': 80.0, 'y5': 80.0},
-                     'round_rule': '3', 'team_base_ratio': 80.0},
+                     'round_rule': COMM_ROUND_RULE, 'team_base_ratio': 80.0},
     }
     for ct, d in defaults.items():
         cfg = CrmCommCoefConfig.query.filter_by(channel_type=ct).first()
@@ -10409,7 +10409,7 @@ def commission_coefficient_init():
         cfg.note = '初始化默认比例'
         cfg.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
     db.session.commit()
-    flash('已按常规比例一键生成：线下 基础80%/销售5%/经营4% ｜ 互联网 基础80%/销售0%/经营5%（RYC2~5佣金比例默认均＝基础佣金比例，可按年单独调整；取整规则默认「四舍五入后减1%取整」，可改）')
+    flash('已按常规比例一键生成：线下 基础80%/销售5%/经营4% ｜ 互联网 基础80%/销售0%/经营5%（RYC2~5佣金比例默认均＝基础佣金比例，可按年单独调整；取整规则已写死为「减1%后数据取整（直接舍去）」）')
     return redirect(url_for('crm.commission_coefficient'))
 
 
