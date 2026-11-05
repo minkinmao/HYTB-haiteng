@@ -9731,7 +9731,9 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
     三层口径（2026-11-05 最终定稿）：
       · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；销售净费 = 签约费用 × 净费比例%（不取整）
       · 子公司层面：销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去；
-                    FYC首佣/销售费用/经营费用 = 销售费用合计 × 对应设置比例%（各截断1位）
+                    FYC首佣 = 合计 × 基础佣金比例 ÷ 净费比例（四舍五入1位）；
+                    销售费用 = 合计 × 销售费用比例 ÷ 净费比例（四舍五入1位）；
+                    经营费用 = 合计 − FYC首佣 − 销售费用（兜底平衡，三项之和恒等合计）
       · 团队长层面：FYC首佣 = 子公司层面 FYC首佣
     销售分公司过滤：选具体省 → 命中该省或全国；选全国 → 仅全国；all → 全部。
     归属月份过滤：month 非空时只取该月数据。
@@ -9810,25 +9812,26 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         _pct_first = Decimal(str(round(first_amt * 100, 4)))
         _net_pct_raw = _pct_first * Decimal(str(net_ratio)) / Decimal('100')   # 百分点，如 4.895
         net = float(_net_pct_raw.quantize(Decimal('0.01'), rounding=ROUND_DOWN)) / 100.0
-        # ---- 子公司层面（威哥 2026-11-05 最终定稿：以「销售费用合计」为基数，各按设置比例计提）----
-        #   销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（取整规则<b>仅</b>用于此处）
-        #   FYC首佣  = 销售费用合计 × 基础佣金比例%
-        #   销售费用 = 销售费用合计 × 销售费用比例%
-        #   经营费用 = 销售费用合计 × 经营费用比例%
-        #   三项各自「保留1位小数、直接舍去」，页面/导出统一显示 2 位小数。
-        #   例（净费比例 89%、80/5/4，签约费用 5.50%）：
-        #       销售费用合计 5.50×89% = 4.895 → 减1 → 3.895 → 舍去 3.00%
-        #       FYC = 3.00×80% = 2.40%；销售 = 3.00×5% = 0.15% → 0.1%；经营 = 3.00×4% = 0.12% → 0.1%
+        # ---- 子公司层面（威哥 2026-11-05 第三次定稿：占净费比例折算 + 经营费用兜底平衡）----
+        #   销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（取整规则仅用于此处）
+        #   FYC首佣  = 销售费用合计 × (基础佣金比例 / 净费比例)  → 四舍五入保留1位
+        #   销售费用 = 销售费用合计 × (销售费用比例 / 净费比例)  → 四舍五入保留1位
+        #   经营费用 = 销售费用合计 − FYC首佣 − 销售费用（平衡项：三项之和必须等于合计，
+        #             求和超出时也从经营费用里扣减）
+        #   例（净费 89%、80/5/4，销售费用合计 7%）：
+        #       FYC = 7×80/89 = 6.2921% → 6.3%；销售 = 7×5/89 = 0.3933% → 0.4%；
+        #       经营 = 7 − 6.3 − 0.4 = 0.3%（比例值 0.3146% → 0.3%，一致）
         _sub_int = int(_net_pct_raw.quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
         _sub_pct = Decimal(str(max(0, _sub_int - 1)))            # 销售费用合计（整数百分点）
         sub_total = float(_sub_pct) / 100.0
         if net_ratio and _sub_pct:
-            _d_base = (_sub_pct * Decimal(str(br)) / Decimal('100')) \
-                .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-            _d_sales = (_sub_pct * Decimal(str(sr)) / Decimal('100')) \
-                .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
-            _d_op = (_sub_pct * Decimal(str(orr)) / Decimal('100')) \
-                .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
+            _nr = Decimal(str(net_ratio))
+            _d_base = (_sub_pct * Decimal(str(br)) / _nr).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+            _d_sales = (_sub_pct * Decimal(str(sr)) / _nr).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+            # 经营费用吃余额，保证「FYC + 销售 + 经营 = 销售费用合计」严格闭合
+            _d_op = _sub_pct - _d_base - _d_sales
+            if _d_op < 0:                       # 极端配置下（比例之和超标）不让经营费用为负
+                _d_op = Decimal('0')
         else:
             _d_base = _d_op = _d_sales = Decimal('0')
         base = float(_d_base) / 100.0                            # 子公司·FYC首佣

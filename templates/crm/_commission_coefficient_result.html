@@ -169,9 +169,9 @@
         <td style="text-align:right" class="mono num" title="销售净费 = 签约费用 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营），股东层面不取整">{{ pct(r.net) }}</td>
         {% endif %}
         {% if level in ('all','subsidiary') %}
-        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 基础佣金比例 {{ '%.0f'|format(r.base_ratio) }}%，保留1位直接舍去">{{ '%.2f'|format(r.base*100) }}%</td>
-        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 销售费用比例 {{ '%.0f'|format(r.sales_ratio) }}%，保留1位直接舍去">{{ '%.2f'|format(r.sales*100) }}%</td>
-        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 经营费用比例 {{ '%.0f'|format(r.op_ratio) }}%，保留1位直接舍去">{{ '%.2f'|format(r.op*100) }}%</td>
+        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 基础佣金比例 {{ '%.0f'|format(r.base_ratio) }}% ÷ 净费比例 {{ '%.2f'|format(r.net_ratio) }}%，四舍五入保留1位">{{ '%.2f'|format(r.base*100) }}%</td>
+        <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 销售费用比例 {{ '%.0f'|format(r.sales_ratio) }}% ÷ 净费比例 {{ '%.2f'|format(r.net_ratio) }}%，四舍五入保留1位">{{ '%.2f'|format(r.sales*100) }}%</td>
+        <td style="text-align:right" class="mono num" title="经营费用兜底平衡 = 销售费用合计 − FYC首佣 − 销售费用（比例值 {{ '%.0f'|format(r.op_ratio) }}% ÷ 净费比例仅供参考）">{{ '%.2f'|format(r.op*100) }}%</td>
         <td style="text-align:right;color:#C86432" class="mono num" title="销售费用合计 = 签约费用 {{ '%.2f'|format(r.sign_total*100) }}% × 净费比例 {{ '%.2f'|format(r.net_ratio) }}% → 减1 → 直接舍去">{{ pct(r.sub_total) }}</td>
         {% endif %}
         {% if level in ('all','team') %}
