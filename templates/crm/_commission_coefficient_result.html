@@ -166,7 +166,7 @@
         {% endif %}
         {% if level in ('all','shareholder') %}
         <td style="text-align:right" class="mono num" title="签约费用 = 首佣合计 = FYC + 首年方案">{{ pct(r.sign_total) }}</td>
-        <td style="text-align:right" class="mono num" title="销售净费 = 签约费用 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营）→ 取整 → 减1">{{ pct(r.net) }}</td>
+        <td style="text-align:right" class="mono num" title="销售净费 = 签约费用 × 净费比例 {{ '%.2f'|format(r.net_ratio) }}%（基础+销售+经营），股东层面不取整">{{ pct(r.net) }}</td>
         {% endif %}
         {% if level in ('all','subsidiary') %}
         <td style="text-align:right" class="mono num" title="销售费用合计 {{ '%.2f'|format(r.sub_total*100) }}% × 基础佣金比例 {{ '%.0f'|format(r.base_ratio) }}%，保留1位直接舍去">{{ '%.2f'|format(r.base*100) }}%</td>

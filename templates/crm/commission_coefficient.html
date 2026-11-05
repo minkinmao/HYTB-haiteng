@@ -186,7 +186,7 @@
           <div class="coefline"><span>2、销售费用比例</span><b class="pc">{{ '%.2f'|format(cfg.sales_ratio or 0) }}%</b></div>
           <div class="coefline"><span>3、经营费用比例</span><b class="pc">{{ '%.2f'|format(cfg.operate_ratio or 0) }}%</b></div>
           <div class="coefline"><span>→ 销售净费比例 <i style="font-style:normal;color:#9C9288;font-size:11.5px">（自动＝基础+销售+经营）</i></span><b class="pc">{{ '%.2f'|format(net_ratio_both[ct]) }}%</b></div>
-          <div class="coefline"><span>4、销售净费取整规则</span><b class="pc" style="font-size:12.5px">
+          <div class="coefline"><span>4、子公司销售费用合计取整规则</span><b class="pc" style="font-size:12.5px">
             签约费用×净费比例% → 减1% → 直接舍去</b></div>
           <div class="coefline"><span>5、RYC 佣金比例</span><b class="pc" style="font-size:12.5px">
             {% for yn, ys in [('y2','RYC2'),('y3','RYC3'),('y4','RYC4'),('y5','RYC5')] %}{% set v = cfg|attr('ryc_ratio_' ~ yn) %}{{ ys }} {% if v is none %}沿用{% elif v == 0 %}0.00%{% else %}{{ '%.2f'|format(v) }}%{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</b></div>
@@ -200,7 +200,7 @@
         {% if any_locked %}
         <span class="hint" style="color:#B05A26">系数已进入<b>归档保护</b>（{{ backup_lock.offline.month if backup_lock.offline is not none else '' }}{{ ' / ' if backup_lock.offline is not none and backup_lock.internet is not none else '' }}{{ backup_lock.internet.month if backup_lock.internet is not none else '' }}）：一键初始化已停用，如需调整请在下方录入区修改，并在确认弹窗勾选「我已确认覆盖已备份系数」。</span>
         {% else %}
-        <span class="hint">线下 基础80/销售5/经营4 ｜ 互联网 基础80/销售0/经营5 ｜ RYC2~5佣金比例默认＝基础佣金比例 ｜ 销售净费取整规则已写死＝签约费用×净费比例% → 减1% → 直接舍去</span>
+        <span class="hint">线下 基础80/销售5/经营4 ｜ 互联网 基础80/销售0/经营5 ｜ RYC2~5佣金比例默认＝基础佣金比例 ｜ 取整规则（仅用于子公司销售费用合计，股东净费不取整）＝签约费用×净费比例% → 减1% → 直接舍去</span>
         {% endif %}
       </form>
       <div style="margin-bottom:10px">
@@ -238,7 +238,7 @@
                        value="{{ '%.2f'|format(cfg.operate_ratio or 0) }}" style="width:90px"></div>
               <div class="coefline"><span>→ 销售净费比例(%) <i style="font-style:normal;color:#9C9288">自动＝基础+销售+经营</i></span>
                 <b class="pc" id="{{ ct }}_net_show">{{ '%.2f'|format(net_ratio_both[ct]) }}%</b></div>
-              <div class="coefline"><span>4、销售净费取整规则</span>
+              <div class="coefline"><span>4、子公司销售费用合计取整规则</span>
                 <b class="pc" style="font-size:12.5px">签约费用×净费比例% → 减1% → 直接舍去</b></div>
               <div class="coefline" style="display:block"><span>5、RYC 佣金比例(%) <i style="font-style:normal;color:#9C9288">（第二~五年分年期设定，每年可不同 · 留空/0＝沿用基础佣金比例）</i></span></div>
               <div class="ryc-grid">
@@ -254,8 +254,8 @@
                 {% else %}
                 默认：基础佣金 80% / 销售费用 0 / 经营费用 5%（销售净费比例自动＝80+0+5＝85%）。
                 {% endif %}
-                <br>股东·销售净费 = 签约费用（即首佣合计）×（基础佣金比例 + 销售费用比例 + 经营费用比例）% → 取整 → 减1，改任一比例自动重算。
-                <br>子公司·销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（与股东·销售净费同值）。
+                <br>股东·销售净费 = 签约费用（即首佣合计）×（基础佣金比例 + 销售费用比例 + 经营费用比例）%，直接相乘、不取整，改任一比例自动重算。
+                <br>子公司·销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（取整规则仅用于此处）。
                 <br>子公司·FYC首佣 = 销售费用合计 × 基础佣金比例%；销售费用 = 销售费用合计 × 销售费用比例%；经营费用 = 销售费用合计 × 经营费用比例%（三项各保留1位、直接舍去，显示2位小数）。
                 <br>团队长·FYC首佣 = 子公司层面 FYC首佣。
                 <br>RYC 分年期：RYC2佣金 = RYC2 × RYC2佣金比例%，RYC3/4/5 同理（留空沿用基础佣金比例）。
@@ -456,7 +456,7 @@ function askConfirmCoef(){
     html += '<div class="cfrow"><b>' + nm + '</b><br>'
           + '基础佣金 ' + b + '% ／ 销售费用 ' + s + '% ／ 经营费用 ' + o + '%'
           + '<br><span style="color:#C86432">→ 销售净费比例 ' + (isNaN(nr) ? '—' : nr.toFixed(2)) + '%（自动＝三项相加）</span>'
-          + '<br><span>取整规则：' + rule + '</span>'
+          + '<br><span>子公司销售费用合计取整：' + rule + '</span>'
           + '<br><span>' + ryc.join(' ／ ') + '</span></div>';
   }
   document.getElementById('cfBody').innerHTML = html;

@@ -9595,11 +9595,13 @@ def _comm_net_ratio_of(cfg):
 def _comm_trunc_pct(v):
     """模板显示用：占保费比例 → 百分比文本，第三位起直接舍去（四舍五也舍，不四舍五入）。
 
-    用 Decimal 截断而非浮点 floor：避免 0.0425 → 424.9999 → 4.24% 这类尾差。
+    先 round 到 6 位消掉浮点尾差（如 18.24/100 → 0.18239999999999998 会误显示 18.23%），
+    再用 Decimal 截断而非浮点 floor：避免 0.0425 → 424.9999 → 4.24% 这类尾差。
     """
     if not v:
         return ''
-    return str((Decimal(str(v)) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_DOWN)) + '%'
+    d = Decimal(str(round(float(v) * 100, 6)))
+    return str(d.quantize(Decimal('0.01'), rounding=ROUND_DOWN)) + '%'
 
 
 def _comm_pct_num(v):
@@ -9727,9 +9729,9 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
     """生成结果行（含三层口径 + 首年/续期明细），并按 销售分公司/归属月份/保司/缴别/产品 过滤。
 
     三层口径（2026-11-05 最终定稿）：
-      · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；销售净费 = 签约费用 × 净费比例% → 取整 → 减1
-      · 子公司层面：销售费用合计 = 销售净费（同源同值）；FYC首佣/销售费用/经营费用
-                    = 销售费用合计 × 对应设置比例%（各截断1位）
+      · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；销售净费 = 签约费用 × 净费比例%（不取整）
+      · 子公司层面：销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去；
+                    FYC首佣/销售费用/经营费用 = 销售费用合计 × 对应设置比例%（各截断1位）
       · 团队长层面：FYC首佣 = 子公司层面 FYC首佣
     销售分公司过滤：选具体省 → 命中该省或全国；选全国 → 仅全国；all → 全部。
     归属月份过滤：month 非空时只取该月数据。
@@ -9801,15 +9803,15 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         # 股东·净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例（随渠道自动测算）
         #   线下默认 80+5+4=89%；互联网默认 80+0+5=85%
         net_ratio = _comm_net_ratio_of(cfg)
-        # 股东·销售净费 = 签约费用 × 净费比例% → 取整（直接舍去小数）→ 减1
-        #   口径（威哥 2026-11-05 定稿）：例 5.50% × 89% = 4.895% → 取整 4 → 减1 → 3.0%
+        # 股东·销售净费 = 签约费用 × 净费比例%
+        #   口径（威哥 2026-11-05 最终确认）：股东层面不套用取整规则，直接相乘（页面/导出显示2位）
+        #   例：签约费用 5.50% × 89% = 4.895% → 4.89%
         #   线下 89% / 互联网 85%，按渠道自动取值
         _pct_first = Decimal(str(round(first_amt * 100, 4)))
-        _net_int = int((_pct_first * Decimal(str(net_ratio)) / Decimal('100'))
-                       .quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
-        net = float(max(0, _net_int - 1)) / 100.0              # 股东·销售净费
+        _net_pct_raw = _pct_first * Decimal(str(net_ratio)) / Decimal('100')   # 百分点，如 4.895
+        net = float(_net_pct_raw.quantize(Decimal('0.01'), rounding=ROUND_DOWN)) / 100.0
         # ---- 子公司层面（威哥 2026-11-05 最终定稿：以「销售费用合计」为基数，各按设置比例计提）----
-        #   销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（与股东·销售净费同源同值）
+        #   销售费用合计 = 签约费用 × 净费比例% → 减1% → 直接舍去（取整规则<b>仅</b>用于此处）
         #   FYC首佣  = 销售费用合计 × 基础佣金比例%
         #   销售费用 = 销售费用合计 × 销售费用比例%
         #   经营费用 = 销售费用合计 × 经营费用比例%
@@ -9817,7 +9819,9 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         #   例（净费比例 89%、80/5/4，签约费用 5.50%）：
         #       销售费用合计 5.50×89% = 4.895 → 减1 → 3.895 → 舍去 3.00%
         #       FYC = 3.00×80% = 2.40%；销售 = 3.00×5% = 0.15% → 0.1%；经营 = 3.00×4% = 0.12% → 0.1%
-        _sub_pct = Decimal(str(round(net * 100, 4)))             # 销售费用合计（整数百分点）
+        _sub_int = int(_net_pct_raw.quantize(Decimal('0.0001'), rounding=ROUND_DOWN))
+        _sub_pct = Decimal(str(max(0, _sub_int - 1)))            # 销售费用合计（整数百分点）
+        sub_total = float(_sub_pct) / 100.0
         if net_ratio and _sub_pct:
             _d_base = (_sub_pct * Decimal(str(br)) / Decimal('100')) \
                 .quantize(Decimal('0.1'), rounding=ROUND_DOWN)
@@ -9830,7 +9834,6 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         base = float(_d_base) / 100.0                            # 子公司·FYC首佣
         op = float(_d_op) / 100.0                                # 子公司·经营费用
         sales = float(_d_sales) / 100.0                          # 子公司·销售费用
-        sub_total = net                                          # 子公司·销售费用合计（= 股东·销售净费）
         # 团队长·FYC首佣 = 子公司·FYC首佣（保持不变）
         team = base
         out.append({
@@ -9844,7 +9847,7 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
             'first_year_comm': first_amt,  # 首佣合计 = FYC + 首年方案
             'sign_total': sign_total, 'net': net, 'net_ratio': net_ratio,
             'base': base, 'sales': sales, 'op': op, 'team': team,
-            'sub_total': sub_total,   # 子公司·销售费用合计 = FYC首佣 + 销售费用 + 经营费用
+            'sub_total': sub_total,   # 子公司·销售费用合计（= 净费比例减1舍去后的基数）
             'base_ratio': br, 'sales_ratio': sr, 'op_ratio': orr,   # 明细作用域提示用
             'ryc_comm': ryc,
             'ryc_ratio': {'y2': rr2, 'y3': rr3, 'y4': rr4, 'y5': rr5},
