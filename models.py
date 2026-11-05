@@ -3063,6 +3063,8 @@ class CrmProductCommission(db.Model):
     is_internet = db.Column(db.Integer, default=0, comment='是否互联网产品：1=E列="是" / 0=空(线下)')
     internet_heavy = db.Column(db.String(16), default='', comment='互险网重疾标识')
     region = db.Column(db.String(128), default='', comment='投保区域')
+    issue_platform = db.Column(db.String(128), default='', comment='出单平台')
+    platform_name = db.Column(db.String(128), default='', comment='平台名称')
     coverage_term = db.Column(db.String(64), default='', comment='保障期限')
     pay_period = db.Column(db.String(16), default='', comment='缴费期')
     purchase_y1 = db.Column(db.Float, default=0, comment='首年采购')
