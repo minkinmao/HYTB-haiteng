@@ -79,9 +79,6 @@
   .crm-table.res-tb td.c-prod .ell{display:block;max-width:230px;overflow:hidden;
         text-overflow:ellipsis;white-space:nowrap}
   .crm-table.res-tb td.num,.crm-table.res-tb th.num{text-align:right;white-space:nowrap;min-width:66px}
-  /* 一键导出栏（结果表上方，右对齐，随筛选栏一起可见） */
-  .export-bar{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap;margin:0 0 8px}
-  .export-bar a.crm-btn{text-decoration:none;display:inline-block}
   /* ---- 月度备份区 ---- */
   .bk-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:10px}
   .bk-bar .hint{margin:0;max-width:760px}
@@ -100,8 +97,19 @@
         border:1px solid #E6B33C;background:#FFF8E6;border-radius:8px;font-size:12.5px;color:#8A5A12}
   /* 锚点跳转时避开顶部导航 */
   #bkSec{scroll-margin-top:80px}
-  /* ---- 销售系数数据管理：弹窗入口与模块卡片 ---- */
-  .mgr-entry{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  /* ---- 销售系数数据管理：右上角入口 + 弹窗卡片 ---- */
+  .page-hd{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+           margin:0 0 16px;padding:14px 18px;border-radius:14px;border:1px solid #EFE3D4;
+           background:linear-gradient(135deg,#FFFDF9 0%,#FAF1E6 100%);
+           box-shadow:0 2px 10px rgba(42,42,42,.045)}
+  .page-hd h2{font-size:19px;margin:0;color:#9C4E2C;letter-spacing:.6px;font-weight:700}
+  .mgr-btn{padding:7px 17px;font-size:13px;border-radius:10px;white-space:nowrap;
+           box-shadow:0 3px 10px rgba(200,100,50,.22)}
+  .mgr-btn:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(200,100,50,.3)}
+  /* 筛选胶囊：柔和过渡 + 悬停反馈 */
+  .ch-filters a,.lvl-filters a{transition:background .15s,color .15s,border-color .15s,box-shadow .15s}
+  .ch-filters a:hover{border-color:#C86432;color:#C86432;background:#FFF8F1}
+  .ch-filters a.on,.lvl-filters a.on{box-shadow:0 2px 8px rgba(156,78,44,.2)}
   .mgr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;padding:6px 2px 2px}
   .mgr-card{display:flex;flex-direction:column;gap:6px;padding:16px;background:#FFFDFA;border:1px solid #EADFCF;
             border-radius:12px;cursor:pointer;transition:.15s;box-shadow:0 2px 8px rgba(42,42,42,.04)}
@@ -114,13 +122,14 @@
   .mask .mbd .crm-card{box-shadow:none;border:none;padding:0}
 </style>
 
-<h2 style="font-size:18px;margin:0 0 6px">产品佣金系数管理</h2>
+<div class="page-hd">
+  <h2>产品佣金系数管理</h2>
+  {% if can_import or can_coef %}
+  <button class="crm-btn pri mgr-btn" type="button" onclick="openSalesMgr()">⚙ 销售系数数据管理</button>
+  {% endif %}
+</div>
 
 {% if can_import or can_coef %}
-<div class="mgr-entry">
-  <button class="crm-btn pri" type="button" onclick="openSalesMgr()">⚙ 销售系数数据管理</button>
-  <span class="hint">导入 / 系数设置 / 月度备份 集中管理 · 点击弹出对应操作</span>
-</div>
 
 <!-- ========== 一级弹窗：销售系数数据管理 ========== -->
 <div class="mask" id="salesMgrMask">

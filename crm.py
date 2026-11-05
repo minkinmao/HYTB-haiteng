@@ -10140,12 +10140,12 @@ def commission_coefficient_export():
         col += 1; pct_cols[col] = 2
         col += 1; pct_cols[col] = 2
     if level in ('all', 'subsidiary'):
-        heads += ['FYC首佣', '销售费用', '销售费用合计', '经营费用']
+        heads += ['FYC首佣', '销售费用', '经营费用', '销售费用合计']
         groups.append(('子公司层面', 4))
         col += 1; pct_cols[col] = 1     # FYC首佣：1 位小数（截断）
         col += 1; pct_cols[col] = 1     # 销售费用：1 位小数（截断）
-        col += 1; pct_cols[col] = 2     # 销售费用合计：与「首佣合计」一致，2 位小数
         col += 1; pct_cols[col] = 1     # 经营费用：1 位小数（截断）
+        col += 1; pct_cols[col] = 2     # 销售费用合计：与「首佣合计」一致，2 位小数
     if level in ('all', 'team'):
         heads += ['FYC首佣']
         groups.append(('团队长层面', 1))
@@ -10173,7 +10173,7 @@ def commission_coefficient_export():
             line += [_comm_pct_num(r['sign_total']), _comm_pct_num(r['net'])]
         if level in ('all', 'subsidiary'):
             line += [_comm_pct_num(r['base']), _comm_pct_num(r['sales']),
-                     _comm_pct_num(r['sub_total']), _comm_pct_num(r['op'])]
+                     _comm_pct_num(r['op']), _comm_pct_num(r['sub_total'])]
         if level in ('all', 'team'):
             line += [_comm_pct_num(r['team'])]
         line += [_comm_ryc_pct_num(r['ryc_comm']['y2'], r['ryc_hide_lt1']),
