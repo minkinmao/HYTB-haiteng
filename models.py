@@ -3143,6 +3143,51 @@ class CrmCommCoefConfig(db.Model):
     note = db.Column(db.String(200), default='', comment='备注')
 
 
+class CrmCommPerm(db.Model):
+    """产品佣金系数 · 用户级权限（2026-11-05 威哥需求：管理员可决定每个用户是否开放）。
+
+    两项彼此独立：
+      · allow_global：可使用「全公司统一系数」进行销售系数数据管理（导入 / 系数设置 / 月度备份）
+      · allow_custom：可定制「个人专属产品销售系数」，支持保存多套方案、导出、按方案查询
+    系统管理员(is_admin)默认两项全开，不受本表限制。
+    """
+    __tablename__ = 'crm_comm_perm'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False, comment='用户')
+    allow_global = db.Column(db.Boolean, default=False, nullable=False,
+                             comment='允许使用全公司统一系数进行销售系数数据管理')
+    allow_custom = db.Column(db.Boolean, default=False, nullable=False,
+                             comment='允许定制个人专属产品销售系数（保存/导出/查询）')
+    updated_at = db.Column(db.String(20), default='', comment='更新时间')
+    user = db.relationship('User', backref=db.backref('comm_perm', uselist=False))
+
+
+class CrmUserCoef(db.Model):
+    """产品佣金系数 · 个人定制方案（一人多套，每套 = 渠道 + 三个比例 + 方案名）。
+
+    查询时选一套方案，系统用该方案的比例覆盖公司统一系数参与计算，可导出 Excel。
+    与 CrmCommCoefConfig 的区别：后者是全公司统一口径，本表只对创建者本人生效。
+    """
+    __tablename__ = 'crm_user_coef'
+    __table_args__ = (db.UniqueConstraint('user_id', 'name', name='uq_user_coef_name'),)
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True, comment='创建人')
+    name = db.Column(db.String(64), default='', comment='方案名（同一用户内唯一）')
+    channel_type = db.Column(db.String(16), default='offline', comment='offline 线下 / internet 互联网')
+    base_ratio = db.Column(db.Float, default=80, comment='基础佣金比例(%)')
+    sales_ratio = db.Column(db.Float, default=5, comment='销售费用比例(%)')
+    operate_ratio = db.Column(db.Float, default=4, comment='经营费用比例(%)')
+    note = db.Column(db.String(200), default='', comment='备注')
+    created_at = db.Column(db.String(20), default='', comment='创建时间')
+    updated_at = db.Column(db.String(20), default='', comment='更新时间')
+    user = db.relationship('User', backref='user_coefs')
+
+    @property
+    def net_ratio(self):
+        """销售净费比例(%) = 基础 + 销售 + 经营"""
+        return (self.base_ratio or 0) + (self.sales_ratio or 0) + (self.operate_ratio or 0)
+
+
 class CrmCommCoefBackup(db.Model):
     """产品佣金系数「月度备份」：每月归档一份当期生效系数 + 当期计算结果汇总。
 

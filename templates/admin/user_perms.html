@@ -25,6 +25,17 @@
   .btn:hover{background:var(--brand-deep)}
   .lnk{color:var(--brand-deep);font-size:13px}
   .adm-note{background:#EDEAE6;color:#4A443E;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+  /* 产品佣金系数专项权限（2026-11-05） */
+  .crmperm{margin-top:18px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--brand);
+           border-radius:14px;padding:16px 20px}
+  .crmperm-hd{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--ink);margin-bottom:4px}
+  .crmperm-sub{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.7}
+  .crmperm-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px dashed var(--line);font-size:13px}
+  .crmperm-item:first-of-type{border-top:none;padding-top:2px}
+  .crmperm-item input{width:auto;margin:3px 0 0}
+  .crmperm-item .t{font-weight:600;color:var(--ink);white-space:nowrap;min-width:130px}
+  .crmperm-item .d{color:var(--ink-2);line-height:1.65}
+  .crmperm-item .d b{color:var(--brand-deep)}
 </style>
 
 <div class="head">
@@ -74,6 +85,21 @@
       </div>
     </div>
     {% endfor %}
+  </div>
+
+  <div class="crmperm">
+    <div class="crmperm-hd">产品佣金系数 · 专项权限</div>
+    <div class="crmperm-sub">与左侧菜单权限相互独立：这两项决定该用户在「产品佣金系数」页面里能做什么，未勾选则只能查看公司统一口径的结果清单。</div>
+    <label class="crmperm-item">
+      <input type="checkbox" name="comm_global" value="1" {{ 'checked' if u.is_admin or (crm_perm and crm_perm.allow_global) else '' }} {{ 'disabled' if u.is_admin else '' }}>
+      <span class="t">① 统一系数数据管理</span>
+      <span class="d">允许使用<b>全公司统一系数</b>：查看/导入产品合约数据、调整销售系数与分配比例、查看月度备份</span>
+    </label>
+    <label class="crmperm-item">
+      <input type="checkbox" name="comm_custom" value="1" {{ 'checked' if u.is_admin or (crm_perm and crm_perm.allow_custom) else '' }} {{ 'disabled' if u.is_admin else '' }}>
+      <span class="t">② 个人专属系数定制</span>
+      <span class="d">允许定制<b>个人专属产品销售系数</b>：可建多套方案、保存、按方案查询并导出 Excel（只对本人生效，不影响他人）</span>
+    </label>
   </div>
 
   <div class="form-actions">

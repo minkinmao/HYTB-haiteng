@@ -37,6 +37,7 @@ from models import (db, Insurer, InsurerBranch, InsurerContact, InsurerLinkman, 
                     CrmTaxConfig, CrmCustomer, CrmPolicyOrder, CrmPremiumFactor, CrmProposal,
                     CrmProposalProduct, CrmFetchConfig,
                     CrmProductCommission, CrmCommCoefConfig, CrmCommCoefBackup,
+                    CrmCommPerm, CrmUserCoef,
                     COMM_CHANNELS, COMM_ITEMS, ROUND_RULES, COMM_ROUND_RULE)
 from app import login_required, permission_required
 
@@ -9565,6 +9566,37 @@ def proposal_engine_delete():
 #           经营费用 = V × 经营费用比例%
 #           再跨 6 项求和；线下/互联网各自套用本渠道系数。
 
+def _comm_perm_of(uid=None):
+    """当前用户的「产品佣金系数」两项用户级权限 → (allow_global, allow_custom)。
+
+    allow_global：可用全公司统一系数做销售系数数据管理（导入/设置/备份）
+    allow_custom：可定制个人专属系数方案（保存/导出/查询）
+    系统管理员默认两项全开；普通用户读 CrmCommPerm（未登记 = 全关）。
+    """
+    uid = uid or session.get('user_id')
+    user = User.query.get(uid) if uid else None
+    if not user:
+        return False, False
+    if user.is_admin:
+        return True, True
+    p = CrmCommPerm.query.filter_by(user_id=user.id).first()
+    if not p:
+        return False, False
+    return bool(p.allow_global), bool(p.allow_custom)
+
+
+def _comm_mycoef_of(coef_id, uid=None):
+    """取当前用户的个性化系数方案（只能取自己的；无权限/非本人 → None）。"""
+    allow_global, allow_custom = _comm_perm_of(uid)
+    if not allow_custom or not coef_id:
+        return None
+    uid = uid or session.get('user_id')
+    try:
+        return CrmUserCoef.query.filter_by(id=int(coef_id), user_id=uid).first()
+    except (TypeError, ValueError):
+        return None
+
+
 def _comm_coef_of(channel_type):
     """取某渠道类型的系数配置；未配置则返回带默认值的「瞬态」实例（不落库）。"""
     cfg = CrmCommCoefConfig.query.filter_by(channel_type=channel_type).first()
@@ -9725,8 +9757,12 @@ def _comm_valid_insurer(s):
 
 
 
-def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_period=None, product=None):
+def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_period=None, product=None,
+                     user_coef=None):
     """生成结果行（含三层口径 + 首年/续期明细），并按 销售分公司/归属月份/保司/缴别/产品 过滤。
+
+    user_coef：个人定制方案（CrmUserCoef）—— 命中该方案渠道的产品，用方案的三个比例
+               覆盖公司统一系数，其余渠道仍按公司系数；None = 全按公司系数。
 
     三层口径（2026-11-05 最终定稿）：
       · 股东层面：签约费用 = 首佣合计(FYC+首年方案)；销售净费 = 签约费用 × 净费比例%（不取整）
@@ -9766,6 +9802,11 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         br = cfg.base_ratio or 0        # 基础佣金比例%（首年佣金系数）
         orr = cfg.operate_ratio or 0    # 经营费用比例%（仅首年）
         sr = cfg.sales_ratio or 0       # 销售费用比例%（仅首年；只参与净费比例测算，不再单独计提）
+        # 个人定制方案：命中渠道时用方案比例覆盖（威哥 2026-11-05）
+        if user_coef is not None and (user_coef.channel_type or 'offline') == ct:
+            br = user_coef.base_ratio or 0
+            sr = user_coef.sales_ratio or 0
+            orr = user_coef.operate_ratio or 0
         # RYC 分年期佣金比例（每年可不同）：
         #   本年系数「显式值优先」，含 0 = 该年续期佣金 0%（不再把 0 当作「未设→沿用基础比例」）；
         #   仅当该年系数为 None（确实未配置）时才回退到统一兜底 ryc_base_ratio，再退基础佣金比例。
@@ -9804,7 +9845,9 @@ def _comm_build_rows(channel=None, region='all', month=None, insurer=None, pay_p
         sign_total = first_amt                                  # 股东·签约费用
         # 股东·净费比例 = 基础佣金比例 + 销售费用比例 + 经营费用比例（随渠道自动测算）
         #   线下默认 80+5+4=89%；互联网默认 80+0+5=85%
-        net_ratio = _comm_net_ratio_of(cfg)
+        #   应用个人方案时直接取方案三项之和（br/sr/orr 已被方案覆盖）
+        _override = user_coef is not None and (user_coef.channel_type or 'offline') == ct
+        net_ratio = (br + sr + orr) if _override else _comm_net_ratio_of(cfg)
         # 股东·销售净费 = 签约费用 × 净费比例%
         #   口径（威哥 2026-11-05 最终确认）：股东层面不套用取整规则，直接相乘（页面/导出显示2位）
         #   例：签约费用 5.50% × 89% = 4.895% → 4.89%
@@ -10008,11 +10051,18 @@ def commission_coefficient():
     if not month:
         month = month_options[0] if month_options else ''
     month_filter = month if month and month != 'all' else None
+    # 个性化系数方案（有 allow_custom 权限时才能用，且只能用自己的方案）
+    _allow_global, _allow_custom = _comm_perm_of()
+    _my_id = (request.args.get('mycoef') or '').strip()
+    mycoef = _comm_mycoef_of(_my_id) if _my_id else None
+    mycoef_opts = (CrmUserCoef.query.filter_by(user_id=session.get('user_id'))
+                   .order_by(CrmUserCoef.updated_at.desc(), CrmUserCoef.id.desc()).all()
+                   if _allow_custom else [])
     rows, cfgs = _comm_build_rows(
         None if channel == 'all' else channel, region, month_filter,
         None if insurer == 'all' else insurer,
         None if pay_period == 'all' else pay_period,
-        product or None)
+        product or None, user_coef=mycoef)
     # 计数按所选月份（或全部）；排除历史遗留的说明/活动行（无产品名）
     base_q = CrmProductCommission.query.filter(
         CrmProductCommission.product.isnot(None), CrmProductCommission.product != '')
@@ -10025,6 +10075,9 @@ def commission_coefficient():
     cfgs_both = {ct: _comm_coef_of(ct) for ct in ('offline', 'internet')}
     # 销售净费比例（基础+销售+经营，随渠道自动测算）：线下默认 89% / 互联网默认 85%
     net_ratio_both = {ct: _comm_net_ratio_of(cfgs_both[ct]) for ct in ('offline', 'internet')}
+    # 应用个人方案时，被覆盖渠道的净费比例跟着方案走（表头展示与实际一致）
+    if mycoef is not None:
+        net_ratio_both[mycoef.channel_type or 'offline'] = mycoef.net_ratio
     region_opts = _comm_region_options()
     insurer_opts = sorted({m[0] for m in CrmProductCommission.query
                            .filter(CrmProductCommission.insurer.isnot(None),
@@ -10075,8 +10128,9 @@ def commission_coefficient():
                                net_ratio_both=net_ratio_both,
                                region_opts=region_opts, insurer_opts=insurer_opts,
                                pay_period_opts=pay_period_opts, product_opts=product_opts,
-                               can_import=_can('crm.commission.import'),
-                               can_coef=_can('crm.commission.coef'))
+                               can_import=_can('crm.commission.import') or _allow_global,
+                               can_coef=_can('crm.commission.coef') or _allow_global,
+                               mycoef=mycoef)
     return render_template('crm/commission_coefficient.html',
                            rows=rows, channel=channel, region=region, level=level,
                            insurer=insurer, pay_period=pay_period, product=product,
@@ -10084,13 +10138,92 @@ def commission_coefficient():
                            counts={'total': total, 'internet': n_int, 'offline': n_off},
                            imported_at=(imported.imported_at if imported else ''),
                            cfgs=cfgs_both, net_ratio_both=net_ratio_both, items=COMM_ITEMS, channels=COMM_CHANNELS,
-                           round_rules=ROUND_RULES, can_import=_can('crm.commission.import'),
-                           can_coef=_can('crm.commission.coef'),
-                           can_manage=_can('crm.commission.import') or _can('crm.commission.coef'),
+                           round_rules=ROUND_RULES,
+                           can_import=_can('crm.commission.import') or _allow_global,
+                           can_coef=_can('crm.commission.coef') or _allow_global,
+                           can_manage=(_can('crm.commission.import') or _can('crm.commission.coef')
+                                       or _allow_global),
+                           can_custom=_allow_custom, mycoef=mycoef, mycoef_opts=mycoef_opts,
                            region_opts=region_opts, insurer_opts=insurer_opts,
                            pay_period_opts=pay_period_opts, product_opts=product_opts,
                            backups=backups, backup_lock=backup_lock,
                            backup_lock_months=backup_lock_months)
+
+
+@bp.route('/crm/commission-coefficient/mycoef/save', methods=['POST'])
+@login_required
+@permission_required('crm.view')
+def commission_mycoef_save():
+    """保存/更新个人定制系数方案（需 allow_custom 权限；同名方案覆盖更新）。
+
+    保存后仍留在本页，并把 mycoef 指向该方案 —— 立即按新方案查询，可直接导出。
+    """
+    _allow_global, allow_custom = _comm_perm_of()
+    back = (request.form.get('back_qs') or '').strip().lstrip('?')
+    # 原查询串里可能已带旧方案的 mycoef，先剔掉，避免拼出新旧两个参数（取到的是旧的）
+    back = re.sub(r'(^|&)mycoef=[^&]*', '', back).strip('&')
+    if not allow_custom:
+        flash('没有「个人定制系数」权限，请联系管理员开通')
+        return redirect(url_for('crm.commission_coefficient') + ('?' + back if back else ''))
+    uid = session.get('user_id')
+    cid = request.form.get('id') or ''
+    name = (request.form.get('name') or '').strip()
+    ct = request.form.get('channel_type') or 'offline'
+    if ct not in ('offline', 'internet'):
+        ct = 'offline'
+    try:
+        br = float(request.form.get('base_ratio') or 0)
+        sr = float(request.form.get('sales_ratio') or 0)
+        orr = float(request.form.get('operate_ratio') or 0)
+    except (TypeError, ValueError):
+        flash('比例请填写数字')
+        return redirect(url_for('crm.commission_coefficient') + ('?' + back if back else ''))
+    if not name:
+        flash('请先填写方案名称')
+        return redirect(url_for('crm.commission_coefficient') + ('?' + back if back else ''))
+    if any(x < 0 or x > 100 for x in (br, sr, orr)) or (br + sr + orr) <= 0:
+        flash('比例需在 0~100 之间，且三项之和必须大于 0')
+        return redirect(url_for('crm.commission_coefficient') + ('?' + back if back else ''))
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    obj = None
+    if cid:
+        try:
+            obj = CrmUserCoef.query.filter_by(id=int(cid), user_id=uid).first()
+        except (TypeError, ValueError):
+            obj = None
+    if obj is None:
+        # 同名方案直接覆盖（同一用户内方案名唯一）
+        obj = CrmUserCoef.query.filter_by(user_id=uid, name=name).first()
+    if obj is None:
+        obj = CrmUserCoef(user_id=uid, name=name, created_at=now)
+        db.session.add(obj)
+    obj.name = name
+    obj.channel_type = ct
+    obj.base_ratio, obj.sales_ratio, obj.operate_ratio = br, sr, orr
+    obj.note = (request.form.get('note') or '').strip()[:200]
+    obj.updated_at = now
+    db.session.commit()
+    flash('已保存方案「%s」：基础 %g%% / 销售 %g%% / 经营 %g%%（净费 %g%%）'
+          % (name, br, sr, orr, br + sr + orr))
+    q = ('?' + back) if back else '?'
+    return redirect(url_for('crm.commission_coefficient') + q + ('&' if back else '') + 'mycoef=%d' % obj.id)
+
+
+@bp.route('/crm/commission-coefficient/mycoef/<int:cid>/delete', methods=['POST'])
+@login_required
+@permission_required('crm.view')
+def commission_mycoef_delete(cid):
+    """删除自己的定制方案。"""
+    uid = session.get('user_id')
+    obj = CrmUserCoef.query.filter_by(id=cid, user_id=uid).first()
+    if obj:
+        db.session.delete(obj)
+        db.session.commit()
+        flash('已删除方案「%s」' % obj.name)
+    else:
+        flash('方案不存在或不属于当前账号')
+    back = (request.form.get('back_qs') or '').strip().lstrip('?')
+    return redirect(url_for('crm.commission_coefficient') + ('?' + back if back else ''))
 
 
 @bp.route('/crm/commission-coefficient/export')
@@ -10111,11 +10244,14 @@ def commission_coefficient_export():
     if not month:
         month = _comm_latest_month()          # 与页面一致：未指定月份时取最新导入月份
     month_filter = month if month and month != 'all' else None
+    # 导出同样支持个人定制方案（只能用自己的，无权限则自动忽略）
+    _my_id = (request.args.get('mycoef') or '').strip()
+    mycoef = _comm_mycoef_of(_my_id) if _my_id else None
     rows, _cfgs = _comm_build_rows(
         None if channel == 'all' else channel, region, month_filter,
         None if insurer == 'all' else insurer,
         None if pay_period == 'all' else pay_period,
-        product or None)
+        product or None, user_coef=mycoef)
 
     heads = ['保险公司', '险种名称', '渠道', '类型', '出单平台', '平台名称', '是否需要补录', '保障期限', '缴费期', '销售分公司']
     groups = [('产品信息', 10)]
@@ -10170,11 +10306,11 @@ def commission_coefficient_export():
         if level in ('all', 'shareholder'):
             line += [_comm_pct_num(r['sign_total']), _comm_pct_num(r['net'])]
         if level in ('all', 'subsidiary'):
-            # 子公司四项 0 也输出 0.0（页面显示 0.00%，导出保持一致）
-            line += [_comm_pct_num(r['base']) or 0.0, _comm_pct_num(r['sales']) or 0.0,
-                     _comm_pct_num(r['op']) or 0.0, _comm_pct_num(r['sub_total']) or 0.0]
+            # 0 值留空（与页面一致）
+            line += [_comm_pct_num(r['base']), _comm_pct_num(r['sales']),
+                     _comm_pct_num(r['op']), _comm_pct_num(r['sub_total'])]
         if level in ('all', 'team'):
-            line += [_comm_pct_num(r['team']) or 0.0]
+            line += [_comm_pct_num(r['team'])]
         line += [_comm_ryc_pct_num(r['ryc_comm']['y2'], r['ryc_hide_lt1']),
                  _comm_ryc_pct_num(r['ryc_comm']['y3'], r['ryc_hide_lt1']),
                  _comm_ryc_pct_num(r['ryc_comm']['y4'], r['ryc_hide_lt1']),
@@ -10183,7 +10319,12 @@ def commission_coefficient_export():
 
     lv_name = {'all': '全部层级', 'shareholder': '股东层面',
                'subsidiary': '子公司层面', 'team': '团队长层面'}.get(level, '全部层级')
-    title = '产品佣金系数 · %s（归属月份 %s · 单位 %% · 共 %d 条）' % (lv_name, month or '全部', len(data))
+    title = '产品佣金系数 · %s（归属月份 %s · 单位 %% · 共 %d 条）%s' % (
+        lv_name, month or '全部', len(data),
+        ('｜个人方案：%s（%s %g/%g/%g）' % (mycoef.name,
+                                     '线下' if (mycoef.channel_type or 'offline') == 'offline' else '互联网',
+                                     mycoef.base_ratio or 0, mycoef.sales_ratio or 0,
+                                     mycoef.operate_ratio or 0)) if mycoef else '')
     return _xlsx_response('佣金系数' + lv_name, title, heads, data, groups=groups, pct_cols=pct_cols)
 
 

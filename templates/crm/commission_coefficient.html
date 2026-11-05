@@ -120,14 +120,129 @@
   .msec{font-size:14px;font-weight:600;color:#9C4E2C;margin:0 0 12px}
   /* 弹窗内卡片去边框阴影，融入弹窗 */
   .mask .mbd .crm-card{box-shadow:none;border:none;padding:0}
+
+  /* ---- 我的专属系数（个人定制方案，2026-11-05） ---- */
+  .mycoef-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FFF6EA;
+    border:1px solid #EBD3B4;border-left:3px solid #C86432;border-radius:12px;padding:10px 16px;margin-bottom:14px;font-size:13px;color:#6B5D4F}
+  .mycoef-bar b{color:#9C4E2C;font-size:14px}
+  .mycoef-bar .muted{color:#9C9288;font-size:12.5px}
+  .mycoef-bar .tag2{background:#C86432;color:#fff;font-size:11px;padding:2px 8px;border-radius:20px}
+  .lnkbtn{background:none;border:none;color:#9C4E2C;font-size:12.5px;cursor:pointer;padding:4px 6px;text-decoration:underline;font-family:inherit}
+  .lnkbtn:hover{color:#C86432}
+  .lnkbtn.danger{color:#B4453A}
+  .mc-list{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding-right:4px}
+  .mc-item{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#FFFDFA;
+    border:1px solid #EADFCF;border-radius:10px;padding:10px 14px}
+  .mc-item.on{background:#FFF4E8;border-color:#E0A96A;box-shadow:0 2px 8px rgba(180,90,30,.1)}
+  .mc-item .mc-main b{font-size:14px;color:#2A2A2A}
+  .mc-tag{display:inline-block;background:#F0E7DB;color:#7A6A58;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px}
+  .mc-tag.on{background:#C86432;color:#fff}
+  .mc-sub{font-size:12.5px;color:#8A7D6E;margin-top:5px}
+  .mc-sub b{color:#9C4E2C}
+  .mc-time{color:#B9AFA2;margin-left:10px;font-size:11.5px}
+  .mc-ops{display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .mc-ops .crm-btn{padding:5px 12px;font-size:12.5px}
+  .mc-form .mc-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .mc-form label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:#7A6A58}
+  .mc-form input,.mc-form select{padding:8px 10px;border:1px solid #E2D8CA;border-radius:8px;font-size:13.5px;font-family:inherit;min-width:120px}
+  .mc-form input[type=number]{width:130px}
+  .mc-net{font-size:13px;color:#6B5D4F;background:#FAF7F2;border-radius:8px;padding:8px 12px;margin-bottom:12px}
+  .mc-net b{color:#C86432;font-size:15px}
 </style>
 
 <div class="page-hd">
   <h2>产品佣金系数管理</h2>
-  {% if can_import or can_coef %}
-  <button class="crm-btn pri mgr-btn" type="button" onclick="openSalesMgr()">⚙ 销售系数数据管理</button>
-  {% endif %}
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    {% if can_custom %}
+    <button class="crm-btn" type="button" onclick="openMyCoef()">★ 我的专属系数{% if mycoef_opts %}（{{ mycoef_opts|length }}）{% endif %}</button>
+    {% endif %}
+    {% if can_import or can_coef %}
+    <button class="crm-btn pri mgr-btn" type="button" onclick="openSalesMgr()">⚙ 销售系数数据管理</button>
+    {% endif %}
+  </div>
 </div>
+
+{% if mycoef %}
+<div class="mycoef-bar">
+  <span class="tag2">个人方案</span>
+  <b>{{ mycoef.name }}</b>
+  <span class="muted">{{ '线下' if mycoef.channel_type == 'offline' else '互联网' }} ｜
+    基础 {{ '%g'|format(mycoef.base_ratio or 0) }}% · 销售 {{ '%g'|format(mycoef.sales_ratio or 0) }}% · 经营 {{ '%g'|format(mycoef.operate_ratio or 0) }}% ·
+    净费 {{ '%g'|format(mycoef.net_ratio) }}%</span>
+  <span class="muted">（该渠道按此方案计算，其余渠道仍用公司统一系数）</span>
+  <button type="button" class="lnkbtn" onclick="clearCoef()">切回公司统一系数</button>
+</div>
+{% endif %}
+
+{% if can_custom %}
+<!-- ========== 我的专属系数（个人定制方案） ========== -->
+<div class="mask" id="myCoefMask">
+  <div class="mcard" style="max-width:780px">
+    <div class="mhd"><b>我的专属系数</b><span>只对本人生效 · 可保存多套方案 · 可随时切回公司统一系数</span>
+      <button type="button" class="mx" onclick="closeMyCoef()">✕</button></div>
+    <div class="mbd">
+      <div class="msec">已保存的方案</div>
+      {% if mycoef_opts %}
+      <div class="mc-list">
+        {% for c in mycoef_opts %}
+        <div class="mc-item {{ 'on' if mycoef and mycoef.id == c.id else '' }}"
+             data-id="{{ c.id }}" data-name="{{ c.name }}" data-ch="{{ c.channel_type }}"
+             data-base="{{ c.base_ratio or 0 }}" data-sales="{{ c.sales_ratio or 0 }}"
+             data-op="{{ c.operate_ratio or 0 }}">
+          <div class="mc-main">
+            <b>{{ c.name }}</b>
+            <span class="mc-tag">{{ '线下' if c.channel_type == 'offline' else '互联网' }}</span>
+            {% if mycoef and mycoef.id == c.id %}<span class="mc-tag on">使用中</span>{% endif %}
+            <div class="mc-sub">基础 {{ '%g'|format(c.base_ratio or 0) }}% ｜ 销售 {{ '%g'|format(c.sales_ratio or 0) }}% ｜
+              经营 {{ '%g'|format(c.operate_ratio or 0) }}% ｜ 净费 <b>{{ '%g'|format(c.net_ratio) }}%</b>
+              {% if c.updated_at %}<span class="mc-time">{{ c.updated_at }}</span>{% endif %}</div>
+          </div>
+          <div class="mc-ops">
+            <button type="button" class="crm-btn pri" onclick="applyCoef({{ c.id }})">应用</button>
+            <button type="button" class="lnkbtn" onclick="editCoef(this)">编辑</button>
+            <button type="button" class="lnkbtn" onclick="exportCoef({{ c.id }})">导出</button>
+            <form method="post" action="{{ url_for('crm.commission_mycoef_delete', cid=c.id) }}"
+                  style="display:inline" onsubmit="return confirm('确定删除方案「{{ c.name }}」？')">
+              <input type="hidden" name="back_qs" value="{{ request.query_string.decode() }}">
+              <button type="submit" class="lnkbtn danger">删除</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="hint" style="margin:0 0 6px">还没有专属方案，在下面新建一套即可。</div>
+      {% endif %}
+
+      <div class="msec" style="margin-top:18px" id="mcFormTitle">新建方案</div>
+      <form method="post" action="{{ url_for('crm.commission_mycoef_save') }}" class="mc-form" id="mcForm">
+        <input type="hidden" name="id" id="mc-id" value="">
+        <input type="hidden" name="back_qs" value="{{ request.query_string.decode() }}">
+        <div class="mc-row">
+          <label>方案名称<input name="name" id="mc-name" required maxlength="64" placeholder="如：我的线下方案A"></label>
+          <label>渠道
+            <select name="channel_type" id="mc-ch">
+              <option value="offline">线下产品</option>
+              <option value="internet">互联网产品</option>
+            </select>
+          </label>
+        </div>
+        <div class="mc-row">
+          <label>基础佣金比例(%)<input type="number" step="any" min="0" max="100" name="base_ratio" id="mc-base" value="80"></label>
+          <label>销售费用比例(%)<input type="number" step="any" min="0" max="100" name="sales_ratio" id="mc-sales" value="5"></label>
+          <label>经营费用比例(%)<input type="number" step="any" min="0" max="100" name="operate_ratio" id="mc-op" value="4"></label>
+        </div>
+        <div class="mc-net">→ 销售净费比例 <b id="mc-net">89</b>%（自动＝基础+销售+经营）</div>
+        <div class="mc-actions">
+          <button type="submit" class="crm-btn pri">保存方案</button>
+          <button type="button" class="lnkbtn" onclick="resetCoefForm()">清空重填</button>
+          <span class="hint">保存后自动按该方案查询，可直接点右上角「导出」下载当前结果</span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% if can_import or can_coef %}
 
@@ -382,6 +497,53 @@ function showMask(id){ var m=document.getElementById(id); if(m) m.classList.add(
 function hideMask(id){ var m=document.getElementById(id); if(m) m.classList.remove('on'); }
 function openSalesMgr(){ showMask('salesMgrMask'); }
 function closeSalesMgr(){ hideMask('salesMgrMask'); }
+
+/* ===== 我的专属系数（个人定制方案） ===== */
+function openMyCoef(){ showMask('myCoefMask'); }
+function closeMyCoef(){ hideMask('myCoefMask'); }
+function mcNet(){
+  var b=parseFloat(document.getElementById('mc-base').value)||0;
+  var s=parseFloat(document.getElementById('mc-sales').value)||0;
+  var o=parseFloat(document.getElementById('mc-op').value)||0;
+  document.getElementById('mc-net').textContent=(b+s+o).toFixed(2).replace(/\.00$/,'');
+}
+function applyCoef(id){
+  var u=new URL(location.href); u.searchParams.set('mycoef', id); location.href=u.toString();
+}
+function clearCoef(){
+  var u=new URL(location.href); u.searchParams.delete('mycoef'); location.href=u.toString();
+}
+function exportCoef(id){
+  var u=new URL('/crm/commission-coefficient/export', location.origin);
+  new URLSearchParams(location.search).forEach(function(v,k){ u.searchParams.set(k,v); });
+  u.searchParams.set('mycoef', id);
+  location.href=u.toString();
+}
+function editCoef(btn){
+  var it=btn.closest('.mc-item');
+  document.getElementById('mc-id').value=it.dataset.id;
+  document.getElementById('mc-name').value=it.dataset.name;
+  document.getElementById('mc-ch').value=it.dataset.ch;
+  document.getElementById('mc-base').value=it.dataset.base;
+  document.getElementById('mc-sales').value=it.dataset.sales;
+  document.getElementById('mc-op').value=it.dataset.op;
+  document.getElementById('mcFormTitle').textContent='编辑方案：'+it.dataset.name;
+  mcNet();
+  document.getElementById('mcForm').scrollIntoView({block:'nearest'});
+}
+function resetCoefForm(){
+  document.getElementById('mc-id').value='';
+  document.getElementById('mc-name').value='';
+  document.getElementById('mc-base').value=80;
+  document.getElementById('mc-sales').value=5;
+  document.getElementById('mc-op').value=4;
+  document.getElementById('mcFormTitle').textContent='新建方案';
+  mcNet();
+}
+['mc-base','mc-sales','mc-op'].forEach(function(id){
+  var el=document.getElementById(id); if(el) el.addEventListener('input', mcNet);
+});
+if (document.getElementById('mc-base')) mcNet();
 function openImp(){ showMask('impMask'); }
 function closeImp(){ hideMask('impMask'); }
 function openCoefSet(){ showMask('coefSetMask'); }

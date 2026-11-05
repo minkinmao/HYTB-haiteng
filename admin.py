@@ -4,7 +4,9 @@
 from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash
-from models import db, Level, Permission, User, Employee, UserModulePerm
+from datetime import datetime
+
+from models import db, Level, Permission, User, Employee, UserModulePerm, CrmCommPerm
 from app import login_required, MODULE_KEYS, build_menu_tree, log_audit
 
 bp = Blueprint('admin', __name__)
@@ -241,11 +243,24 @@ def user_perms(uid):
             if k in MODULE_KEYS:
                 db.session.add(UserModulePerm(user_id=u.id, menu_key=k))
                 added += 1
+        # 产品佣金系数·用户级两项权限（2026-11-05 威哥需求）
+        allow_global = request.form.get('comm_global') == '1'
+        allow_custom = request.form.get('comm_custom') == '1'
+        cp = CrmCommPerm.query.filter_by(user_id=u.id).first()
+        if cp is None:
+            cp = CrmCommPerm(user_id=u.id)
+            db.session.add(cp)
+        cp.allow_global = allow_global
+        cp.allow_custom = allow_custom
+        cp.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
         db.session.commit()
-        flash('已更新「%s」的模块权限（%d 个）' % (u.username, added))
+        flash('已更新「%s」的模块权限（%d 个）｜佣金系数：统一系数管理 %s / 个人定制 %s'
+              % (u.username, added, '开通' if allow_global else '关闭',
+                 '开通' if allow_custom else '关闭'))
         return redirect(url_for('admin.users'))
+    crm_perm = CrmCommPerm.query.filter_by(user_id=u.id).first()
     return render_template('admin/user_perms.html', u=u, full_tree=full_tree, owned=owned,
-                           level_default_keys=level_default_keys)
+                           level_default_keys=level_default_keys, crm_perm=crm_perm)
 
 
 @bp.route('/admin/users/<int:uid>/password', methods=['GET', 'POST'])

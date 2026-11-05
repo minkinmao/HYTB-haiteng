@@ -995,6 +995,15 @@ def wecom_verify(fname):
     return 'WW_verify file not found', 404
 
 
+# 启动兜底建表：create_all 只创建缺失的表、不改已有表，因此每次启动都安全。
+# （seed.py 只在初始化时跑，新增业务表若没人跑 seed 就会缺表 —— 这里统一兜底）
+try:
+    with app.app_context():
+        db.create_all()
+except Exception as _e:      # 建表失败不能挡住启动，交由业务报错暴露
+    print('[warn] create_all 失败：', _e)
+
+
 if __name__ == '__main__':
     # 【重要】请统一用 run.py 启动本系统（双击 启动系统.bat 即可）。
     # 直接运行本文件会与下方业务模块形成循环导入，启动会报 ImportError。
